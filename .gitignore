@@ -29,3 +29,6 @@ Desktop.ini
 *.log
 .turbo/
 .cache/
+
+# Build artifacts
+output/
