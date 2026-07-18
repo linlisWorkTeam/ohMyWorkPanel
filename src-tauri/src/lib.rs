@@ -1,4 +1,4 @@
-﻿pub mod auth;
+pub mod auth;
 mod adapters;
 mod commands;
 mod ocr;
