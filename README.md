@@ -37,7 +37,7 @@ pnpm dev
 | `pnpm tauri dev` | 启动桌面应用（开发） |
 | `pnpm test` | 前端 Vitest |
 | `cd src-tauri && cargo test` | Rust 单测 |
-| `pwsh scripts/smoke-adapters.ps1` | 本机适配器 smoke（尽力，失败不挡合并） |
+| `powershell -File scripts/smoke-adapters.ps1` | 本机适配器 smoke（尽力，失败不挡合并） |
 
 ## Agent 适配器
 
