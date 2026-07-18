@@ -138,3 +138,119 @@ pub struct ExecutionContext {
     pub prompt: String,
     pub settings: RuntimeSettings,
 }
+ 
+ // === Project Management ===
+ 
+ #[derive(Debug, Clone, Serialize, Deserialize)]
+ #[serde(rename_all = "camelCase")]
+ pub struct RoadmapItem {
+     pub id: String,
+     pub group_id: String,
+     pub title: String,
+     pub description: String,
+     pub status: String,
+     pub priority: String,
+     pub target_date: Option<String>,
+     pub sort_order: i64,
+     pub created_at: i64,
+ }
+ 
+ #[derive(Debug, Clone, Serialize, Deserialize)]
+ #[serde(rename_all = "camelCase")]
+ pub struct Feature {
+     pub id: String,
+     pub group_id: String,
+     pub title: String,
+     pub description: String,
+     pub status: String,
+     pub priority: String,
+     pub area: String,
+     pub assignee_member_id: Option<String>,
+     pub target_roadmap_item_id: Option<String>,
+     pub sort_order: i64,
+     pub created_at: i64,
+     pub updated_at: i64,
+ }
+ 
+ #[derive(Debug, Clone, Serialize, Deserialize)]
+ #[serde(rename_all = "camelCase")]
+ pub struct FeatureTask {
+     pub id: String,
+     pub feature_id: String,
+     pub title: String,
+     pub done: bool,
+     pub sort_order: i64,
+     pub created_at: i64,
+ }
+ 
+ #[derive(Debug, Deserialize)]
+ #[serde(rename_all = "camelCase")]
+ pub struct CreateRoadmapItemInput {
+     pub group_id: String,
+     pub title: String,
+     pub description: Option<String>,
+     pub status: Option<String>,
+     pub priority: Option<String>,
+     pub target_date: Option<String>,
+ }
+ 
+ #[derive(Debug, Deserialize)]
+ #[serde(rename_all = "camelCase")]
+ pub struct UpdateRoadmapItemInput {
+     pub title: Option<String>,
+     pub description: Option<String>,
+     pub status: Option<String>,
+     pub priority: Option<String>,
+     pub target_date: Option<String>,
+     pub sort_order: Option<i64>,
+ }
+ 
+ #[derive(Debug, Deserialize)]
+ #[serde(rename_all = "camelCase")]
+ pub struct CreateFeatureInput {
+     pub group_id: String,
+     pub title: String,
+     pub description: Option<String>,
+     pub status: Option<String>,
+     pub priority: Option<String>,
+     pub area: Option<String>,
+     pub assignee_member_id: Option<String>,
+     pub target_roadmap_item_id: Option<String>,
+ }
+ 
+ #[derive(Debug, Deserialize)]
+ #[serde(rename_all = "camelCase")]
+ pub struct UpdateFeatureInput {
+     pub title: Option<String>,
+     pub description: Option<String>,
+     pub status: Option<String>,
+     pub priority: Option<String>,
+     pub area: Option<String>,
+     pub assignee_member_id: Option<String>,
+     pub target_roadmap_item_id: Option<String>,
+     pub sort_order: Option<i64>,
+ }
+ 
+ #[derive(Debug, Deserialize)]
+ #[serde(rename_all = "camelCase")]
+ pub struct CreateFeatureTaskInput {
+     pub feature_id: String,
+     pub title: String,
+ }
+ 
+ #[derive(Debug, Deserialize)]
+ #[serde(rename_all = "camelCase")]
+ pub struct UpdateFeatureTaskInput {
+     pub title: Option<String>,
+     pub done: Option<bool>,
+     pub sort_order: Option<i64>,
+ }
+ 
+ #[derive(Debug, Clone, Serialize)]
+ #[serde(rename_all = "camelCase")]
+ pub struct RoadmapState {
+     pub group_id: String,
+     pub items: Vec<RoadmapItem>,
+     pub features: Vec<Feature>,
+     pub tasks: Vec<FeatureTask>,
+ }

@@ -2,10 +2,17 @@ use crate::adapters::AdapterKind;
 use crate::db::{
     active_agent_ids, create_task_run, get_group, get_groups, get_preset_roles, get_settings_from,
     group_state, id, insert_run_event, member_from_row, now, open_db, run_from_row, AppResult,
+    create_roadmap_item_db, get_roadmap_items, update_roadmap_item_db, delete_roadmap_item_db,
+    create_feature_db, get_features, update_feature_db, delete_feature_db,
+    create_feature_task_db, get_feature_tasks, update_feature_task_db, delete_feature_task_db,
+    get_roadmap_state_db,
 };
 use crate::models::{
     AddMemberInput, Bootstrap, ChatEvent, CreateGroupInput, GroupState, Member, Message, PresetRole,
     RuntimeSettings, SendResult, TaskRun,
+    RoadmapItem, Feature, FeatureTask, CreateRoadmapItemInput, UpdateRoadmapItemInput,
+    CreateFeatureInput, UpdateFeatureInput, CreateFeatureTaskInput, UpdateFeatureTaskInput,
+    RoadmapState,
 };
 use crate::scheduler::{emit, schedule_group};
 use crate::AppState;
@@ -498,3 +505,76 @@ pub fn ocr_image_base64(base64_data: String) -> AppResult<String> {
 pub fn get_preset_roles_command(state: State<'_, AppState>) -> AppResult<Vec<PresetRole>> {
     get_preset_roles(&open_db(&state.db_path)?)
 }
+ 
+ // === PM: Roadmap Items ===
+ 
+ #[tauri::command]
+ pub fn list_roadmap_items(group_id: String, state: State<'_, AppState>) -> AppResult<Vec<RoadmapItem>> {
+     get_roadmap_items(&open_db(&state.db_path)?, &group_id)
+ }
+ 
+ #[tauri::command]
+ pub fn create_roadmap_item(input: CreateRoadmapItemInput, state: State<'_, AppState>) -> AppResult<RoadmapItem> {
+     create_roadmap_item_db(&open_db(&state.db_path)?, &input)
+ }
+ 
+ #[tauri::command]
+ pub fn update_roadmap_item(id: String, input: UpdateRoadmapItemInput, state: State<'_, AppState>) -> AppResult<RoadmapItem> {
+     update_roadmap_item_db(&open_db(&state.db_path)?, &id, &input)
+ }
+ 
+ #[tauri::command]
+ pub fn delete_roadmap_item(id: String, state: State<'_, AppState>) -> AppResult<()> {
+     delete_roadmap_item_db(&open_db(&state.db_path)?, &id)
+ }
+ 
+ // === PM: Features ===
+ 
+ #[tauri::command]
+ pub fn list_features(group_id: String, state: State<'_, AppState>) -> AppResult<Vec<Feature>> {
+     get_features(&open_db(&state.db_path)?, &group_id)
+ }
+ 
+ #[tauri::command]
+ pub fn create_feature(input: CreateFeatureInput, state: State<'_, AppState>) -> AppResult<Feature> {
+     create_feature_db(&open_db(&state.db_path)?, &input)
+ }
+ 
+ #[tauri::command]
+ pub fn update_feature(id: String, input: UpdateFeatureInput, state: State<'_, AppState>) -> AppResult<Feature> {
+     update_feature_db(&open_db(&state.db_path)?, &id, &input)
+ }
+ 
+ #[tauri::command]
+ pub fn delete_feature(id: String, state: State<'_, AppState>) -> AppResult<()> {
+     delete_feature_db(&open_db(&state.db_path)?, &id)
+ }
+ 
+ // === PM: Feature Tasks ===
+ 
+ #[tauri::command]
+ pub fn list_feature_tasks(feature_id: String, state: State<'_, AppState>) -> AppResult<Vec<FeatureTask>> {
+     get_feature_tasks(&open_db(&state.db_path)?, &feature_id)
+ }
+ 
+ #[tauri::command]
+ pub fn create_feature_task(input: CreateFeatureTaskInput, state: State<'_, AppState>) -> AppResult<FeatureTask> {
+     create_feature_task_db(&open_db(&state.db_path)?, &input)
+ }
+ 
+ #[tauri::command]
+ pub fn update_feature_task(id: String, input: UpdateFeatureTaskInput, state: State<'_, AppState>) -> AppResult<FeatureTask> {
+     update_feature_task_db(&open_db(&state.db_path)?, &id, &input)
+ }
+ 
+ #[tauri::command]
+ pub fn delete_feature_task(id: String, state: State<'_, AppState>) -> AppResult<()> {
+     delete_feature_task_db(&open_db(&state.db_path)?, &id)
+ }
+ 
+ // === PM: Aggregated State ===
+ 
+ #[tauri::command]
+ pub fn get_roadmap_state(group_id: String, state: State<'_, AppState>) -> AppResult<RoadmapState> {
+     get_roadmap_state_db(&open_db(&state.db_path)?, &group_id)
+ }

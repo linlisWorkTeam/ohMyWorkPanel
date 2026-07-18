@@ -1,4 +1,6 @@
-use crate::models::{Group, GroupState, Member, Message, RuntimeSettings, TaskRun};
+use crate::models::{
+    Feature, FeatureTask, Group, GroupState, Member, Message, RoadmapItem, RuntimeSettings, TaskRun,
+};
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use std::path::Path;
@@ -73,6 +75,30 @@ pub fn init_db(path: &Path) -> AppResult<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_messages_group_created ON messages(group_id, created_at);
         CREATE INDEX IF NOT EXISTS idx_runs_group_status ON task_runs(group_id, status, created_at);
+ 
+         CREATE TABLE IF NOT EXISTS roadmap_items (
+           id TEXT PRIMARY KEY, group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+           title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+           status TEXT NOT NULL DEFAULT 'backlog', priority TEXT NOT NULL DEFAULT 'medium',
+           target_date TEXT, sort_order INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS features (
+           id TEXT PRIMARY KEY, group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+           title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+           status TEXT NOT NULL DEFAULT 'backlog', priority TEXT NOT NULL DEFAULT 'medium',
+           area TEXT NOT NULL DEFAULT '',
+           assignee_member_id TEXT REFERENCES members(id),
+           target_roadmap_item_id TEXT REFERENCES roadmap_items(id) ON DELETE SET NULL,
+           sort_order INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS feature_tasks (
+           id TEXT PRIMARY KEY, feature_id TEXT NOT NULL REFERENCES features(id) ON DELETE CASCADE,
+           title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0,
+           sort_order INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
+         );
+         CREATE INDEX IF NOT EXISTS idx_roadmap_items_group ON roadmap_items(group_id, sort_order);
+         CREATE INDEX IF NOT EXISTS idx_features_group ON features(group_id, status, sort_order);
+         CREATE INDEX IF NOT EXISTS idx_feature_tasks_feature ON feature_tasks(feature_id, sort_order);
         ",
         )
         .map_err(|e| e.to_string())?;
@@ -359,6 +385,250 @@ pub fn active_agent_ids(
     }
     Ok(agents)
 }
+ 
+ // === PM: Roadmap Items ===
+ 
+ pub fn roadmap_item_from_row(row: &Row<'_>) -> rusqlite::Result<RoadmapItem> {
+     Ok(RoadmapItem {
+         id: row.get(0)?,
+         group_id: row.get(1)?,
+         title: row.get(2)?,
+         description: row.get(3)?,
+         status: row.get(4)?,
+         priority: row.get(5)?,
+         target_date: row.get(6)?,
+         sort_order: row.get(7)?,
+         created_at: row.get(8)?,
+     })
+ }
+ 
+ pub fn get_roadmap_items(conn: &Connection, group_id: &str) -> AppResult<Vec<RoadmapItem>> {
+     let mut stmt = conn
+         .prepare("SELECT id,group_id,title,description,status,priority,target_date,sort_order,created_at FROM roadmap_items WHERE group_id=?1 ORDER BY sort_order,created_at")
+         .map_err(|e| e.to_string())?;
+     let rows = stmt
+         .query_map(params![group_id], roadmap_item_from_row)
+         .map_err(|e| e.to_string())?
+         .collect::<Result<Vec<_>, _>>()
+         .map_err(|e| e.to_string())?;
+     Ok(rows)
+ }
+ 
+ pub fn create_roadmap_item_db(conn: &Connection, input: &crate::models::CreateRoadmapItemInput) -> AppResult<RoadmapItem> {
+     let item = RoadmapItem {
+         id: id(),
+         group_id: input.group_id.clone(),
+         title: input.title.clone(),
+         description: input.description.clone().unwrap_or_default(),
+         status: input.status.clone().unwrap_or_else(|| "backlog".into()),
+         priority: input.priority.clone().unwrap_or_else(|| "medium".into()),
+         target_date: input.target_date.clone(),
+         sort_order: 0,
+         created_at: now(),
+     };
+     conn.execute(
+         "INSERT INTO roadmap_items(id,group_id,title,description,status,priority,target_date,sort_order,created_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)",
+         params![item.id, item.group_id, item.title, item.description, item.status, item.priority, item.target_date, item.sort_order, item.created_at],
+     )
+     .map_err(|e| e.to_string())?;
+     Ok(item)
+ }
+ 
+ pub fn update_roadmap_item_db(conn: &Connection, id: &str, input: &crate::models::UpdateRoadmapItemInput) -> AppResult<RoadmapItem> {
+     let orig: RoadmapItem = conn
+         .query_row("SELECT id,group_id,title,description,status,priority,target_date,sort_order,created_at FROM roadmap_items WHERE id=?1", params![id], roadmap_item_from_row)
+         .map_err(|e| format!("roadmap item not found: {e}"))?;
+     let updated = RoadmapItem {
+         title: input.title.clone().unwrap_or(orig.title),
+         description: input.description.clone().unwrap_or(orig.description),
+         status: input.status.clone().unwrap_or(orig.status),
+         priority: input.priority.clone().unwrap_or(orig.priority),
+         target_date: input.target_date.clone().or(orig.target_date),
+         sort_order: input.sort_order.unwrap_or(orig.sort_order),
+         ..orig
+     };
+     conn.execute(
+         "UPDATE roadmap_items SET title=?1,description=?2,status=?3,priority=?4,target_date=?5,sort_order=?6 WHERE id=?7",
+         params![updated.title, updated.description, updated.status, updated.priority, updated.target_date, updated.sort_order, id],
+     )
+     .map_err(|e| e.to_string())?;
+     Ok(updated)
+ }
+ 
+ pub fn delete_roadmap_item_db(conn: &Connection, id: &str) -> AppResult<()> {
+     conn.execute("DELETE FROM roadmap_items WHERE id=?1", params![id])
+         .map_err(|e| e.to_string())?;
+     Ok(())
+ }
+ 
+ // === PM: Features ===
+ 
+ pub fn feature_from_row(row: &Row<'_>) -> rusqlite::Result<Feature> {
+     Ok(Feature {
+         id: row.get(0)?,
+         group_id: row.get(1)?,
+         title: row.get(2)?,
+         description: row.get(3)?,
+         status: row.get(4)?,
+         priority: row.get(5)?,
+         area: row.get(6)?,
+         assignee_member_id: row.get(7)?,
+         target_roadmap_item_id: row.get(8)?,
+         sort_order: row.get(9)?,
+         created_at: row.get(10)?,
+         updated_at: row.get(11)?,
+     })
+ }
+ 
+ pub fn get_features(conn: &Connection, group_id: &str) -> AppResult<Vec<Feature>> {
+     let mut stmt = conn
+         .prepare("SELECT id,group_id,title,description,status,priority,area,assignee_member_id,target_roadmap_item_id,sort_order,created_at,updated_at FROM features WHERE group_id=?1 ORDER BY sort_order,created_at")
+         .map_err(|e| e.to_string())?;
+     let rows = stmt
+         .query_map(params![group_id], feature_from_row)
+         .map_err(|e| e.to_string())?
+         .collect::<Result<Vec<_>, _>>()
+         .map_err(|e| e.to_string())?;
+     Ok(rows)
+ }
+ 
+ pub fn create_feature_db(conn: &Connection, input: &crate::models::CreateFeatureInput) -> AppResult<Feature> {
+     let now_ts = now();
+     let feature = Feature {
+         id: id(),
+         group_id: input.group_id.clone(),
+         title: input.title.clone(),
+         description: input.description.clone().unwrap_or_default(),
+         status: input.status.clone().unwrap_or_else(|| "backlog".into()),
+         priority: input.priority.clone().unwrap_or_else(|| "medium".into()),
+         area: input.area.clone().unwrap_or_default(),
+         assignee_member_id: input.assignee_member_id.clone(),
+         target_roadmap_item_id: input.target_roadmap_item_id.clone(),
+         sort_order: 0,
+         created_at: now_ts,
+         updated_at: now_ts,
+     };
+     conn.execute(
+         "INSERT INTO features(id,group_id,title,description,status,priority,area,assignee_member_id,target_roadmap_item_id,sort_order,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)",
+         params![feature.id, feature.group_id, feature.title, feature.description, feature.status, feature.priority, feature.area, feature.assignee_member_id, feature.target_roadmap_item_id, feature.sort_order, feature.created_at, feature.updated_at],
+     )
+     .map_err(|e| e.to_string())?;
+     Ok(feature)
+ }
+ 
+ pub fn update_feature_db(conn: &Connection, id: &str, input: &crate::models::UpdateFeatureInput) -> AppResult<Feature> {
+     let orig: Feature = conn
+         .query_row("SELECT id,group_id,title,description,status,priority,area,assignee_member_id,target_roadmap_item_id,sort_order,created_at,updated_at FROM features WHERE id=?1", params![id], feature_from_row)
+         .map_err(|e| format!("feature not found: {e}"))?;
+     let updated = Feature {
+         title: input.title.clone().unwrap_or(orig.title),
+         description: input.description.clone().unwrap_or(orig.description),
+         status: input.status.clone().unwrap_or(orig.status),
+         priority: input.priority.clone().unwrap_or(orig.priority),
+         area: input.area.clone().unwrap_or(orig.area),
+         assignee_member_id: input.assignee_member_id.clone().or(orig.assignee_member_id),
+         target_roadmap_item_id: input.target_roadmap_item_id.clone().or(orig.target_roadmap_item_id),
+         sort_order: input.sort_order.unwrap_or(orig.sort_order),
+         updated_at: now(),
+         ..orig
+     };
+     conn.execute(
+         "UPDATE features SET title=?1,description=?2,status=?3,priority=?4,area=?5,assignee_member_id=?6,target_roadmap_item_id=?7,sort_order=?8,updated_at=?9 WHERE id=?10",
+         params![updated.title, updated.description, updated.status, updated.priority, updated.area, updated.assignee_member_id, updated.target_roadmap_item_id, updated.sort_order, updated.updated_at, id],
+     )
+     .map_err(|e| e.to_string())?;
+     Ok(updated)
+ }
+ 
+ pub fn delete_feature_db(conn: &Connection, id: &str) -> AppResult<()> {
+     conn.execute("DELETE FROM features WHERE id=?1", params![id])
+         .map_err(|e| e.to_string())?;
+     Ok(())
+ }
+ 
+ // === PM: Feature Tasks ===
+ 
+ pub fn feature_task_from_row(row: &Row<'_>) -> rusqlite::Result<FeatureTask> {
+     Ok(FeatureTask {
+         id: row.get(0)?,
+         feature_id: row.get(1)?,
+         title: row.get(2)?,
+         done: row.get::<_, i64>(3)? != 0,
+         sort_order: row.get(4)?,
+         created_at: row.get(5)?,
+     })
+ }
+ 
+ pub fn get_feature_tasks(conn: &Connection, feature_id: &str) -> AppResult<Vec<FeatureTask>> {
+     let mut stmt = conn
+         .prepare("SELECT id,feature_id,title,done,sort_order,created_at FROM feature_tasks WHERE feature_id=?1 ORDER BY sort_order,created_at")
+         .map_err(|e| e.to_string())?;
+     let rows = stmt
+         .query_map(params![feature_id], feature_task_from_row)
+         .map_err(|e| e.to_string())?
+         .collect::<Result<Vec<_>, _>>()
+         .map_err(|e| e.to_string())?;
+     Ok(rows)
+ }
+ 
+ pub fn create_feature_task_db(conn: &Connection, input: &crate::models::CreateFeatureTaskInput) -> AppResult<FeatureTask> {
+     let task = FeatureTask {
+         id: id(),
+         feature_id: input.feature_id.clone(),
+         title: input.title.clone(),
+         done: false,
+         sort_order: 0,
+         created_at: now(),
+     };
+     conn.execute(
+         "INSERT INTO feature_tasks(id,feature_id,title,done,sort_order,created_at) VALUES(?1,?2,?3,?4,?5,?6)",
+         params![task.id, task.feature_id, task.title, 0i64, task.sort_order, task.created_at],
+     )
+     .map_err(|e| e.to_string())?;
+     Ok(task)
+ }
+ 
+ pub fn update_feature_task_db(conn: &Connection, id: &str, input: &crate::models::UpdateFeatureTaskInput) -> AppResult<FeatureTask> {
+     let orig: FeatureTask = conn
+         .query_row("SELECT id,feature_id,title,done,sort_order,created_at FROM feature_tasks WHERE id=?1", params![id], feature_task_from_row)
+         .map_err(|e| format!("task not found: {e}"))?;
+     let updated = FeatureTask {
+         title: input.title.clone().unwrap_or(orig.title),
+         done: input.done.unwrap_or(orig.done),
+         sort_order: input.sort_order.unwrap_or(orig.sort_order),
+         ..orig
+     };
+     conn.execute(
+         "UPDATE feature_tasks SET title=?1,done=?2,sort_order=?3 WHERE id=?4",
+         params![updated.title, updated.done as i64, updated.sort_order, id],
+     )
+     .map_err(|e| e.to_string())?;
+     Ok(updated)
+ }
+ 
+ pub fn delete_feature_task_db(conn: &Connection, id: &str) -> AppResult<()> {
+     conn.execute("DELETE FROM feature_tasks WHERE id=?1", params![id])
+         .map_err(|e| e.to_string())?;
+     Ok(())
+ }
+ 
+ // === PM: Aggregated State ===
+ 
+ pub fn get_roadmap_state_db(conn: &Connection, group_id: &str) -> AppResult<crate::models::RoadmapState> {
+     let features = get_features(conn, group_id)?;
+     let all_task_ids: Vec<String> = features.iter().map(|f| f.id.clone()).collect();
+     let mut all_tasks = Vec::new();
+     for fid in &all_task_ids {
+         all_tasks.extend(get_feature_tasks(conn, fid)?);
+     }
+     Ok(crate::models::RoadmapState {
+         group_id: group_id.into(),
+         items: get_roadmap_items(conn, group_id)?,
+         features,
+         tasks: all_tasks,
+     })
+ }
+ 
 
 #[cfg(test)]
 mod tests {

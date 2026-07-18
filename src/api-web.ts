@@ -1,6 +1,12 @@
-// Web API layer — replaces api.ts when running in browser (non-Tauri mode).
+﻿// Web API layer - replaces api.ts when running in browser (non-Tauri mode).
 // Uses fetch() + WebSocket instead of Tauri invoke().
-import type { GroupState, Member, PresetRole, RuntimeSettings } from "./types";
+import type {
+  GroupState, Member, PresetRole, RuntimeSettings, Message,
+  RoadmapItem, Feature, FeatureTask, RoadmapState,
+  CreateRoadmapItemInput, UpdateRoadmapItemInput,
+  CreateFeatureInput, UpdateFeatureInput,
+  CreateFeatureTaskInput, UpdateFeatureTaskInput,
+} from "./types";
 
 const API_BASE = "";
 const WS_BASE = `ws://${location.host}`;
@@ -50,9 +56,8 @@ export const api = {
       },
     ),
 
-  // Bootstrap — returns groups the user belongs to
-  bootstrap: () =>
-    apiFetch<{ groups: GroupState["group"][] }>("/api/bootstrap"),
+  // Bootstrap - returns groups list
+  bootstrap: () => apiFetch<GroupState[]>("/api/groups"),
 
   // Groups
   getGroupState: (groupId: string) =>
@@ -78,7 +83,7 @@ export const api = {
     adapter?: string;
     executablePath?: string;
   }) =>
-    apiFetch<Member>("/api/members", {
+    apiFetch<Member>(`/api/groups/${input.groupId}/members`, {
       method: "POST",
       body: JSON.stringify(input),
     }),
@@ -89,10 +94,10 @@ export const api = {
     }),
 
   setAdmin: (groupId: string, memberId: string | null) =>
-    apiFetch<GroupState>(
-      `/api/groups/${groupId}/admin/${memberId ?? ""}`,
-      { method: "PUT" },
-    ),
+    apiFetch<GroupState>(`/api/groups/${groupId}/admin`, {
+      method: "PUT",
+      body: JSON.stringify({ member_id: memberId }),
+    }),
 
   sendMessage: (
     groupId: string,
@@ -100,7 +105,7 @@ export const api = {
     content: string,
     mentionMemberIds: string[],
   ) =>
-    apiFetch("/api/messages", {
+    apiFetch<{ message: Message; runIds: string[] }>("/api/messages", {
       method: "POST",
       body: JSON.stringify({ groupId, senderMemberId, content, mentionMemberIds }),
     }),
@@ -110,9 +115,6 @@ export const api = {
 
   retryRun: (runId: string) =>
     apiFetch<string>(`/api/runs/${runId}/retry`, { method: "POST" }),
-
-  detectAgent: (memberId: string) =>
-    apiFetch<string>(`/api/agents/${memberId}/detect`),
 
   getSettings: () => apiFetch<RuntimeSettings>("/api/settings"),
 
@@ -136,7 +138,59 @@ export const api = {
 
   getPresetRoles: () => apiFetch<PresetRole[]>("/api/preset-roles"),
 
-  // WebSocket — replaces Tauri listen()
+  // PM: Roadmap Items
+  listRoadmapItems: (groupId: string) =>
+    apiFetch<RoadmapItem[]>(`/api/groups/${groupId}/roadmap`),
+  createRoadmapItem: (input: CreateRoadmapItemInput) =>
+    apiFetch<RoadmapItem>("/api/roadmap-items", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  updateRoadmapItem: (id: string, input: UpdateRoadmapItemInput) =>
+    apiFetch<RoadmapItem>(`/api/roadmap-items/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }),
+  deleteRoadmapItem: (id: string) =>
+    apiFetch<void>(`/api/roadmap-items/${id}`, { method: "DELETE" }),
+
+  // PM: Features
+  listFeatures: (groupId: string) =>
+    apiFetch<Feature[]>(`/api/groups/${groupId}/features`),
+  createFeature: (input: CreateFeatureInput) =>
+    apiFetch<Feature>("/api/features", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  updateFeature: (id: string, input: UpdateFeatureInput) =>
+    apiFetch<Feature>(`/api/features/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }),
+  deleteFeature: (id: string) =>
+    apiFetch<void>(`/api/features/${id}`, { method: "DELETE" }),
+
+  // PM: Feature Tasks
+  listFeatureTasks: (featureId: string) =>
+    apiFetch<FeatureTask[]>(`/api/features/${featureId}/tasks`),
+  createFeatureTask: (input: CreateFeatureTaskInput) =>
+    apiFetch<FeatureTask>("/api/feature-tasks", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  updateFeatureTask: (id: string, input: UpdateFeatureTaskInput) =>
+    apiFetch<FeatureTask>(`/api/feature-tasks/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }),
+  deleteFeatureTask: (id: string) =>
+    apiFetch<void>(`/api/feature-tasks/${id}`, { method: "DELETE" }),
+
+  // PM: Aggregated State
+  getRoadmapState: (groupId: string) =>
+    apiFetch<RoadmapState>(`/api/groups/${groupId}/roadmap-state`),
+
+  // WebSocket - replaces Tauri listen()
   connectWS: (onMessage: (data: string) => void) => {
     const ws = new WebSocket(`${WS_BASE}/ws?token=${authToken ?? ""}`);
     ws.onmessage = (e) => onMessage(e.data);

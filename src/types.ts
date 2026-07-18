@@ -79,3 +79,99 @@ export interface RuntimeSettings {
   contextMessageLimit: number;
   maxDelegationDepth: number;
 }
+ 
+ // === Project Management ===
+ 
+ export interface RoadmapItem {
+   id: string;
+   groupId: string;
+   title: string;
+   description: string;
+   status: string;
+   priority: string;
+   targetDate: string | null;
+   sortOrder: number;
+   createdAt: number;
+ }
+ 
+ export interface Feature {
+   id: string;
+   groupId: string;
+   title: string;
+   description: string;
+   status: string;
+   priority: string;
+   area: string;
+   assigneeMemberId: string | null;
+   targetRoadmapItemId: string | null;
+   sortOrder: number;
+   createdAt: number;
+   updatedAt: number;
+ }
+ 
+ export interface FeatureTask {
+   id: string;
+   featureId: string;
+   title: string;
+   done: boolean;
+   sortOrder: number;
+   createdAt: number;
+ }
+ 
+ export interface RoadmapState {
+   groupId: string;
+   items: RoadmapItem[];
+   features: Feature[];
+   tasks: FeatureTask[];
+ }
+ 
+ export interface CreateRoadmapItemInput {
+   groupId: string;
+   title: string;
+   description?: string;
+   status?: string;
+   priority?: string;
+   targetDate?: string;
+ }
+ 
+ export interface UpdateRoadmapItemInput {
+   title?: string;
+   description?: string;
+   status?: string;
+   priority?: string;
+   targetDate?: string;
+   sortOrder?: number;
+ }
+ 
+ export interface CreateFeatureInput {
+   groupId: string;
+   title: string;
+   description?: string;
+   status?: string;
+   priority?: string;
+   area?: string;
+   assigneeMemberId?: string;
+   targetRoadmapItemId?: string;
+ }
+ 
+ export interface UpdateFeatureInput {
+   title?: string;
+   description?: string;
+   status?: string;
+   priority?: string;
+   area?: string;
+   assigneeMemberId?: string;
+   targetRoadmapItemId?: string;
+   sortOrder?: number;
+ }
+ 
+ export interface CreateFeatureTaskInput {
+   featureId: string;
+   title: string;
+ }
+ 
+ export interface UpdateFeatureTaskInput {
+   title?: string;
+   done?: boolean;
+   sortOrder?: number;
+ }

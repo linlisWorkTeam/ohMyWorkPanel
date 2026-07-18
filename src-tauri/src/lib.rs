@@ -55,9 +55,26 @@ pub fn run() {
             commands::retry_run,
             commands::detect_agent,
             commands::ocr_image,
-            commands::ocr_image_base64,
-            commands::get_preset_roles_command
-        ])
+            commands::ocr_image_base64,
+            commands::get_preset_roles_command,
+            // PM: Roadmap Items
+            commands::list_roadmap_items,
+            commands::create_roadmap_item,
+            commands::update_roadmap_item,
+            commands::delete_roadmap_item,
+            // PM: Features
+            commands::list_features,
+            commands::create_feature,
+            commands::update_feature,
+            commands::delete_feature,
+            // PM: Feature Tasks
+            commands::list_feature_tasks,
+            commands::create_feature_task,
+            commands::update_feature_task,
+            commands::delete_feature_task,
+            // PM: Aggregated
+            commands::get_roadmap_state,
+        ])
         .run(tauri::generate_context!())
         .expect("鑴濅箞闇茬倝 LinlisWorkPanel 鑴㈡悅鎺宠労");
 }
