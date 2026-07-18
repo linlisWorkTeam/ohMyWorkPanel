@@ -1,10 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { GroupState, Member, RuntimeSettings } from "./types";
+import type { GroupState, Member, PresetRole, RuntimeSettings } from "./types";
 
 export const api = {
   bootstrap: () => invoke<{ groups: GroupState["group"][] }>("bootstrap"),
   getGroupState: (groupId: string) => invoke<GroupState>("get_group_state", { groupId }),
-  createGroup: (input: { name: string; workspacePath: string; ownerName: string }) =>
+  createGroup: (input: { name: string; workspacePath: string; ownerName: string; presetRoles?: string[] }) =>
     invoke<GroupState>("create_group", { input }),
   addMember: (input: {
     groupId: string; kind: "user" | "agent"; displayName: string; roleDescription: string;
@@ -20,5 +20,6 @@ export const api = {
   getSettings: () => invoke<RuntimeSettings>("get_runtime_settings"),
    updateSettings: (settings: RuntimeSettings) => invoke<RuntimeSettings>("update_runtime_settings", { settings }),
    ocrImage: (imagePath: string) => invoke<string>("ocr_image", { imagePath }),
-   getPresetRoles: () => invoke<PresetRole[]>("get_preset_roles_command")
+   getPresetRoles: () => invoke<PresetRole[]>("get_preset_roles_command"),
+  ocrImageBase64: (base64Data: string) => invoke<string>("ocr_image_base64", { base64Data }),
 };

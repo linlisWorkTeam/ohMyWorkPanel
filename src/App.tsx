@@ -19,6 +19,7 @@ export function App() {
   const [showAddMember, setShowAddMember] = useState(false);
   const [newMember, setNewMember] = useState<NewMember>(emptyMember);
   const [ocrRunning, setOcrRunning] = useState(false);
+  const [ocrPasting, setOcrPasting] = useState(false);
   const [presetRoles, setPresetRoles] = useState<PresetRole[]>([]);
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [settings, setSettings] = useState<RuntimeSettings | null>(null);
@@ -105,6 +106,36 @@ export function App() {
       setOcrRunning(false);
     }
   };
+  const handlePaste = async (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = event.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.startsWith("image/")) {
+        event.preventDefault();
+        const file = item.getAsFile();
+        if (!file) continue;
+        setOcrPasting(true);
+        try {
+          const reader = new FileReader();
+          const base64 = await new Promise<string>((resolve, reject) => {
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = () => reject(reader.error);
+            reader.readAsDataURL(file);
+          });
+          const text = await api.ocrImageBase64(base64);
+          if (text.trim()) setComposer((prev) => prev + text);
+          setError(null);
+        } catch (reason) {
+          setError(readError(reason));
+        } finally {
+          setOcrPasting(false);
+        }
+        break;
+      }
+    }
+  };
+
   const send = async () => {
     if (!current || !owner || !composer.trim()) return;
     const body = composer;
@@ -168,8 +199,8 @@ export function App() {
         </div>
         <footer className="composer-wrap">
           {mentionSuggestions.length > 0 && <div className="mention-menu">{mentionSuggestions.map((member) => <button key={member.id} onClick={() => selectMention(member)}><Avatar member={member} /><span>{member.displayName}<small>{member.kind === "agent" ? member.roleDescription || member.adapter : "用户"}</small></span></button>)}</div>}
-          <textarea value={composer} onChange={(event) => setComposer(event.target.value)} onKeyDown={composerKeyDown} placeholder="发送消息，输入 @ 选择 Agent。Enter 发送，Shift + Enter 换行。" />
-          <div className="composer-actions"><span>Agent 会在本机已有登录的 CLI 中运行</span><span><button className="ocr-button" disabled={ocrRunning} title="从图片识别文字" onClick={() => void handleOcr()}>📷</button><button className="send-button" disabled={!composer.trim()} onClick={() => void send()}>发送</button></span></div>
+          <textarea value={composer} onChange={(event) => setComposer(event.target.value)} onKeyDown={composerKeyDown} onPaste={handlePaste} placeholder="发送消息，输入 @ 选择 Agent。Enter 发送，Shift + Enter 换行。" />
+          <div className="composer-actions"><span>Agent 会在本机已有登录的 CLI 中运行</span><span><button className="ocr-button" disabled={ocrRunning || ocrPasting} title={ocrPasting ? "正在识别粘贴的图片…" : "从图片识别文字"} onClick={() => void handleOcr()}>📷</button><button className="send-button" disabled={!composer.trim()} onClick={() => void send()}>发送</button></span></div>
         </footer>
       </> : <div className="loading">正在打开本地群聊…</div>}
     </section>

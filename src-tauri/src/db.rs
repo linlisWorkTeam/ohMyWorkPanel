@@ -62,6 +62,15 @@ pub fn init_db(path: &Path) -> AppResult<()> {
           kind TEXT NOT NULL, payload TEXT NOT NULL, created_at INTEGER NOT NULL
         );
         CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS users (
+          id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE,
+          password_hash TEXT NOT NULL, created_at INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS message_attachments (
+          id TEXT PRIMARY KEY, message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+          file_name TEXT NOT NULL, mime_type TEXT NOT NULL, file_data BLOB NOT NULL,
+          file_size INTEGER NOT NULL, created_at INTEGER NOT NULL
+        );
         CREATE INDEX IF NOT EXISTS idx_messages_group_created ON messages(group_id, created_at);
         CREATE INDEX IF NOT EXISTS idx_runs_group_status ON task_runs(group_id, status, created_at);
         ",

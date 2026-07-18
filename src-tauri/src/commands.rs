@@ -484,9 +484,15 @@ pub async fn detect_agent(member_id: String, state: State<'_, AppState>) -> AppR
 }
  
  #[tauri::command]
- pub fn ocr_image(image_path: String) -> AppResult<String> {
-     crate::ocr::ocr_image(&image_path)
- }
+pub fn ocr_image(image_path: String) -> AppResult<String> {
+    crate::ocr::ocr_image(&image_path)
+}
+
+/// OCR from a base64-encoded image (e.g. clipboard paste)
+#[tauri::command]
+pub fn ocr_image_base64(base64_data: String) -> AppResult<String> {
+    crate::ocr::ocr_image_base64(&base64_data)
+}
 
 #[tauri::command]
 pub fn get_preset_roles_command(state: State<'_, AppState>) -> AppResult<Vec<PresetRole>> {
