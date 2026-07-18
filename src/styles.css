@@ -13,3 +13,78 @@
 .ocr-button { border:0;background:transparent;color:#5d7da3;font-size:17px;padding:0 8px;cursor:pointer;border-radius:5px; }
 .ocr-button:disabled { opacity:.4;cursor:not-allowed; }
 .ocr-button:hover:not(:disabled) { background:#edf2f8; }
+
+/* ── Right Panel Tab Bar ── */
+.pm-tab-bar { display:flex; gap:0; }
+.pm-tab-btn { border:0; background:transparent; color:#7a8798; font-size:12px; font-weight:600; padding:6px 10px 10px; border-bottom:2px solid transparent; cursor:pointer; transition:color .15s,border-color .15s; }
+.pm-tab-btn.active { color:#3b7fc4; border-bottom-color:#3b7fc4; }
+.pm-tab-btn:hover:not(.active) { color:#4f6074; }
+
+/* ── PM Panel ── */
+.pm-panel { display:flex; flex-direction:column; flex:1; min-height:0; }
+.pm-loading { display:grid;place-items:center;height:100%;color:#8490a1;font-size:12px;padding:30px; }
+.pm-empty { display:grid;place-items:center;gap:10px;padding:40px 18px;text-align:center;color:#768498;font-size:12px; }
+.pm-tabs { display:flex; gap:0; border-bottom:1px solid #eef1f5; padding:0 12px; }
+.pm-tab { border:0;background:transparent;color:#7d8b9c;font-size:11px;font-weight:600;padding:7px 11px 8px;border-bottom:2px solid transparent;cursor:pointer; }
+.pm-tab.active { color:#3b7fc4;border-bottom-color:#3b7fc4; }
+.pm-tab:hover:not(.active) { color:#506579; }
+.pm-body { flex:1; overflow-y:auto; min-height:0; padding:8px 10px; }
+.pm-section-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.pm-count { font-size:10px;color:#8d99aa;font-weight:500; }
+.pm-btn { border:0;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;color:#4f6074;background:#edf2f8; }
+.pm-btn:hover { background:#e2e9f2; }
+.pm-btn.primary { background:#4b93df;color:#fff; }
+.pm-btn.primary:hover { background:#4082c8; }
+.pm-btn.quiet { background:transparent;color:#6f7e90; }
+.pm-btn.quiet:hover { background:#f0f3f7; }
+.pm-btn.sm { padding:3px 7px;font-size:10px; }
+.pm-btn:disabled { opacity:.45;cursor:not-allowed; }
+.pm-link { border:0;background:transparent;color:#5783b5;font-size:11px;cursor:pointer;padding:2px 0; }
+.pm-link:hover { color:#3e6a9c; }
+.pm-link.danger { color:#ba615b; }
+.pm-link.danger:hover { color:#9e4c46; }
+.pm-link.sm { font-size:10px; }
+.pm-input { width:100%;border:1px solid #dbe2eb;border-radius:6px;padding:6px 8px;font-size:11px;color:#253349;outline-color:#68a5e2; }
+.pm-input.sm { padding:4px 6px;font-size:10px; }
+.pm-textarea { width:100%;border:1px solid #dbe2eb;border-radius:6px;padding:5px 7px;font-size:11px;color:#253349;outline-color:#68a5e2;resize:vertical;font-family:inherit; }
+.pm-select { border:1px solid #dbe2eb;border-radius:6px;padding:5px 6px;font-size:10px;color:#253349;background:#fff;outline-color:#68a5e2; }
+.pm-inline-form { background:#f6f9fd;border:1px solid #dce6f0;border-radius:8px;padding:9px;display:grid;gap:6px;margin-bottom:8px; }
+.pm-inline-row { display:flex;gap:5px; }
+.pm-inline-actions { display:flex;justify-content:flex-end;gap:5px; }
+.pm-badge { display:inline-block;font-size:9px;font-weight:700;border:1px solid;border-radius:4px;padding:1px 5px;white-space:nowrap; }
+.pm-muted { color:#8d99aa;font-size:10px; }
+.pm-tag { display:inline-block;background:#eef2f7;color:#586c82;border-radius:3px;padding:1px 5px;font-size:9px;font-weight:500; }
+.pm-assignee { font-size:10px;color:#68788c; }
+.pm-tasks-count { font-size:9px;color:#7f8d9e;background:#eef2f6;border-radius:7px;padding:1px 5px; }
+
+/* ── Roadmap View ── */
+.roadmap-group { margin-bottom:10px; }
+.roadmap-group-title { font-size:11px;color:#63758b;margin:6px 0 5px;font-weight:600; }
+.roadmap-card { background:#fff;border:1px solid #e9eef4;border-radius:7px;padding:8px 9px;margin-bottom:5px; }
+.roadmap-card-header { display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:3px; }
+.roadmap-card-header strong { font-size:11px;color:#263547;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0; }
+.roadmap-card-desc { font-size:10px;color:#6e7e92;margin:3px 0;line-height:1.4; }
+.roadmap-card-meta { display:flex;align-items:center;gap:8px;font-size:10px;color:#76869a;margin:3px 0; }
+.roadmap-card-actions { display:flex;gap:8px;justify-content:flex-end;margin-top:4px;padding-top:4px;border-top:1px solid #f0f3f7; }
+
+/* ── Kanban Board ── */
+.kanban-view { display:flex;flex-direction:column;height:100%; }
+.kanban-board { display:flex;gap:8px;overflow-x:auto;flex:1;padding-bottom:6px;min-height:0; }
+.kanban-col { min-width:210px;max-width:240px;flex:1;background:#f4f6f9;border-radius:8px;padding:8px;display:flex;flex-direction:column; }
+.kanban-col-title { font-size:11px;color:#54687e;margin:0 0 6px;font-weight:600;display:flex;align-items:center;justify-content:space-between; }
+.kanban-cards { display:flex;flex-direction:column;gap:5px;overflow-y:auto;flex:1;min-height:0; }
+.feature-card { background:#fff;border:1px solid #e5eaef;border-radius:7px;padding:7px 8px; }
+.feature-card-header { cursor:pointer; }
+.feature-card-title { display:flex;align-items:center;gap:5px;margin-bottom:2px; }
+.feature-card-title strong { font-size:11px;color:#263547;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.feature-card-meta { display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:3px; }
+.feature-card-desc { font-size:10px;color:#6c7d92;margin:4px 0;line-height:1.4; }
+.feature-status-jump { display:flex;gap:3px;flex-wrap:wrap;margin:4px 0; }
+.feature-tasks { border-top:1px solid #eef1f5;margin-top:5px;padding-top:5px; }
+.feature-task-row { display:flex;align-items:center;justify-content:space-between;gap:4px;padding:2px 0; }
+.feature-task-label { display:flex;align-items:center;gap:5px;flex:1;min-width:0;cursor:pointer; }
+.feature-task-label input { margin:0; }
+.feature-task-label span { font-size:10px;color:#3b4b5e; }
+.feature-task-label span.done { text-decoration:line-through;color:#8d9aaa; }
+.feature-task-add { display:flex;gap:4px;margin-top:4px; }
+.feature-card-actions { display:flex;gap:6px;justify-content:flex-end;margin-top:4px;padding-top:3px;border-top:1px solid #f0f3f7; }

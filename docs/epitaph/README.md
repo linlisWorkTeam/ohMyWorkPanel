@@ -6,7 +6,8 @@ Active handoff notes for future agents.
 
 | Date | Topic | Status |
 |------|-------|--------|
-| 2026-07-19 | v0.4 Tauri + Web Dual-Mode | active |
+| 2026-07-19 | v1.0–v1.1 PM Frontend UI + API Layer | active |
+| 2026-07-19 | v0.4 Tauri + Web Dual-Mode | archived |
 
 ## Archive
 

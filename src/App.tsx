@@ -4,6 +4,7 @@ import { FormEvent, KeyboardEvent, useEffect, useState, type ReactNode } from "r
 import { api } from "./api";
 import { currentMentionQuery, findMentionedMemberIds } from "./mentions";
 import type { ChatEvent, Group, GroupState, Member, PresetRole, RuntimeSettings, TaskRun } from "./types";
+import { PmPanel } from "./PmPanel";
 
 type NewMember = { kind: "agent" | "user"; displayName: string; roleDescription: string; adapter: string; executablePath: string };
 const emptyMember: NewMember = { kind: "agent", displayName: "", roleDescription: "", adapter: "mock", executablePath: "" };
@@ -16,6 +17,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showMembers, setShowMembers] = useState(true);
+  const [rightPanelTab, setRightPanelTab] = useState<"members" | "pm">("members");
   const [showAddMember, setShowAddMember] = useState(false);
   const [newMember, setNewMember] = useState<NewMember>(emptyMember);
   const [ocrRunning, setOcrRunning] = useState(false);
@@ -206,15 +208,23 @@ export function App() {
     </section>
 
     {current && showMembers && <aside className="member-panel">
-      <header><div><h2>群成员</h2><p>管理员负责未 @ 消息的默认处理</p></div><button className="icon-button" onClick={() => setShowMembers(false)}>×</button></header>
-      <div className="member-list">{members.map((member) => <MemberRow key={member.id} member={member} group={current.group} onAdmin={setAdmin} onRemove={removeMember} onDetect={detect} />)}</div>
-      {showAddMember ? <form className="add-member-form" onSubmit={addMember}>
-        <select value={newMember.kind} onChange={(event) => setNewMember((value) => ({ ...value, kind: event.target.value as NewMember["kind"] }))}><option value="agent">Agent</option><option value="user">用户</option></select>
-        <input autoFocus value={newMember.displayName} onChange={(event) => setNewMember((value) => ({ ...value, displayName: event.target.value }))} placeholder="成员名称" required />
-        <input value={newMember.roleDescription} onChange={(event) => setNewMember((value) => ({ ...value, roleDescription: event.target.value }))} placeholder={newMember.kind === "agent" ? "职责，例如：代码审查" : "成员说明（可选）"} />
-        {newMember.kind === "agent" && <><select value={newMember.adapter} onChange={(event) => setNewMember((value) => ({ ...value, adapter: event.target.value }))}><option value="mock">模拟 Agent（推荐体验）</option><option value="codex">Codex CLI</option><option value="claude-code">Claude Code</option><option value="opencode">OpenCode</option><option value="cursor">Cursor CLI</option></select><input value={newMember.executablePath} onChange={(event) => setNewMember((value) => ({ ...value, executablePath: event.target.value }))} placeholder="可执行文件路径（可选）" /></>}
-        <div><button type="button" className="quiet-button" onClick={() => setShowAddMember(false)}>取消</button><button type="submit">添加</button></div>
-      </form> : <button className="add-member-button" onClick={() => setShowAddMember(true)}>＋ 添加成员</button>}
+      <header>
+        <div className="pm-tab-bar">
+          <button className={`pm-tab-btn ${rightPanelTab === "members" ? "active" : ""}`} onClick={() => setRightPanelTab("members")}>群成员</button>
+          <button className={`pm-tab-btn ${rightPanelTab === "pm" ? "active" : ""}`} onClick={() => setRightPanelTab("pm")}>项目管理</button>
+        </div>
+        <button className="icon-button" onClick={() => setShowMembers(false)}>×</button>
+      </header>
+      {rightPanelTab === "members" ? <>
+        <div className="member-list">{members.map((member) => <MemberRow key={member.id} member={member} group={current.group} onAdmin={setAdmin} onRemove={removeMember} onDetect={detect} />)}</div>
+        {showAddMember ? <form className="add-member-form" onSubmit={addMember}>
+          <select value={newMember.kind} onChange={(event) => setNewMember((value) => ({ ...value, kind: event.target.value as NewMember["kind"] }))}><option value="agent">Agent</option><option value="user">用户</option></select>
+          <input autoFocus value={newMember.displayName} onChange={(event) => setNewMember((value) => ({ ...value, displayName: event.target.value }))} placeholder="成员名称" required />
+          <input value={newMember.roleDescription} onChange={(event) => setNewMember((value) => ({ ...value, roleDescription: event.target.value }))} placeholder={newMember.kind === "agent" ? "职责，例如：代码审查" : "成员说明（可选）"} />
+          {newMember.kind === "agent" && <><select value={newMember.adapter} onChange={(event) => setNewMember((value) => ({ ...value, adapter: event.target.value }))}><option value="mock">模拟 Agent（推荐体验）</option><option value="codex">Codex CLI</option><option value="claude-code">Claude Code</option><option value="opencode">OpenCode</option><option value="cursor">Cursor CLI</option></select><input value={newMember.executablePath} onChange={(event) => setNewMember((value) => ({ ...value, executablePath: event.target.value }))} placeholder="可执行文件路径（可选）" /></>}
+          <div><button type="button" className="quiet-button" onClick={() => setShowAddMember(false)}>取消</button><button type="submit">添加</button></div>
+        </form> : <button className="add-member-button" onClick={() => setShowAddMember(true)}>＋ 添加成员</button>}
+      </> : <PmPanel groupId={current.group.id} members={members} onError={(msg) => setError(msg)} />}
     </aside>}
 
     {showCreate && <Modal title="新建协作群" onClose={() => groups.length > 0 && setShowCreate(false)}><form className="modal-form" onSubmit={createGroup}><label>群名称<input name="name" required placeholder="例如：官网改版" /></label><label>群主名称<input name="ownerName" required defaultValue="我" /></label><label>本地工作目录<div className="path-input"><input name="workspacePath" required placeholder="选择 Agent 可访问的项目目录" /><button type="button" onClick={(event) => void chooseDirectory(event.currentTarget.previousElementSibling as HTMLInputElement)}>浏览</button></div></label><p className="form-hint">此目录由群主明确授权，所有 Agent 任务均在其中执行。</p><button className="primary-wide" type="submit">创建群聊</button></form></Modal>}
