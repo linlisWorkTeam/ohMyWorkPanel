@@ -68,3 +68,10 @@ scripts/
 - `AppState` 持有 `db_path` 与任务取消/调度锁，`commands` 消费 `State<AppState>`。
 - `schedule_group` 为同步函数（内部仅入锁+spawn），不要加 `.await`。
 - `append_delta` 为同步函数，避免异步闭包中持有 `MutexGuard` 导致 `!Send`。
+
+## Handoff notes
+
+This project uses `docs/epitaph/` for session handoff notes. New agents:
+1. Read `docs/epitaph/README.md` for index.
+2. Read the latest active epitaph before modifying related code.
+3. Follow the epitaph skill workflow to write new handoffs.
