@@ -1,0 +1,129 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Group {
+    pub id: String,
+    pub name: String,
+    pub workspace_path: String,
+    pub owner_member_id: String,
+    pub admin_member_id: Option<String>,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Member {
+    pub id: String,
+    pub group_id: String,
+    pub kind: String,
+    pub display_name: String,
+    pub avatar_color: String,
+    pub role_description: String,
+    pub is_active: bool,
+    pub adapter: Option<String>,
+    pub executable_path: Option<String>,
+    pub runtime_status: Option<String>,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Message {
+    pub id: String,
+    pub group_id: String,
+    pub sender_member_id: String,
+    pub parent_run_id: Option<String>,
+    pub content: String,
+    pub status: String,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskRun {
+    pub id: String,
+    pub group_id: String,
+    pub root_message_id: String,
+    pub agent_member_id: String,
+    pub parent_run_id: Option<String>,
+    pub depth: i64,
+    pub status: String,
+    pub output_message_id: Option<String>,
+    pub error_message: Option<String>,
+    pub created_at: i64,
+    pub started_at: Option<i64>,
+    pub completed_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupState {
+    pub group: Group,
+    pub members: Vec<Member>,
+    pub messages: Vec<Message>,
+    pub runs: Vec<TaskRun>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Bootstrap {
+    pub groups: Vec<Group>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateGroupInput {
+    pub name: String,
+    pub workspace_path: String,
+    pub owner_name: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddMemberInput {
+    pub group_id: String,
+    pub kind: String,
+    pub display_name: String,
+    pub role_description: String,
+    pub avatar_color: Option<String>,
+    pub adapter: Option<String>,
+    pub executable_path: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SendResult {
+    pub message: Message,
+    pub run_ids: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatEvent {
+    pub kind: String,
+    pub group_id: String,
+    pub run_id: Option<String>,
+    pub message_id: Option<String>,
+    pub delta: Option<String>,
+    pub status: Option<String>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeSettings {
+    pub max_concurrent_runs: i64,
+    pub run_timeout_seconds: i64,
+    pub context_message_limit: i64,
+    pub max_delegation_depth: i64,
+}
+
+#[derive(Clone)]
+pub struct ExecutionContext {
+    pub run: TaskRun,
+    pub group: Group,
+    pub agent: Member,
+    pub prompt: String,
+    pub settings: RuntimeSettings,
+}
