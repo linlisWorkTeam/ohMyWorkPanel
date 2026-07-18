@@ -80,6 +80,16 @@ pub fn init_db(path: &Path) -> AppResult<()> {
             )
             .map_err(|e| e.to_string())?;
     }
+    // Default preset roles
+    let default_roles = serde_json::json!([
+        {"name":"????","adapter":"codex","roleDescription":"????????????????","avatarColor":"#2b6cb0"},
+        {"name":"?????","adapter":"codex","roleDescription":"????????????????","avatarColor":"#38a169"},
+        {"name":"UI?????","adapter":"codex","roleDescription":"?????????????????","avatarColor":"#d69e2e"}
+    ]);
+    connection.execute(
+        "INSERT OR IGNORE INTO app_settings(key, value) VALUES('preset_roles', ?1)",
+        params![default_roles.to_string()],
+    ).map_err(|e| e.to_string())?;
     connection
         .execute(
             "UPDATE task_runs SET status='interrupted', completed_at=?1 WHERE status IN ('queued','running')",
@@ -260,6 +270,17 @@ pub fn settings_or(conn: &Connection, key: &str, default: i64) -> AppResult<i64>
         .map_err(|e| e.to_string())?
         .and_then(|x| x.parse().ok())
         .unwrap_or(default))
+}
+
+pub fn get_preset_roles(connection: &Connection) -> AppResult<Vec<crate::models::PresetRole>> {
+    let json: Option<String> = connection
+        .query_row("SELECT value FROM app_settings WHERE key='preset_roles'", [], |r| r.get(0))
+        .optional()
+        .map_err(|e| e.to_string())?;
+    match json {
+        Some(val) => serde_json::from_str(&val).map_err(|e| format!("?????????{e}")),
+        None => Ok(Vec::new()),
+    }
 }
 
 pub fn insert_run_event(

@@ -18,5 +18,7 @@ export const api = {
   retryRun: (runId: string) => invoke<string>("retry_run", { runId }),
   detectAgent: (memberId: string) => invoke<string>("detect_agent", { memberId }),
   getSettings: () => invoke<RuntimeSettings>("get_runtime_settings"),
-  updateSettings: (settings: RuntimeSettings) => invoke<RuntimeSettings>("update_runtime_settings", { settings })
+   updateSettings: (settings: RuntimeSettings) => invoke<RuntimeSettings>("update_runtime_settings", { settings }),
+   ocrImage: (imagePath: string) => invoke<string>("ocr_image", { imagePath }),
+   getPresetRoles: () => invoke<PresetRole[]>("get_preset_roles_command")
 };

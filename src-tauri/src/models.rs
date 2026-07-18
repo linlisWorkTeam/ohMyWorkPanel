@@ -1,5 +1,15 @@
 use serde::{Deserialize, Serialize};
 
+/// A predefined agent role template used during group creation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PresetRole {
+    pub name: String,
+    pub adapter: String,
+    pub role_description: String,
+    pub avatar_color: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Group {
@@ -77,6 +87,7 @@ pub struct CreateGroupInput {
     pub name: String,
     pub workspace_path: String,
     pub owner_name: String,
+    pub preset_roles: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]

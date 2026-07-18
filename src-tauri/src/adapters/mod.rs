@@ -80,8 +80,14 @@ impl AdapterKind {
             return Err("此适配器暂未提供运行器。".into());
         }
         for name in candidates {
-            if executable_on_path(name) {
-                return Ok((*name).to_string());
+            if let Some(full_path) = find_executable_path(name) {
+                return Ok(full_path);
+            }
+            #[cfg(windows)]
+            {
+                if let Some(npm_path) = find_in_npm(name) {
+                    return Ok(npm_path);
+                }
             }
         }
         Ok(self
@@ -105,28 +111,70 @@ impl AdapterKind {
     }
 }
 
-pub fn executable_on_path(name: &str) -> bool {
-    let Ok(paths) = std::env::var("PATH") else {
-        return false;
-    };
-    for dir in std::env::split_paths(&paths) {
-        if candidate_exists(&dir.join(name)) {
-            return true;
-        }
-        #[cfg(windows)]
-        {
-            for ext in ["exe", "cmd", "bat", "ps1"] {
-                if candidate_exists(&dir.join(format!("{name}.{ext}"))) {
-                    return true;
+fn candidate_exists(path: &Path) -> bool {
+    path.is_file()
+}
+
+fn find_executable_path(name: &str) -> Option<String> {
+    std::env::var("PATH").ok().and_then(|paths| {
+        for dir in std::env::split_paths(&paths) {
+            #[cfg(windows)]
+            {
+                // Windows: only match files with executable extensions.
+                // Bare names (e.g. Unix scripts without extension) will fail
+                // at CreateProcess with "not a valid Win32 application".
+                for ext in ["exe", "cmd", "bat", "ps1"] {
+                    let full = dir.join(format!("{name}.{ext}"));
+                    if candidate_exists(&full) {
+                        return Some(full.to_string_lossy().to_string());
+                    }
+                }
+            }
+            #[cfg(not(windows))]
+            {
+                if candidate_exists(&dir.join(name)) {
+                    return Some(dir.join(name).to_string_lossy().to_string());
                 }
             }
         }
-    }
-    false
+        None
+    })
 }
 
-fn candidate_exists(path: &Path) -> bool {
-    path.is_file()
+#[cfg(windows)]
+fn find_in_npm(name: &str) -> Option<String> {
+    let appdata = std::env::var("APPDATA").ok()?;
+    let npm_dir = std::path::Path::new(&appdata).join("npm");
+    for ext in ["cmd", "exe", "bat", "ps1"] {
+        let full = npm_dir.join(format!("{name}.{ext}"));
+        if candidate_exists(&full) {
+            return Some(full.to_string_lossy().to_string());
+        }
+    }
+    None
+}
+
+/// Windows helper: wraps .cmd/.bat through cmd.exe, .ps1 through powershell.exe,
+/// so scripts that aren't valid PE executables still work.
+#[cfg(windows)]
+fn prepare_command(executable: &str) -> Command {
+    let lower = executable.to_lowercase();
+    if lower.ends_with(".ps1") {
+        let mut cmd = Command::new("powershell.exe");
+        cmd.arg("-ExecutionPolicy").arg("Bypass").arg("-File").arg(executable);
+        cmd
+    } else if lower.ends_with(".cmd") || lower.ends_with(".bat") {
+        let mut cmd = Command::new("cmd.exe");
+        cmd.arg("/c").arg(executable);
+        cmd
+    } else {
+        Command::new(executable)
+    }
+}
+
+#[cfg(not(windows))]
+fn prepare_command(executable: &str) -> Command {
+    Command::new(executable)
 }
 
 pub async fn run_mock_stream<F, Fut>(token: &Arc<AtomicBool>, mut on_delta: F) -> AppResult<()>
@@ -158,12 +206,13 @@ where
     Fut: std::future::Future<Output = AppResult<()>>,
 {
     let adapter = kind.as_str();
-    let mut command = Command::new(executable);
+    let mut command = prepare_command(executable);
     command
-        .current_dir(workspace)
-        .args(kind.build_args(prompt))
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+       .current_dir(workspace)
+       .args(kind.build_args(prompt))
+        .stdin(Stdio::null())
+       .stdout(Stdio::piped())
+       .stderr(Stdio::piped());
 
     let mut child = command
         .spawn()

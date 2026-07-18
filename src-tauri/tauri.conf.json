@@ -20,7 +20,23 @@
         "resizable": true
       }
     ],
-    "security": { "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' asset: data:; style-src 'self' 'unsafe-inline'" }
+    "security": {
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' asset: data:; style-src 'self' 'unsafe-inline'"
+    }
   },
-  "bundle": { "active": true, "targets": "all" }
+ "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "windows": {
+      "wix": null,
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    },
+    "icon": [
+      "icons/32x32.png",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ]
+ }
 }

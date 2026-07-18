@@ -1,4 +1,4 @@
-export type MemberKind = "user" | "agent";
+﻿export type MemberKind = "user" | "agent";
 export type RunStatus = "queued" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
 
 export interface Group {
@@ -64,6 +64,13 @@ export interface ChatEvent {
   delta: string | null;
   status: RunStatus | string | null;
   error: string | null;
+}
+
+export interface PresetRole {
+  name: string;
+  adapter: string;
+  roleDescription: string;
+  avatarColor: string;
 }
 
 export interface RuntimeSettings {

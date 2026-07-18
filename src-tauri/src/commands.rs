@@ -1,10 +1,10 @@
 use crate::adapters::AdapterKind;
 use crate::db::{
-    active_agent_ids, create_task_run, get_group, get_groups, get_settings_from, group_state, id,
-    insert_run_event, member_from_row, now, open_db, run_from_row, AppResult,
+    active_agent_ids, create_task_run, get_group, get_groups, get_preset_roles, get_settings_from,
+    group_state, id, insert_run_event, member_from_row, now, open_db, run_from_row, AppResult,
 };
 use crate::models::{
-    AddMemberInput, Bootstrap, ChatEvent, CreateGroupInput, GroupState, Member, Message,
+    AddMemberInput, Bootstrap, ChatEvent, CreateGroupInput, GroupState, Member, Message, PresetRole,
     RuntimeSettings, SendResult, TaskRun,
 };
 use crate::scheduler::{emit, schedule_group};
@@ -88,6 +88,22 @@ pub fn create_group(input: CreateGroupInput, state: State<'_, AppState>) -> AppR
         params![owner_id, group_id, owner_name, created_at],
     )
     .map_err(|e| e.to_string())?;
+    // Auto-create agent members from selected preset roles
+    if let Some(role_names) = &input.preset_roles {
+        let all_roles = get_preset_roles(&conn)?;
+        for role in all_roles {
+            if !role_names.contains(&role.name) { continue; }
+            let mid = id();
+            conn.execute(
+                "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at) VALUES(?1,?2,'agent',?3,?4,?5,1,?6)",
+                params![mid, group_id, role.name, role.avatar_color, role.role_description, created_at],
+            ).map_err(|e| e.to_string())?;
+            conn.execute(
+                "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at) VALUES(?1,?2,NULL,'unknown',?3)",
+                params![mid, role.adapter, created_at],
+            ).map_err(|e| e.to_string())?;
+        }
+    }
     group_state(&conn, &group_id)
 }
 
@@ -465,4 +481,14 @@ pub async fn detect_agent(member_id: String, state: State<'_, AppState>) -> AppR
     )
     .map_err(|e| e.to_string())?;
     Ok(status.into())
+}
+ 
+ #[tauri::command]
+ pub fn ocr_image(image_path: String) -> AppResult<String> {
+     crate::ocr::ocr_image(&image_path)
+ }
+
+#[tauri::command]
+pub fn get_preset_roles_command(state: State<'_, AppState>) -> AppResult<Vec<PresetRole>> {
+    get_preset_roles(&open_db(&state.db_path)?)
 }

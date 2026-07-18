@@ -1,9 +1,9 @@
-import { listen } from "@tauri-apps/api/event";
+﻿import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { FormEvent, KeyboardEvent, useEffect, useState, type ReactNode } from "react";
 import { api } from "./api";
 import { currentMentionQuery, findMentionedMemberIds } from "./mentions";
-import type { ChatEvent, Group, GroupState, Member, RuntimeSettings, TaskRun } from "./types";
+import type { ChatEvent, Group, GroupState, Member, PresetRole, RuntimeSettings, TaskRun } from "./types";
 
 type NewMember = { kind: "agent" | "user"; displayName: string; roleDescription: string; adapter: string; executablePath: string };
 const emptyMember: NewMember = { kind: "agent", displayName: "", roleDescription: "", adapter: "mock", executablePath: "" };
@@ -18,6 +18,9 @@ export function App() {
   const [showMembers, setShowMembers] = useState(true);
   const [showAddMember, setShowAddMember] = useState(false);
   const [newMember, setNewMember] = useState<NewMember>(emptyMember);
+  const [ocrRunning, setOcrRunning] = useState(false);
+  const [presetRoles, setPresetRoles] = useState<PresetRole[]>([]);
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [settings, setSettings] = useState<RuntimeSettings | null>(null);
   const [showSettings, setShowSettings] = useState(false);
 
@@ -43,6 +46,7 @@ export function App() {
         if (boot.groups[0]) await refresh(boot.groups[0].id);
         else setShowCreate(true);
         setSettings(await api.getSettings());
+        try { setPresetRoles(await api.getPresetRoles()); } catch {}
       } catch (reason) {
         if (!disposed) setError(readError(reason));
       }
@@ -74,7 +78,7 @@ export function App() {
     const data = new FormData(event.currentTarget);
     try {
       const created = await api.createGroup({
-        name: String(data.get("name") ?? ""), workspacePath: String(data.get("workspacePath") ?? ""), ownerName: String(data.get("ownerName") ?? "")
+        name: String(data.get("name") ?? ""), workspacePath: String(data.get("workspacePath") ?? ""), ownerName: String(data.get("ownerName") ?? ""), presetRoles: selectedRoles.length > 0 ? selectedRoles : undefined
       });
       setCurrent(created); setGroups((previous) => [created.group, ...previous]); setShowCreate(false); setError(null);
     } catch (reason) { setError(readError(reason)); }
@@ -83,6 +87,23 @@ export function App() {
     if (!field) return;
     try { const selected = await open({ directory: true, multiple: false }); if (typeof selected === "string") field.value = selected; }
     catch (reason) { setError(readError(reason)); }
+  };
+  const handleOcr = async () => {
+    try {
+      const selected = await open({
+        multiple: false,
+        filters: [{ name: "图片", extensions: ["png", "jpg", "jpeg", "bmp", "gif", "tiff", "webp"] }]
+      });
+      if (typeof selected !== "string") return;
+      setOcrRunning(true);
+      const text = await api.ocrImage(selected);
+      setComposer((prev) => prev + text);
+      setError(null);
+    } catch (reason) {
+      setError(readError(reason));
+    } finally {
+      setOcrRunning(false);
+    }
   };
   const send = async () => {
     if (!current || !owner || !composer.trim()) return;
@@ -121,6 +142,11 @@ export function App() {
     try { setSettings(await api.updateSettings(settings)); setShowSettings(false); } catch (reason) { setError(readError(reason)); }
   };
 
+  const toggleRole = (name: string) => setSelectedRoles((prev) => prev.includes(name) ? prev.filter((r) => r !== name) : [...prev, name]);
+
+  // Fetch preset roles when create modal opens
+  useEffect(() => { if (showCreate) { void api.getPresetRoles().then(setPresetRoles).catch(() => {}); setSelectedRoles([]); } }, [showCreate]);
+
   return <main className="app-shell">
     <aside className="group-sidebar">
       <div className="brand"><span className="brand-mark">L</span><span>Linlis</span></div>
@@ -143,7 +169,7 @@ export function App() {
         <footer className="composer-wrap">
           {mentionSuggestions.length > 0 && <div className="mention-menu">{mentionSuggestions.map((member) => <button key={member.id} onClick={() => selectMention(member)}><Avatar member={member} /><span>{member.displayName}<small>{member.kind === "agent" ? member.roleDescription || member.adapter : "用户"}</small></span></button>)}</div>}
           <textarea value={composer} onChange={(event) => setComposer(event.target.value)} onKeyDown={composerKeyDown} placeholder="发送消息，输入 @ 选择 Agent。Enter 发送，Shift + Enter 换行。" />
-          <div className="composer-actions"><span>Agent 会在本机已有登录的 CLI 中运行</span><button className="send-button" disabled={!composer.trim()} onClick={() => void send()}>发送</button></div>
+          <div className="composer-actions"><span>Agent 会在本机已有登录的 CLI 中运行</span><span><button className="ocr-button" disabled={ocrRunning} title="从图片识别文字" onClick={() => void handleOcr()}>📷</button><button className="send-button" disabled={!composer.trim()} onClick={() => void send()}>发送</button></span></div>
         </footer>
       </> : <div className="loading">正在打开本地群聊…</div>}
     </section>

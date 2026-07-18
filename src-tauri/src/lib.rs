@@ -1,5 +1,6 @@
-mod adapters;
+﻿mod adapters;
 mod commands;
+mod ocr;
 mod db;
 mod models;
 mod scheduler;
@@ -50,8 +51,11 @@ pub fn run() {
             commands::send_message,
             commands::cancel_run,
             commands::retry_run,
-            commands::detect_agent
+            commands::detect_agent,
+            commands::ocr_image,
+            commands::get_preset_roles_command
         ])
         .run(tauri::generate_context!())
         .expect("启动 LinlisWorkPanel 失败");
 }
+
