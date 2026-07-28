@@ -75,3 +75,25 @@ This project uses `docs/epitaph/` for session handoff notes. New agents:
 1. Read `docs/epitaph/README.md` for index.
 2. Read the latest active epitaph before modifying related code.
 3. Follow the epitaph skill workflow to write new handoffs.
+
+## Cursor Cloud specific instructions
+
+Environment refresh (`pnpm install`) runs on startup; Rust stable toolchain and the
+Tauri GUI system libraries (`libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, etc.) are baked into
+the VM snapshot. Notes below cover only non-obvious runtime caveats.
+
+- **Rust must be stable ≥ 1.85** (`rustup default stable`). The base image's 1.83 fails to
+  build because a transitive dep (`zeroize_derive`) requires `edition2024`.
+- **Running the desktop app (primary product):** the VM is headless but has an XFCE
+  desktop on `DISPLAY=:1`. Launch with `DISPLAY=:1 pnpm tauri dev`. The window title is
+  `LinlisWorkPanel`. `libEGL ... DRI3` warnings at launch are benign (software rendering).
+- **Hello-world flow:** create a group → add an agent member with the `mock` adapter →
+  send a chat message that `@`-mentions the agent; the mock adapter streams back a reply.
+  No external Agent CLI (codex/claude/opencode/cursor) is needed for the mock path.
+- **Web-server mode (`linlis-work-panel-server`) is currently broken.** Build it with
+  `cargo build --bin linlis-work-panel-server --no-default-features` (avoids the GUI/webkit
+  deps), but it panics at runtime: `main_server.rs` uses `nest_service("/")`, which axum 0.8
+  no longer allows at the root. Prefer the desktop app for E2E. (`fix_main_server.py` at the
+  repo root is an unapplied workaround that swaps it for `fallback_service`.)
+- **Rust tests** run from `src-tauri/` with `cargo test` (default `gui` feature; compiles
+  Tauri/webkit). Frontend tests: `pnpm test` (Vitest).
