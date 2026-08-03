@@ -39,7 +39,7 @@ pub fn init_db(path: &Path) -> AppResult<()> {
         );
         CREATE TABLE IF NOT EXISTS members (
           id TEXT PRIMARY KEY, group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
-          kind TEXT NOT NULL CHECK(kind IN ('user','agent')), display_name TEXT NOT NULL,
+          kind TEXT NOT NULL CHECK(kind IN ('user','agent','chatbot')), display_name TEXT NOT NULL,
           avatar_color TEXT NOT NULL, role_description TEXT NOT NULL, is_active INTEGER NOT NULL DEFAULT 1,
           created_at INTEGER NOT NULL
         );
@@ -143,6 +143,18 @@ pub fn init_db(path: &Path) -> AppResult<()> {
         "ALTER TABLE groups ADD COLUMN announcement_updated_at INTEGER",
         [],
     );
+    for col_sql in [
+        "ALTER TABLE agent_profiles ADD COLUMN workspace_path TEXT",
+        "ALTER TABLE agent_profiles ADD COLUMN api_key TEXT",
+        "ALTER TABLE agent_profiles ADD COLUMN keep_alive INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE agent_profiles ADD COLUMN last_heartbeat_at INTEGER",
+        "ALTER TABLE agent_profiles ADD COLUMN warm_status TEXT NOT NULL DEFAULT 'cold'",
+        "ALTER TABLE task_runs ADD COLUMN phase TEXT",
+        "ALTER TABLE task_runs ADD COLUMN phase_updated_at INTEGER",
+    ] {
+        let _ = connection.execute(col_sql, []);
+    }
+    migrate_members_allow_chatbot(&connection)?;
     for (key, value) in [
         ("max_concurrent_runs", "3"),
         ("run_timeout_seconds", "900"),
@@ -274,6 +286,48 @@ pub fn ensure_default_seed(connection: &Connection) -> AppResult<()> {
     Ok(())
 }
 
+fn migrate_members_allow_chatbot(connection: &Connection) -> AppResult<()> {
+    let ddl: String = connection
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='members'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or_default();
+    if ddl.contains("chatbot") {
+        return Ok(());
+    }
+    connection
+        .execute_batch("PRAGMA foreign_keys=OFF;")
+        .map_err(|e| e.to_string())?;
+    let result = (|| -> AppResult<()> {
+        connection
+            .execute_batch(
+                r#"
+CREATE TABLE IF NOT EXISTS members_new (
+  id TEXT PRIMARY KEY,
+  group_id TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK(kind IN ('user','agent','chatbot')),
+  display_name TEXT NOT NULL,
+  avatar_color TEXT NOT NULL,
+  role_description TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  tags TEXT NOT NULL DEFAULT ''
+);
+INSERT INTO members_new(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,tags)
+SELECT id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,COALESCE(tags,'') FROM members;
+DROP TABLE members;
+ALTER TABLE members_new RENAME TO members;
+"#,
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    })();
+    let _ = connection.execute_batch("PRAGMA foreign_keys=ON;");
+    result
+}
+
 pub fn group_from_row(row: &Row<'_>) -> rusqlite::Result<Group> {
     Ok(Group {
         id: row.get(0)?,
@@ -288,6 +342,7 @@ pub fn group_from_row(row: &Row<'_>) -> rusqlite::Result<Group> {
 }
 
 pub fn member_from_row(row: &Row<'_>) -> rusqlite::Result<Member> {
+    let api_key: Option<String> = row.get(13)?;
     Ok(Member {
         id: row.get(0)?,
         group_id: row.get(1)?,
@@ -301,8 +356,15 @@ pub fn member_from_row(row: &Row<'_>) -> rusqlite::Result<Member> {
         runtime_status: row.get(9)?,
         tags: row.get(10)?,
         created_at: row.get(11)?,
+        workspace_path: row.get(12)?,
+        api_key_set: api_key.as_ref().map(|k| !k.is_empty()).unwrap_or(false),
+        keep_alive: row.get::<_, i64>(14)? != 0,
+        warm_status: row.get(15)?,
     })
 }
+
+pub const MEMBER_SELECT: &str = "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status
+         FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id";
 
 pub fn message_from_row(row: &Row<'_>) -> rusqlite::Result<Message> {
     Ok(Message {
@@ -332,8 +394,12 @@ pub fn run_from_row(row: &Row<'_>) -> rusqlite::Result<TaskRun> {
         created_at: row.get(11)?,
         started_at: row.get(12)?,
         completed_at: row.get(13)?,
+        phase: row.get(14).ok().flatten(),
+        phase_updated_at: row.get(15).ok().flatten(),
     })
 }
+
+pub const RUN_SELECT: &str = "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at,phase,phase_updated_at FROM task_runs";
 
 pub fn get_groups(connection: &Connection) -> AppResult<Vec<Group>> {
     let mut stmt = connection
@@ -396,12 +462,71 @@ pub fn update_group_workspace(
     get_group(connection, group_id)
 }
 
+pub fn set_run_phase(connection: &Connection, run_id: &str, phase: &str) -> AppResult<(i64, i64)> {
+    let ts = now();
+    let created: i64 = connection
+        .query_row(
+            "SELECT created_at FROM task_runs WHERE id=?1",
+            params![run_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    let prev: Option<i64> = connection
+        .query_row(
+            "SELECT phase_updated_at FROM task_runs WHERE id=?1",
+            params![run_id],
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?
+        .flatten();
+    connection
+        .execute(
+            "UPDATE task_runs SET phase=?1, phase_updated_at=?2 WHERE id=?3",
+            params![phase, ts, run_id],
+        )
+        .map_err(|e| e.to_string())?;
+    let elapsed = ts - prev.unwrap_or(created);
+    let total = ts - created;
+    let payload = serde_json::json!({"phase": phase, "elapsedMs": elapsed, "totalMs": total});
+    insert_run_event(connection, run_id, "phase", &payload.to_string())?;
+    Ok((elapsed, total))
+}
+
+pub fn get_agent_api_key(connection: &Connection, member_id: &str) -> AppResult<Option<String>> {
+    connection
+        .query_row(
+            "SELECT api_key FROM agent_profiles WHERE member_id=?1",
+            params![member_id],
+            |r| r.get::<_, Option<String>>(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())
+        .map(|v| v.flatten())
+}
+
+pub fn set_member_workspace(
+    connection: &Connection,
+    member_id: &str,
+    workspace_path: &str,
+) -> AppResult<()> {
+    let n = connection
+        .execute(
+            "UPDATE agent_profiles SET workspace_path=?1, updated_at=?2 WHERE member_id=?3",
+            params![workspace_path, now(), member_id],
+        )
+        .map_err(|e| e.to_string())?;
+    if n == 0 {
+        return Err("找不到 Agent 配置。".into());
+    }
+    Ok(())
+}
+
 pub fn get_members(connection: &Connection, group_id: &str) -> AppResult<Vec<Member>> {
     let mut stmt = connection
-        .prepare(
-            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at
-         FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.group_id=?1 ORDER BY m.created_at",
-        )
+        .prepare(&format!(
+            "{MEMBER_SELECT} WHERE m.group_id=?1 ORDER BY m.created_at"
+        ))
         .map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map(params![group_id], member_from_row)
@@ -428,7 +553,7 @@ pub fn get_messages(connection: &Connection, group_id: &str) -> AppResult<Vec<Me
 pub fn get_runs(connection: &Connection, group_id: &str) -> AppResult<Vec<TaskRun>> {
     let mut stmt = connection
         .prepare(
-            "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at FROM task_runs WHERE group_id=?1 ORDER BY created_at",
+            "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at,phase,phase_updated_at FROM task_runs WHERE group_id=?1 ORDER BY created_at",
         )
         .map_err(|e| e.to_string())?;
     let rows = stmt
@@ -537,8 +662,9 @@ pub fn create_task_run(
     depth: i64,
 ) -> AppResult<String> {
     let run_id = id();
+    let ts = now();
     conn.execute(
-        "INSERT INTO task_runs(id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,created_at) VALUES(?1,?2,?3,?4,?5,?6,'queued',?7)",
+        "INSERT INTO task_runs(id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,created_at,phase,phase_updated_at) VALUES(?1,?2,?3,?4,?5,?6,'queued',?7,'queued',?7)",
         params![
             run_id,
             group_id,
@@ -546,7 +672,7 @@ pub fn create_task_run(
             agent_member_id,
             parent_run_id,
             depth,
-            now()
+            ts
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -574,7 +700,7 @@ pub fn active_agent_ids(
             )
             .optional()
             .map_err(|e| e.to_string())?;
-        if kind.as_deref() == Some("agent:1") {
+        if matches!(kind.as_deref(), Some("agent:1") | Some("chatbot:1")) {
             agents.push(member_id.clone());
         }
     }
@@ -833,6 +959,22 @@ pub fn save_experience(conn: &Connection, group_id: &str, source_member_id: &str
         "INSERT INTO experiences(id,group_id,source_member_id,title,content,tags,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8)",
         params![eid, group_id, source_member_id, title, content, tags, now_ts, now_ts],
     ).map_err(|e| e.to_string())?;
+    if let Ok(group) = get_group(conn, group_id) {
+        let ws = std::path::Path::new(&group.workspace_path);
+        let _ = crate::memory::append_group_memory(ws, title, content);
+        let kind: Option<String> = conn
+            .query_row(
+                "SELECT kind FROM members WHERE id=?1",
+                params![source_member_id],
+                |r| r.get(0),
+            )
+            .optional()
+            .ok()
+            .flatten();
+        if kind.as_deref() == Some("agent") {
+            let _ = crate::memory::append_agent_memory(ws, source_member_id, title, content);
+        }
+    }
     Ok(eid)
 }
 

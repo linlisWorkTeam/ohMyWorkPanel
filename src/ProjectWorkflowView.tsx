@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "./api";
 import { PmPanel } from "./PmPanel";
+import { ServerPathPicker } from "./ServerPathPicker";
 import type { Group, Member, OpsJobState, ReleaseStatus, RoadmapItem, TaskRun } from "./types";
 
 interface Props {
@@ -9,8 +10,15 @@ interface Props {
   runs: TaskRun[];
   canManage: boolean;
   onGroupPatch: (group: Group) => void;
+  onMemberPatch: (member: Member) => void;
   onError: (msg: string) => void;
 }
+
+const PHASE_LABEL: Record<string, string> = {
+  queued: "排队", starting: "启动", preparing: "准备", cli_spawn: "拉起 CLI",
+  awaiting_first_token: "等待首包", streaming: "流式输出", finalizing: "收尾",
+  completed: "完成", failed: "失败",
+};
 
 const STATUS_LABEL: Record<string, string> = {
   backlog: "待办",
@@ -19,13 +27,19 @@ const STATUS_LABEL: Record<string, string> = {
   done: "完成",
 };
 
-export function ProjectWorkflowView({ group, members, runs, canManage, onGroupPatch, onError }: Props) {
+export function ProjectWorkflowView({ group, members, runs, canManage, onGroupPatch, onMemberPatch, onError }: Props) {
   const [roadmap, setRoadmap] = useState<RoadmapItem[]>([]);
   const [announcement, setAnnouncement] = useState(group.announcement ?? "");
   const [savingAnn, setSavingAnn] = useState(false);
   const [checklist, setChecklist] = useState(() => loadChecklist(group.id));
   const [release, setRelease] = useState<ReleaseStatus | null>(null);
   const [job, setJob] = useState<OpsJobState | null>(null);
+  const [groupWs, setGroupWs] = useState(group.workspacePath);
+  const [savingWs, setSavingWs] = useState(false);
+  const [editingAgent, setEditingAgent] = useState<string | null>(null);
+  const [agentWs, setAgentWs] = useState("");
+
+  useEffect(() => { setGroupWs(group.workspacePath); }, [group.id, group.workspacePath]);
 
   const refreshRoadmap = useCallback(async () => {
     try {
@@ -66,10 +80,32 @@ export function ProjectWorkflowView({ group, members, runs, canManage, onGroupPa
       ?? null;
   }, [roadmap]);
 
-  const agents = members.filter((m) => m.kind === "agent" && m.isActive);
+  const agents = members.filter((m) => (m.kind === "agent" || m.kind === "chatbot") && m.isActive);
   const activeRuns = runs.filter((r) =>
     ["queued", "running", "awaiting_review", "changes_requested"].includes(r.status)
   );
+
+  const saveGroupWorkspace = async () => {
+    setSavingWs(true);
+    try {
+      const g = await api.updateGroupWorkspace(group.id, groupWs);
+      onGroupPatch({ ...group, ...g });
+    } catch (e: unknown) {
+      onError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSavingWs(false);
+    }
+  };
+
+  const saveAgentWorkspace = async (memberId: string) => {
+    try {
+      const m = await api.updateMemberWorkspace(memberId, agentWs);
+      onMemberPatch(m);
+      setEditingAgent(null);
+    } catch (e: unknown) {
+      onError(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   const saveAnnouncement = async () => {
     setSavingAnn(true);
@@ -147,7 +183,17 @@ export function ProjectWorkflowView({ group, members, runs, canManage, onGroupPa
             })}
           </div>
         )}
-        <p className="wf-meta">工作区：<code>{group.workspacePath}</code></p>
+        <div className="wf-workspace">
+          <p className="wf-meta">群工作区：<code>{group.workspacePath}</code></p>
+          {canManage && (
+            <div className="wf-ws-edit">
+              <ServerPathPicker value={groupWs} onChange={setGroupWs} onError={onError} />
+              <button className="pm-btn sm" disabled={savingWs || groupWs === group.workspacePath} onClick={() => void saveGroupWorkspace()}>
+                {savingWs ? "保存中…" : "更新群工作区"}
+              </button>
+            </div>
+          )}
+        </div>
       </section>
 
       <section className="wf-section">
@@ -160,14 +206,30 @@ export function ProjectWorkflowView({ group, members, runs, canManage, onGroupPa
                 <div className="lane-head">
                   <span className="lane-dot" style={{ background: agent.avatarColor }} />
                   <strong>{agent.displayName}</strong>
-                  <small>{agent.adapter ?? "—"}</small>
+                  <small>{agent.kind === "chatbot" ? "chatbot" : agent.adapter ?? "—"}{agent.keepAlive ? " · 保活" : ""}{agent.warmStatus ? ` · ${agent.warmStatus}` : ""}</small>
                 </div>
+                {agent.kind === "agent" && (
+                  <div className="lane-ws">
+                    <code title={agent.workspacePath ?? ""}>{agent.workspacePath ?? "（默认沙箱）"}</code>
+                    {canManage && (
+                      editingAgent === agent.id ? (
+                        <div className="wf-ws-edit">
+                          <ServerPathPicker value={agentWs} onChange={setAgentWs} onError={onError} />
+                          <button className="pm-btn sm" onClick={() => void saveAgentWorkspace(agent.id)}>保存</button>
+                          <button className="pm-btn sm quiet" onClick={() => setEditingAgent(null)}>取消</button>
+                        </div>
+                      ) : (
+                        <button className="pm-btn sm quiet" onClick={() => { setEditingAgent(agent.id); setAgentWs(agent.workspacePath || group.workspacePath); }}>改工作区</button>
+                      )
+                    )}
+                  </div>
+                )}
                 {mine.length === 0 ? (
                   <div className="lane-idle">空闲</div>
                 ) : (
                   mine.map((run) => (
                     <div key={run.id} className={`lane-run ${run.status}`}>
-                      <span>{run.status}</span>
+                      <span>{run.phase ? (PHASE_LABEL[run.phase] ?? run.phase) : run.status}</span>
                       <code>{run.id.slice(0, 8)}</code>
                     </div>
                   ))
@@ -175,7 +237,7 @@ export function ProjectWorkflowView({ group, members, runs, canManage, onGroupPa
               </div>
             );
           })}
-          {agents.length === 0 && <p className="wf-hint">暂无 Agent 成员</p>}
+          {agents.length === 0 && <p className="wf-hint">暂无 Agent / 聊天机器人</p>}
         </div>
       </section>
 

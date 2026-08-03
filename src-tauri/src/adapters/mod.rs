@@ -1,3 +1,4 @@
+pub mod chatbot;
 mod claude;
 mod codex;
 mod cursor;

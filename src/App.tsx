@@ -11,9 +11,25 @@ import { ProjectWorkflowView } from "./ProjectWorkflowView";
 import { ServerPathPicker } from "./ServerPathPicker";
 import { Brand, ThemeSwitcher } from "./theme";
 
-type NewMember = { kind: "agent" | "user"; displayName: string; roleDescription: string; adapter: string; executablePath: string };
+type NewMember = {
+  kind: "agent" | "user" | "chatbot";
+  displayName: string;
+  roleDescription: string;
+  adapter: string;
+  executablePath: string;
+  chatbotProvider: "opencode-go" | "deepseek";
+  apiKey: string;
+};
 type Session = "checking" | "login" | "ready";
-const emptyMember: NewMember = { kind: "agent", displayName: "", roleDescription: "", adapter: "mock", executablePath: "" };
+const emptyMember: NewMember = {
+  kind: "agent", displayName: "", roleDescription: "", adapter: "mock", executablePath: "",
+  chatbotProvider: "opencode-go", apiKey: "",
+};
+const PHASE_LABEL: Record<string, string> = {
+  queued: "排队", starting: "启动", preparing: "准备", cli_spawn: "拉起 CLI",
+  awaiting_first_token: "等待首包", streaming: "流式输出", finalizing: "收尾",
+  completed: "完成", failed: "失败",
+};
 const time = (value: number) => new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit" }).format(value);
 const dayLabel = (value: number) => {
   const d = new Date(value);
@@ -196,7 +212,7 @@ export function App() {
           }
           return { ...previous, runs, messages };
         });
-        // Terminal status: resync so missed deltas still appear without a full reload.
+        // Terminal status: resync from server so missed deltas still appear without a full reload.
         if (terminal) {
           void refresh(payload.groupId || activeGroupId).catch((reason) => {
             if (isUnauthorizedError(reason)) goLogin("登录已失效，请重新登录");
@@ -359,7 +375,16 @@ export function App() {
   const addMember = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); if (!current) return;
     try {
-      await api.addMember({ groupId: current.group.id, ...newMember });
+      await api.addMember({
+        groupId: current.group.id,
+        kind: newMember.kind,
+        displayName: newMember.displayName,
+        roleDescription: newMember.roleDescription,
+        adapter: newMember.kind === "agent" ? newMember.adapter : undefined,
+        executablePath: newMember.kind === "agent" ? newMember.executablePath : undefined,
+        chatbotProvider: newMember.kind === "chatbot" ? newMember.chatbotProvider : undefined,
+        apiKey: newMember.kind === "chatbot" ? newMember.apiKey : undefined,
+      });
       setNewMember(emptyMember); setShowAddMember(false); await refresh();
     } catch (reason) { setError(readError(reason)); }
   };
@@ -439,6 +464,11 @@ export function App() {
             runs={current.runs}
             canManage
             onGroupPatch={(g) => setCurrent((prev) => prev && ({ ...prev, group: { ...prev.group, ...g } }))}
+            onMemberPatch={(m) => setCurrent((prev) => {
+              if (!prev) return prev;
+              const members = prev.members.map((x) => (x.id === m.id ? { ...x, ...m } : x));
+              return { ...prev, members };
+            })}
             onError={(msg) => setError(msg)}
           />
         ) : <>
@@ -465,8 +495,8 @@ export function App() {
                 <div key={`pending-${run.id}`} className="message-row is-responding">
                   <Avatar member={agent} responding />
                   <div className="message-content">
-                    <div className="message-meta"><strong>{agent?.displayName ?? "Agent"}</strong><Status status={run.status} /></div>
-                    <div className="bubble streaming"><TypingIndicator label={run.status === "queued" ? "排队中" : "…"} /></div>
+                    <div className="message-meta"><strong>{agent?.displayName ?? "Agent"}</strong><Status status={run.status} />{run.phase && <em className="phase-badge">{PHASE_LABEL[run.phase] ?? run.phase}</em>}</div>
+                    <div className="bubble streaming"><TypingIndicator label={run.phase ? (PHASE_LABEL[run.phase] ?? run.phase) : run.status === "queued" ? "排队中" : "…"} /></div>
                   </div>
                 </div>
               );
@@ -478,7 +508,7 @@ export function App() {
               {mentionSuggestions.map((member, index) => (
                 <button key={member.id} className={index === mentionIndex ? "mention-active" : ""} onMouseEnter={() => setMentionIndex(index)} onClick={() => selectMention(member)}>
                   <Avatar member={member} />
-                  <span>{member.displayName}<small>{member.kind === "agent" ? member.roleDescription || member.adapter : "用户"}</small></span>
+                  <span>{member.displayName}<small>{member.kind === "agent" ? member.roleDescription || member.adapter : member.kind === "chatbot" ? "聊天机器人" : "用户"}</small></span>
                 </button>
               ))}
             </div>
@@ -517,10 +547,22 @@ export function App() {
           return <MemberRow key={member.id} member={member} group={current.group} responding={responding} detecting={detecting === member.id} onAdmin={setAdmin} onRemove={removeMember} onDetect={detect} />;
         })}</div>
         {showAddMember ? <form className="add-member-form" onSubmit={addMember}>
-          <select value={newMember.kind} onChange={(event) => setNewMember((value) => ({ ...value, kind: event.target.value as NewMember["kind"] }))}><option value="agent">Agent</option><option value="user">用户</option></select>
+          <select value={newMember.kind} onChange={(event) => setNewMember((value) => ({ ...value, kind: event.target.value as NewMember["kind"] }))}>
+            <option value="agent">Agent</option>
+            <option value="user">用户</option>
+            <option value="chatbot">聊天机器人</option>
+          </select>
           <input autoFocus value={newMember.displayName} onChange={(event) => setNewMember((value) => ({ ...value, displayName: event.target.value }))} placeholder="成员名称" required />
-          <input value={newMember.roleDescription} onChange={(event) => setNewMember((value) => ({ ...value, roleDescription: event.target.value }))} placeholder={newMember.kind === "agent" ? "职责，例如：代码审查" : "成员说明（可选）"} />
+          <input value={newMember.roleDescription} onChange={(event) => setNewMember((value) => ({ ...value, roleDescription: event.target.value }))} placeholder={newMember.kind === "agent" ? "职责，例如：代码审查" : newMember.kind === "chatbot" ? "机器人说明（可选）" : "成员说明（可选）"} />
           {newMember.kind === "agent" && <><select value={newMember.adapter} onChange={(event) => setNewMember((value) => ({ ...value, adapter: event.target.value }))}><option value="mock">模拟 Agent（推荐体验）</option><option value="codex">Codex CLI</option><option value="openclaw">OpenClaw</option><option value="cursor">Cursor CLI（agent/cursor-agent）</option><option value="claude-code">Claude Code</option><option value="opencode">OpenCode</option></select><input value={newMember.executablePath} onChange={(event) => setNewMember((value) => ({ ...value, executablePath: event.target.value }))} placeholder="可执行文件路径（可选）" /></>}
+          {newMember.kind === "chatbot" && <>
+            <select value={newMember.chatbotProvider} onChange={(event) => setNewMember((value) => ({ ...value, chatbotProvider: event.target.value as NewMember["chatbotProvider"] }))}>
+              <option value="opencode-go">OpenCode Go</option>
+              <option value="deepseek">DeepSeek 官方</option>
+            </select>
+            <input type="password" autoComplete="off" value={newMember.apiKey} onChange={(event) => setNewMember((value) => ({ ...value, apiKey: event.target.value }))} placeholder="API Key（仅存服务器，不进 git）" required />
+            <p className="form-hint">模型固定 deepseek-v4-flash；每群仅可添加一个聊天机器人。</p>
+          </>}
           <div><button type="button" className="quiet-button" onClick={() => setShowAddMember(false)}>取消</button><button type="submit">添加</button></div>
         </form> : <button className="add-member-button" onClick={() => setShowAddMember(true)}>＋ 添加成员</button>}
       </> : rightPanelTab === "experiences" ? <ExperiencePanel groupId={current.group.id} members={members} ownerId={current.group.ownerMemberId} onError={(msg) => setError(msg)} />
@@ -579,6 +621,9 @@ const MessageBubble = memo(function MessageBubble({ message, members, runs, owne
           <strong>{sender?.displayName ?? "已移除成员"}</strong>
           <span>{time(message.createdAt)}</span>
           {run && <Status status={run.status} />}
+          {run?.phase && (run.status === "queued" || run.status === "running") && (
+            <em className="phase-badge">{PHASE_LABEL[run.phase] ?? run.phase}</em>
+          )}
           {run?.reviewStatus && <ReviewBadge reviewStatus={run.reviewStatus} />}
         </div>
         <div className={`bubble ${message.status}${responding ? " streaming" : ""}`}>
@@ -588,7 +633,10 @@ const MessageBubble = memo(function MessageBubble({ message, members, runs, owne
               {responding && <span className="stream-caret" aria-hidden />}
             </>
           ) : (
-            <TypingIndicator label={run?.status === "queued" ? "排队中" : "…"} />
+            <TypingIndicator label={
+              run?.phase ? (PHASE_LABEL[run.phase] ?? run.phase)
+                : run?.status === "queued" ? "排队中" : "…"
+            } />
           )}
         </div>
         {run?.errorMessage && <p className="run-error">{run.errorMessage}</p>}
@@ -644,8 +692,10 @@ function TypingIndicator({ label }: { label: string }) {
 function MemberRow({ member, group, responding, detecting, onAdmin, onRemove, onDetect }: { member: Member; group: Group; responding?: boolean; detecting?: boolean; onAdmin: (id: string | null) => void; onRemove: (member: Member) => void; onDetect: (member: Member) => void }) {
   const isAdmin = group.adminMemberId === member.id;
   const statusText = member.kind === "agent"
-    ? `${member.adapter} · ${detecting ? "检测中…" : responding ? "生成回复中" : member.runtimeStatus === "ready" ? "已就绪" : member.runtimeStatus === "unavailable" ? "不可用" : "待检测"}`
-    : member.roleDescription || "本地成员";
+    ? `${member.adapter} · ${detecting ? "检测中…" : responding ? "生成回复中" : member.runtimeStatus === "ready" ? "已就绪" : member.runtimeStatus === "unavailable" ? "不可用" : "待检测"}${member.keepAlive ? ` · 保活${member.warmStatus ? `(${member.warmStatus})` : ""}` : ""}`
+    : member.kind === "chatbot"
+      ? `${member.adapter ?? "chatbot"} · deepseek-v4-flash · ${member.apiKeySet ? "已配置 Key" : "缺 Key"}`
+      : member.roleDescription || "本地成员";
   return (
     <div className={`member-row ${member.isActive ? "" : "inactive"} ${responding ? "is-responding" : ""}`}>
       <Avatar member={member} responding={responding} />
@@ -654,6 +704,7 @@ function MemberRow({ member, group, responding, detecting, onAdmin, onRemove, on
           {member.displayName}
           {member.id === group.ownerMemberId && <em>群主</em>}
           {isAdmin && <em className="admin-badge">管理员</em>}
+          {member.kind === "chatbot" && <em className="admin-badge">机器人</em>}
           {responding && <em className="responding-badge">回应中</em>}
         </strong>
         <span>

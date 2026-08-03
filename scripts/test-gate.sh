@@ -7,22 +7,24 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${ROOT}"
 
 if [[ "${LINLIS_SKIP_TEST_GATE:-}" == "1" ]]; then
-  echo "WARNING: LINLIS_SKIP_TEST_GATE=1 — skipping test gate (break-glass only)" >&2
+  echo "WARNING: LINLIS_SKIP_TEST_GATE=1 - skipping test gate (break-glass only)" >&2
   exit 0
 fi
 
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-1}"
-export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=1024}"
+# Keep Node heap modest on 2GB hosts. Never ulimit -v the whole script (Vitest Wasm needs headroom).
+export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=768}"
 
 echo "==> test-gate: frontend (vitest)"
-pnpm test
+pnpm exec vitest run --pool=forks --maxWorkers=1
 
 echo "==> test-gate: rust lib (no gui features)"
-(
-  cd "${ROOT}/src-tauri"
-  # Cap rustc/test VM when supported; Node/Vitest runs without this (Wasm needs headroom).
+# Isolate ulimit so it cannot affect this shell after cargo exits.
+bash -c '
+  set -euo pipefail
+  cd "$1/src-tauri"
   ulimit -v 1800000 2>/dev/null || true
   cargo test --no-default-features --lib
-)
+' bash "${ROOT}"
 
 echo "==> test-gate: OK"

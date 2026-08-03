@@ -15,8 +15,9 @@ export const api = {
   createGroup: (input: { name: string; workspacePath: string; ownerName: string; presetRoles?: string[] }) =>
     invoke<GroupState>("create_group", { input }),
   addMember: (input: {
-    groupId: string; kind: "user" | "agent"; displayName: string; roleDescription: string;
+    groupId: string; kind: "user" | "agent" | "chatbot"; displayName: string; roleDescription: string;
     avatarColor?: string; adapter?: string; executablePath?: string;
+    chatbotProvider?: "opencode-go" | "deepseek"; apiKey?: string;
   }) => invoke<Member>("add_member", { input }),
   removeMember: (groupId: string, memberId: string) => invoke<void>("remove_member", { groupId, memberId }),
   setAdmin: (groupId: string, memberId: string | null) => invoke<GroupState>("set_admin", { groupId, memberId }),
@@ -75,6 +76,8 @@ export const api = {
   listServerDir: (path: string) => invoke<DirListing>("list_server_dir", { path }),
   updateGroupWorkspace: (groupId: string, workspacePath: string) =>
     invoke<Group>("update_group_workspace_cmd", { groupId, workspacePath }),
+  updateMemberWorkspace: (memberId: string, workspacePath: string) =>
+    invoke<Member>("update_member_workspace_cmd", { memberId, workspacePath }),
   getGroupAnnouncement: (groupId: string) =>
     invoke<Group>("get_group_announcement", { groupId }),
   setGroupAnnouncement: (groupId: string, announcement: string) =>

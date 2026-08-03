@@ -141,12 +141,14 @@ export const api = {
 
   addMember: (input: {
     groupId: string;
-    kind: "user" | "agent";
+    kind: "user" | "agent" | "chatbot";
     displayName: string;
     roleDescription: string;
     avatarColor?: string;
     adapter?: string;
     executablePath?: string;
+    chatbotProvider?: "opencode-go" | "deepseek";
+    apiKey?: string;
   }) =>
     apiFetch<Member>(`/api/groups/${input.groupId}/members`, {
       method: "POST",
@@ -296,6 +298,11 @@ export const api = {
     apiFetch<DirListing>(`/api/fs/list?path=${encodeURIComponent(path || "/")}`),
   updateGroupWorkspace: (groupId: string, workspacePath: string) =>
     apiFetch<Group>(`/api/groups/${groupId}/workspace`, {
+      method: "PUT",
+      body: JSON.stringify({ workspacePath }),
+    }),
+  updateMemberWorkspace: (memberId: string, workspacePath: string) =>
+    apiFetch<Member>(`/api/members/${memberId}/workspace`, {
       method: "PUT",
       body: JSON.stringify({ workspacePath }),
     }),

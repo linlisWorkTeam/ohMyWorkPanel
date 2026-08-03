@@ -40,6 +40,15 @@ pub struct Member {
     pub runtime_status: Option<String>,
     pub tags: String,
     pub created_at: i64,
+    #[serde(default)]
+    pub workspace_path: Option<String>,
+    /// Whether API key is stored (never expose raw key).
+    #[serde(default)]
+    pub api_key_set: bool,
+    #[serde(default)]
+    pub keep_alive: bool,
+    #[serde(default)]
+    pub warm_status: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -71,6 +80,10 @@ pub struct TaskRun {
     pub created_at: i64,
     pub started_at: Option<i64>,
     pub completed_at: Option<i64>,
+    #[serde(default)]
+    pub phase: Option<String>,
+    #[serde(default)]
+    pub phase_updated_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -107,6 +120,9 @@ pub struct AddMemberInput {
     pub avatar_color: Option<String>,
     pub adapter: Option<String>,
     pub executable_path: Option<String>,
+    /// chatbot provider: opencode-go | deepseek
+    pub chatbot_provider: Option<String>,
+    pub api_key: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -132,6 +148,12 @@ pub struct ChatEvent {
     /// When true, `delta` replaces the channel text instead of appending.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub replace: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub phase: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub elapsed_ms: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_ms: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -127,19 +127,29 @@ pub fn create_group(input: CreateGroupInput, state: State<'_, AppState>) -> AppR
 
 #[tauri::command]
 pub fn add_member(input: AddMemberInput, state: State<'_, AppState>) -> AppResult<Member> {
-    if !matches!(input.kind.as_str(), "user" | "agent") || input.display_name.trim().is_empty() {
+    if !matches!(input.kind.as_str(), "user" | "agent" | "chatbot") || input.display_name.trim().is_empty() {
         return Err("成员类型或名称无效。".into());
     }
     let conn = open_db(&state.db_path)?;
-    let _ = get_group(&conn, &input.group_id)?;
+    let group = get_group(&conn, &input.group_id)?;
+    if input.kind == "chatbot" {
+        let exists: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM members WHERE group_id=?1 AND kind='chatbot' AND is_active=1",
+                params![input.group_id],
+                |r| r.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        if exists > 0 {
+            return Err("每个群只能添加一个聊天机器人".into());
+        }
+    }
     let member_id = id();
     let created_at = now();
-    let color = input.avatar_color.unwrap_or_else(|| {
-        if input.kind == "agent" {
-            "#17a673".into()
-        } else {
-            "#5167f6".into()
-        }
+    let color = input.avatar_color.unwrap_or_else(|| match input.kind.as_str() {
+        "agent" => "#17a673".into(),
+        "chatbot" => "#0ea5a0".into(),
+        _ => "#5167f6".into(),
     });
     conn.execute(
         "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at) VALUES(?1,?2,?3,?4,?5,?6,1,?7)",
@@ -157,19 +167,42 @@ pub fn add_member(input: AddMemberInput, state: State<'_, AppState>) -> AppResul
     if input.kind == "agent" {
         let adapter = input.adapter.unwrap_or_else(|| "mock".into());
         AdapterKind::parse(&adapter)?;
+        let default_ws = crate::memory::default_agent_workspace(
+            std::path::Path::new(&group.workspace_path),
+            &member_id,
+        );
+        let _ = crate::memory::ensure_linlis_layout(
+            std::path::Path::new(&group.workspace_path),
+            Some(&member_id),
+        );
         conn.execute(
-            "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at) VALUES(?1,?2,?3,'unknown',?4)",
+            "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at,workspace_path,warm_status) VALUES(?1,?2,?3,'unknown',?4,?5,'cold')",
             params![
                 member_id,
                 adapter,
                 input.executable_path.filter(|p| !p.trim().is_empty()),
-                created_at
+                created_at,
+                default_ws.to_string_lossy().as_ref()
             ],
+        )
+        .map_err(|e| e.to_string())?;
+    } else if input.kind == "chatbot" {
+        let provider = input.chatbot_provider.as_deref().unwrap_or("opencode-go");
+        let adapter = crate::adapters::chatbot::normalize_adapter(provider)?;
+        let api_key = input
+            .api_key
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| "聊天机器人必须填写 API Key".to_string())?;
+        conn.execute(
+            "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at,api_key,warm_status) VALUES(?1,?2,NULL,'ready',?3,?4,'cold')",
+            params![member_id, adapter, created_at, api_key],
         )
         .map_err(|e| e.to_string())?;
     }
     conn.query_row(
-        "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
+        "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
         params![member_id],
         member_from_row,
     )
@@ -191,7 +224,7 @@ pub async fn remove_member(
     }
     let member: Member = conn
         .query_row(
-            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1 AND m.group_id=?2",
+            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1 AND m.group_id=?2",
             params![member_id, group_id],
             member_from_row,
         )
@@ -245,6 +278,9 @@ pub async fn remove_member(
             error: None,
             channel: None,
             replace: None,
+                        phase: None,
+                        elapsed_ms: None,
+                        total_ms: None,
         },
     );
     Ok(())
@@ -275,6 +311,17 @@ pub fn set_admin(
         params![member_id, group_id],
     )
     .map_err(|e| e.to_string())?;
+    // Only admin agent gets keep-alive; clear others in this group.
+    let _ = conn.execute(
+        "UPDATE agent_profiles SET keep_alive=0, updated_at=?1 WHERE member_id IN (SELECT id FROM members WHERE group_id=?2 AND kind='agent')",
+        params![now(), group_id],
+    );
+    if let Some(id) = &member_id {
+        let _ = conn.execute(
+            "UPDATE agent_profiles SET keep_alive=1, warm_status='warming', updated_at=?1 WHERE member_id=?2",
+            params![now(), id],
+        );
+    }
     group_state(&conn, &group_id)
 }
 
@@ -359,6 +406,9 @@ pub async fn send_message(
             error: None,
             channel: None,
             replace: None,
+                        phase: None,
+                        elapsed_ms: None,
+                        total_ms: None,
         },
     );
     schedule_group(to_scheduler(&state, &app), group_id.clone());
@@ -375,7 +425,7 @@ pub async fn cancel_run(
     let conn = open_db(&state.db_path)?;
     let run: TaskRun = conn
         .query_row(
-            "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at FROM task_runs WHERE id=?1",
+            "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at,phase,phase_updated_at FROM task_runs WHERE id=?1",
             params![run_id],
             run_from_row,
         )
@@ -416,6 +466,9 @@ pub async fn cancel_run(
             error: None,
             channel: None,
             replace: None,
+                        phase: None,
+                        elapsed_ms: None,
+                        total_ms: None,
         },
     );
     Ok(())
@@ -431,7 +484,7 @@ pub async fn retry_run(
     let conn = open_db(&state.db_path)?;
     let old: TaskRun = conn
         .query_row(
-            "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at FROM task_runs WHERE id=?1",
+            "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at,phase,phase_updated_at FROM task_runs WHERE id=?1",
             params![run_id],
             run_from_row,
         )
@@ -672,6 +725,35 @@ pub fn update_group_workspace_cmd(
     let workspace = crate::fs_browse::resolve_server_dir(&workspace_path)?;
     let conn = open_db(&state.db_path)?;
     crate::db::update_group_workspace(&conn, &group_id, workspace.to_string_lossy().as_ref())
+}
+
+#[tauri::command]
+pub fn update_member_workspace_cmd(
+    member_id: String,
+    workspace_path: String,
+    state: State<'_, AppState>,
+) -> AppResult<crate::models::Member> {
+    let conn = open_db(&state.db_path)?;
+    let member = conn
+        .query_row(
+            &format!("{} WHERE m.id=?1", crate::db::MEMBER_SELECT),
+            rusqlite::params![member_id],
+            crate::db::member_from_row,
+        )
+        .map_err(|e| e.to_string())?;
+    let group = get_group(&conn, &member.group_id)?;
+    let resolved = crate::memory::resolve_agent_workspace_under_group(
+        std::path::Path::new(&group.workspace_path),
+        &member_id,
+        Some(&workspace_path),
+    )?;
+    crate::db::set_member_workspace(&conn, &member_id, resolved.to_string_lossy().as_ref())?;
+    conn.query_row(
+        &format!("{} WHERE m.id=?1", crate::db::MEMBER_SELECT),
+        rusqlite::params![member_id],
+        crate::db::member_from_row,
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

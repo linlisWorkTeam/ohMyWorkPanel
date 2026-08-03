@@ -243,6 +243,10 @@
 .lane-dot { width:10px; height:10px; border-radius:50%; }
 .lane-idle { font-size:12px; color:#9aa6b5; }
 .lane-run { font-size:12px; display:flex; justify-content:space-between; gap:6px; padding:4px 0; border-top:1px dashed #e8ecf1; }
+.lane-ws { font-size:11px; color:#6c7889; margin-bottom:6px; display:grid; gap:4px; }
+.lane-ws code { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; }
+.wf-ws-edit { display:grid; gap:6px; margin-top:6px; }
+.phase-badge { display:inline-block; margin-left:5px; padding:1px 6px; border-radius:6px; background:#eef4fb; color:#3b6f9f; font-size:10px; font-style:normal; font-weight:600; }
 .ops-checklist { list-style:none; padding:0; margin:0 0 10px; display:grid; gap:6px; font-size:13px; }
 .ops-actions { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
 .ops-status { font-size:12px; color:#4a5a6e; display:grid; gap:4px; margin-bottom:8px; }

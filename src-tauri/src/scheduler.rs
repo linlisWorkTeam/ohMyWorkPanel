@@ -1,11 +1,12 @@
-use crate::adapters::{self, AdapterKind};
+use crate::adapters::{self, chatbot, AdapterKind};
 use crate::db::{
-    create_task_run, get_cli_session_id, get_group, get_members, get_settings_from, id,
-    insert_run_event, member_from_row, message_from_row, now, open_db, run_from_row, set_cli_session_id,
-    settings_or, AppResult,
+    create_task_run, get_agent_api_key, get_cli_session_id, get_group, get_members, get_settings_from,
+    id, insert_run_event, member_from_row, message_from_row, now, open_db, run_from_row,
+    set_cli_session_id, set_run_phase, settings_or, AppResult,
 };
 use crate::event_sender::EventSender;
 use crate::logger;
+use crate::memory;
 use crate::message_content::{apply_channel_delta, parts_to_plain_text};
 use crate::models::{ChatEvent, ExecutionContext, Experience, TaskRun};
 #[cfg(feature = "gui")]
@@ -43,6 +44,38 @@ pub fn emit(state: &SchedulerState, event: ChatEvent) {
     if let Ok(payload) = serde_json::to_string(&event) {
         let _ = tx.send(payload);
     }
+}
+
+fn emit_phase(state: &SchedulerState, group_id: &str, run_id: &str, phase: &str) {
+    let Ok(conn) = open_db(&state.db_path) else {
+        return;
+    };
+    let Ok((elapsed, total)) = set_run_phase(&conn, run_id, phase) else {
+        return;
+    };
+    logger::info(
+        &conn,
+        "run_phase",
+        &format!("run={run_id} phase={phase} +{elapsed}ms total={total}ms"),
+        None,
+    );
+    emit(
+        state,
+        ChatEvent {
+            kind: "run_status".into(),
+            group_id: group_id.into(),
+            run_id: Some(run_id.into()),
+            message_id: None,
+            delta: None,
+            status: None,
+            error: None,
+            channel: None,
+            replace: None,
+            phase: Some(phase.into()),
+            elapsed_ms: Some(elapsed),
+            total_ms: Some(total),
+        },
+    );
 }
 
 /// Decide which queued runs may start now (read-only planning).
@@ -125,12 +158,14 @@ pub fn schedule_group(state: SchedulerState, group_id: String) {
                 params![message_id, group_id, agent_id, run_id, now()],
             )
             .map_err(|e| e.to_string())?;
+            let ts = now();
             conn.execute(
-                "UPDATE task_runs SET status='running',output_message_id=?1,started_at=?2 WHERE id=?3 AND status='queued'",
-                params![message_id, now(), run_id],
+                "UPDATE task_runs SET status='running',output_message_id=?1,started_at=?2,phase='starting',phase_updated_at=?2 WHERE id=?3 AND status='queued'",
+                params![message_id, ts, run_id],
             )
             .map_err(|e| e.to_string())?;
             insert_run_event(&conn, &run_id, "started", "{}")?;
+            let _ = set_run_phase(&conn, &run_id, "starting");
             starts.push((run_id, Some(message_id)));
         }
         Ok(starts)
@@ -155,6 +190,9 @@ pub fn schedule_group(state: SchedulerState, group_id: String) {
                         error: None,
                         channel: None,
                         replace: None,
+                        phase: Some("starting".into()),
+                        elapsed_ms: None,
+                        total_ms: None,
                     },
                 );
                 let child_state = state.clone();
@@ -175,6 +213,9 @@ pub fn schedule_group(state: SchedulerState, group_id: String) {
                 error: Some(error),
                 channel: None,
                 replace: None,
+                        phase: None,
+                        elapsed_ms: None,
+                        total_ms: None,
             },
         ),
     }
@@ -184,7 +225,7 @@ fn get_execution_context(state: &SchedulerState, run_id: &str) -> AppResult<Exec
     let conn = open_db(&state.db_path)?;
     let run: TaskRun = conn
         .query_row(
-            "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at FROM task_runs WHERE id=?1",
+            "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at,phase,phase_updated_at FROM task_runs WHERE id=?1",
             params![run_id],
             run_from_row,
         )
@@ -192,7 +233,7 @@ fn get_execution_context(state: &SchedulerState, run_id: &str) -> AppResult<Exec
     let group = get_group(&conn, &run.group_id)?;
     let agent = conn
         .query_row(
-            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
+            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
             params![run.agent_member_id],
             member_from_row,
         )
@@ -290,7 +331,7 @@ fn get_execution_context(state: &SchedulerState, run_id: &str) -> AppResult<Exec
         (|| -> Option<String> {
             let conn = open_db(&state.db_path).ok()?;
             let parent: TaskRun = conn.query_row(
-                "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at FROM task_runs WHERE id=?1",
+                "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at,phase,phase_updated_at FROM task_runs WHERE id=?1",
                 params![parent_id],
                 run_from_row,
             ).ok()?;
@@ -312,12 +353,23 @@ fn get_execution_context(state: &SchedulerState, run_id: &str) -> AppResult<Exec
     } else { None };
 
     let announcement_block = format_announcement_block(&group.announcement, 4096);
+    let mem_excerpt = memory::read_memory_excerpt(
+        std::path::Path::new(&group.workspace_path),
+        Some(&agent.id),
+        1600,
+    );
+    let memory_block = if mem_excerpt.trim().is_empty() {
+        String::new()
+    } else {
+        format!("\n{mem_excerpt}\n")
+    };
     let prompt = format!(
-        "你是群聊中的 Agent「{}」。职责：{}。\n工作目录：{}{}\n请只完成当前任务，明确说明结果与风险。需要其他 Agent 协作时，使用 @成员名 提及。\n任务根消息：{}\n最近群聊：{}\n你可以将重要经验通过 `!保存经验 <标题>: <内容> #标签` 保存。{}{}",
+        "你是群聊中的 Agent「{}」。职责：{}。\n工作目录：{}{}{}\n请只完成当前任务，明确说明结果与风险。需要其他 Agent 协作时，使用 @成员名 提及。\n任务根消息：{}\n最近群聊：{}\n你可以将重要经验通过 `!保存经验 <标题>: <内容> #标签` 保存。{}{}",
         agent.display_name,
         agent.role_description,
         group.workspace_path,
         announcement_block,
+        memory_block,
         root,
         lines,
         experience_block,
@@ -334,7 +386,10 @@ fn get_execution_context(state: &SchedulerState, run_id: &str) -> AppResult<Exec
 
 async fn execute_run(state: SchedulerState, run_id: String) {
     let context = match get_execution_context(&state, &run_id) {
-        Ok(v) => v,
+        Ok(v) => {
+            emit_phase(&state, &v.group.id, &run_id, "preparing");
+            v
+        }
         Err(error) => {
             finish_failed(&state, &run_id, &error).await;
             return;
@@ -347,9 +402,12 @@ async fn execute_run(state: SchedulerState, run_id: String) {
     let outcome = run_agent(&state, &context, &token).await;
     if token.load(Ordering::SeqCst) {
     } else if let Err(error) = outcome {
+        emit_phase(&state, &context.group.id, &run_id, "failed");
         finish_failed(&state, &run_id, &error).await;
     } else {
+        emit_phase(&state, &context.group.id, &run_id, "finalizing");
         finish_completed(&state, &context).await;
+        emit_phase(&state, &context.group.id, &run_id, "completed");
     }
     if let Ok(mut tokens) = state.cancellations.lock() {
         tokens.remove(&run_id);
@@ -363,22 +421,76 @@ async fn run_agent(
     token: &Arc<AtomicBool>,
 ) -> AppResult<()> {
     let adapter_name = context.agent.adapter.as_deref().unwrap_or("mock");
+
+    // Fast path: HTTP chatbot (no CLI / no tools)
+    if context.agent.kind == "chatbot" || chatbot::is_chatbot_adapter(adapter_name) {
+        emit_phase(state, &context.group.id, &context.run.id, "awaiting_first_token");
+        let conn = open_db(&state.db_path)?;
+        let api_key = get_agent_api_key(&conn, &context.agent.id)?
+            .filter(|k| !k.trim().is_empty())
+            .ok_or_else(|| "聊天机器人未配置 API Key。".to_string())?;
+        let root = extract_root_from_prompt(&context.prompt);
+        let ann = truncate_chars(context.group.announcement.trim(), 800);
+        let mem = memory::read_memory_excerpt(
+            std::path::Path::new(&context.group.workspace_path),
+            None,
+            600,
+        );
+        let system = format!(
+            "你是群聊机器人「{}」。只做轻量对话，不要调用工具、不要改代码/文件。回答简洁。{}",
+            context.agent.display_name,
+            if ann.is_empty() {
+                String::new()
+            } else {
+                format!("\n群公告：{ann}")
+            }
+        );
+        let user = format!("{root}\n{mem}");
+        let text =
+            chatbot::run_chatbot_completion(adapter_name, &api_key, &system, &user, 512, token)
+                .await?;
+        emit_phase(state, &context.group.id, &context.run.id, "streaming");
+        append_delta(state, &context.run, "final", &text, false)?;
+        return Ok(());
+    }
+
     let kind = AdapterKind::parse(adapter_name)?;
     let make_on_delta = || {
         let state_clone = state.clone();
         let run = context.run.clone();
+        let group_id = context.group.id.clone();
         move |channel: String, delta: String, replace: bool| {
             let state = state_clone.clone();
             let run = run.clone();
-            async move { append_delta(&state, &run, &channel, &delta, replace) }
+            let group_id = group_id.clone();
+            async move {
+                // First token → streaming phase
+                if let Ok(conn) = open_db(&state.db_path) {
+                    let phase: Option<String> = conn
+                        .query_row(
+                            "SELECT phase FROM task_runs WHERE id=?1",
+                            params![run.id],
+                            |r| r.get(0),
+                        )
+                        .ok()
+                        .flatten();
+                    if phase.as_deref() != Some("streaming") {
+                        drop(conn);
+                        emit_phase(&state, &group_id, &run.id, "streaming");
+                    }
+                }
+                append_delta(&state, &run, &channel, &delta, replace)
+            }
         }
     };
 
     if kind == AdapterKind::Mock {
+        emit_phase(state, &context.group.id, &context.run.id, "streaming");
         adapters::run_mock_stream(token, make_on_delta()).await?;
         return Ok(());
     }
 
+    emit_phase(state, &context.group.id, &context.run.id, "cli_spawn");
     let executable = kind.resolve_executable(context.agent.executable_path.as_deref())?;
     let mut session_id = if kind == AdapterKind::Cursor {
         let conn = open_db(&state.db_path)?;
@@ -393,10 +505,18 @@ async fn run_agent(
         context.prompt.clone()
     };
 
+    let cwd = memory::resolve_agent_workspace_under_group(
+        std::path::Path::new(&context.group.workspace_path),
+        &context.agent.id,
+        context.agent.workspace_path.as_deref(),
+    )?;
+    let _ = memory::ensure_linlis_layout(std::path::Path::new(&context.group.workspace_path), Some(&context.agent.id));
+
+    emit_phase(state, &context.group.id, &context.run.id, "awaiting_first_token");
     let result = adapters::run_streaming(
         kind,
         &executable,
-        std::path::Path::new(&context.group.workspace_path),
+        &cwd,
         &prompt,
         session_id.as_deref(),
         context.settings.run_timeout_seconds as u64,
@@ -419,7 +539,7 @@ async fn run_agent(
             adapters::run_streaming(
                 kind,
                 &executable,
-                std::path::Path::new(&context.group.workspace_path),
+                &cwd,
                 &context.prompt,
                 None,
                 context.settings.run_timeout_seconds as u64,
@@ -549,6 +669,9 @@ fn append_delta(
             error: None,
             channel: Some(channel.into()),
             replace: Some(replace),
+                    phase: None,
+            elapsed_ms: None,
+            total_ms: None,
         },
     );
     Ok(())
@@ -559,7 +682,7 @@ async fn finish_failed(state: &SchedulerState, run_id: &str, error: &str) {
         let conn = open_db(&state.db_path)?;
         let run: TaskRun = conn
             .query_row(
-                "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at FROM task_runs WHERE id=?1",
+                "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at,phase,phase_updated_at FROM task_runs WHERE id=?1",
                 params![run_id],
                 run_from_row,
             )
@@ -595,6 +718,9 @@ async fn finish_failed(state: &SchedulerState, run_id: &str, error: &str) {
                 error: Some(error.into()),
                 channel: None,
                 replace: None,
+                        phase: None,
+                        elapsed_ms: None,
+                        total_ms: None,
             },
         );
     }
@@ -610,7 +736,7 @@ async fn finish_completed(state: &SchedulerState, context: &ExecutionContext) {
             let check_parent_review = (|| -> AppResult<Option<String>> {
                 let conn = open_db(&state.db_path)?;
                 let parent: TaskRun = conn.query_row(
-                    "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at FROM task_runs WHERE id=?1",
+                    "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at,phase,phase_updated_at FROM task_runs WHERE id=?1",
                     params![parent_run_id],
                     run_from_row,
                 ).map_err(|e| e.to_string())?;
@@ -715,6 +841,9 @@ async fn finish_completed(state: &SchedulerState, context: &ExecutionContext) {
                 error: None,
                 channel: None,
                 replace: None,
+                        phase: None,
+                        elapsed_ms: None,
+                        total_ms: None,
             },
         );
         delegate_from_admin(state, context, &message_id).await;

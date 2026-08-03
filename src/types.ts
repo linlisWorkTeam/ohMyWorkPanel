@@ -1,5 +1,16 @@
-﻿export type MemberKind = "user" | "agent";
+﻿export type MemberKind = "user" | "agent" | "chatbot";
 export type RunStatus = "queued" | "running" | "awaiting_review" | "changes_requested" | "completed" | "failed" | "cancelled" | "interrupted";
+export type RunPhase =
+  | "queued"
+  | "starting"
+  | "preparing"
+  | "cli_spawn"
+  | "awaiting_first_token"
+  | "streaming"
+  | "finalizing"
+  | "completed"
+  | "failed"
+  | string;
 
 export interface Group {
   id: string;
@@ -55,11 +66,15 @@ export interface Member {
   avatarColor: string;
   roleDescription: string;
   isActive: boolean;
-  adapter: "mock" | "codex" | "claude-code" | "opencode" | "openclaw" | "cursor" | null;
+  adapter: "mock" | "codex" | "claude-code" | "opencode" | "openclaw" | "cursor" | "chatbot-opencode-go" | "chatbot-deepseek" | string | null;
   executablePath: string | null;
   runtimeStatus: "unknown" | "ready" | "unavailable" | null;
   tags: string;
   createdAt: number;
+  workspacePath?: string | null;
+  apiKeySet?: boolean;
+  keepAlive?: boolean;
+  warmStatus?: string | null;
 }
 
 export interface Message {
@@ -87,6 +102,8 @@ export interface TaskRun {
   createdAt: number;
   startedAt: number | null;
   completedAt: number | null;
+  phase?: RunPhase | null;
+  phaseUpdatedAt?: number | null;
 }
 
 export interface GroupState {
@@ -108,6 +125,9 @@ export interface ChatEvent {
   channel?: string | null;
   /** When true, delta replaces channel text instead of appending */
   replace?: boolean | null;
+  phase?: RunPhase | null;
+  elapsedMs?: number | null;
+  totalMs?: number | null;
 }
 
 export interface PresetRole {

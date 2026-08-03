@@ -47,6 +47,9 @@ fn web_emit(tx: &broadcast::Sender<String>, group_id: &str, kind: &str, message_
         error: error.map(str::to_string),
         channel: None,
         replace: None,
+                        phase: None,
+                        elapsed_ms: None,
+                        total_ms: None,
     };
     if let Ok(payload) = serde_json::to_string(&event) {
         let _ = tx.send(payload);
@@ -414,22 +417,38 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
      avatar_color: Option<String>,
      adapter: Option<String>,
      executable_path: Option<String>,
+     chatbot_provider: Option<String>,
+     api_key: Option<String>,
  }
 
  async fn add_member_web(
      State(state): State<Arc<AppState>>,
      Json(input): Json<AddMemberInputWeb>,
  ) -> Result<Json<Member>, (StatusCode, String)> {
-     if !matches!(input.kind.as_str(), "user" | "agent") || input.display_name.trim().is_empty() {
+     if !matches!(input.kind.as_str(), "user" | "agent" | "chatbot") || input.display_name.trim().is_empty() {
          return Err((StatusCode::BAD_REQUEST, "invalid member kind or name".into()));
      }
      let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     let _ = db_get_group(&conn, &input.group_id)
+     let group = db_get_group(&conn, &input.group_id)
          .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+     if input.kind == "chatbot" {
+         let exists: i64 = conn
+             .query_row(
+                 "SELECT COUNT(*) FROM members WHERE group_id=?1 AND kind='chatbot' AND is_active=1",
+                 params![input.group_id],
+                 |r| r.get(0),
+             )
+             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+         if exists > 0 {
+             return Err((StatusCode::CONFLICT, "每个群只能添加一个聊天机器人".into()));
+         }
+     }
      let member_id = id();
      let created_at = now();
-     let color = input.avatar_color.unwrap_or_else(|| {
-         if input.kind == "agent" { "#17a673".into() } else { "#5167f6".into() }
+     let color = input.avatar_color.unwrap_or_else(|| match input.kind.as_str() {
+         "agent" => "#17a673".into(),
+         "chatbot" => "#0ea5a0".into(),
+         _ => "#5167f6".into(),
      });
      conn.execute(
          "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at) VALUES(?1,?2,?3,?4,?5,?6,1,?7)",
@@ -438,15 +457,47 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
      .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
      if input.kind == "agent" {
          let adapter = input.adapter.unwrap_or_else(|| "mock".into());
+         let default_ws = crate::memory::default_agent_workspace(
+             std::path::Path::new(&group.workspace_path),
+             &member_id,
+         );
+         let _ = crate::memory::ensure_linlis_layout(
+             std::path::Path::new(&group.workspace_path),
+             Some(&member_id),
+         );
          conn.execute(
-             "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at) VALUES(?1,?2,?3,'unknown',?4)",
-             params![member_id, adapter, input.executable_path.filter(|p| !p.trim().is_empty()), created_at],
+             "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at,workspace_path,warm_status) VALUES(?1,?2,?3,'unknown',?4,?5,'cold')",
+             params![
+                 member_id,
+                 adapter,
+                 input.executable_path.filter(|p| !p.trim().is_empty()),
+                 created_at,
+                 default_ws.to_string_lossy().as_ref()
+             ],
+         )
+         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+     } else if input.kind == "chatbot" {
+         let provider = input
+             .chatbot_provider
+             .as_deref()
+             .unwrap_or("opencode-go");
+         let adapter = crate::adapters::chatbot::normalize_adapter(provider)
+             .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+         let api_key = input
+             .api_key
+             .as_deref()
+             .map(str::trim)
+             .filter(|s| !s.is_empty())
+             .ok_or_else(|| (StatusCode::BAD_REQUEST, "聊天机器人必须填写 API Key".into()))?;
+         conn.execute(
+             "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at,api_key,warm_status) VALUES(?1,?2,NULL,'ready',?3,?4,'cold')",
+             params![member_id, adapter, created_at, api_key],
          )
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
      }
      let member = conn
          .query_row(
-             "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
+             "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
              params![member_id],
              member_from_row,
          )
@@ -492,8 +543,62 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
      }
      conn.execute("UPDATE groups SET admin_member_id=?1 WHERE id=?2", params![member_id, group_id])
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+     // Only admin agent gets keep-alive; clear others in this group.
+     conn.execute(
+         "UPDATE agent_profiles SET keep_alive=0, updated_at=?1 WHERE member_id IN (SELECT id FROM members WHERE group_id=?2 AND kind='agent')",
+         params![now(), group_id],
+     )
+     .ok();
+     if let Some(id) = member_id {
+         conn.execute(
+             "UPDATE agent_profiles SET keep_alive=1, warm_status='warming', updated_at=?1 WHERE member_id=?2",
+             params![now(), id],
+         )
+         .ok();
+     }
      group_state(&conn, &group_id).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
  }
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MemberWorkspaceBody {
+    workspace_path: String,
+}
+
+async fn put_member_workspace_web(
+    State(state): State<Arc<AppState>>,
+    Path(member_id): Path<String>,
+    Json(body): Json<MemberWorkspaceBody>,
+) -> Result<Json<Member>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let member = conn
+        .query_row(
+            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
+            params![member_id],
+            member_from_row,
+        )
+        .map_err(|_| (StatusCode::NOT_FOUND, "member not found".into()))?;
+    if member.kind != "agent" {
+        return Err((StatusCode::BAD_REQUEST, "仅 Agent 可设置工作区".into()));
+    }
+    let group = db_get_group(&conn, &member.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    let resolved = crate::memory::resolve_agent_workspace_under_group(
+        std::path::Path::new(&group.workspace_path),
+        &member_id,
+        Some(&body.workspace_path),
+    )
+    .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    crate::db::set_member_workspace(&conn, &member_id, resolved.to_string_lossy().as_ref())
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    let member = conn
+        .query_row(
+            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
+            params![member_id],
+            member_from_row,
+        )
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(member))
+}
 
  // === Runs ===
 
@@ -528,7 +633,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
  ) -> Result<Json<String>, (StatusCode, String)> {
      let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
      let old: TaskRun = conn
-         .query_row("SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at FROM task_runs WHERE id=?1", params![run_id], crate::db::run_from_row)
+         .query_row("SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at,phase,phase_updated_at FROM task_runs WHERE id=?1", params![run_id], crate::db::run_from_row)
          .map_err(|e| (StatusCode::NOT_FOUND, format!("run not found: {e}")))?;
      let new_id = create_task_run(&conn, &old.group_id, &old.root_message_id, &old.agent_member_id, old.parent_run_id.as_deref(), old.depth)
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
@@ -972,6 +1077,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
          // Members
          .route("/api/groups/{group_id}/members", post(add_member_web))
          .route("/api/groups/{group_id}/members/{member_id}", delete(remove_member_web))
+         .route("/api/members/{member_id}/workspace", put(put_member_workspace_web))
          .route("/api/groups/{group_id}/admin", put(set_admin_web))
          // Messages
         .route("/api/messages", post(send_message_web))

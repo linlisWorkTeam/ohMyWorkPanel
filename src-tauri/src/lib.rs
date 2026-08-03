@@ -6,6 +6,8 @@ mod commands;
 mod ocr;
 pub mod db;
 pub mod fs_browse;
+pub mod keepalive;
+pub mod memory;
 mod message_content;
 mod models;
 pub mod logger;
@@ -93,6 +95,7 @@ pub fn run() {
             commands::clear_logs,
             commands::list_server_dir,
             commands::update_group_workspace_cmd,
+            commands::update_member_workspace_cmd,
             commands::get_group_announcement,
             commands::set_group_announcement_cmd,
             commands::ops_release_status,
