@@ -378,12 +378,21 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .chat-header-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .mobile-nav, .mobile-members { display: none; font-size: 17px; }
 .sidebar-backdrop, .members-backdrop { display: none; }
+.message-list-shell { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.message-list-shell .message-list { flex: 1; }
 .message-list {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
   padding: 26px clamp(18px, 4vw, 58px);
 }
+.jump-bottom-btn {
+  border-color: var(--border-soft);
+  background: var(--bg-surface, #fff);
+  color: var(--accent-strong, #3b7fc4);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--text) 12%, transparent);
+}
+.agent-reply-fold > summary { color: var(--text-soft, #4b6078); }
 .empty-chat { margin: auto; padding-top: 18vh; text-align: center; color: var(--text-soft); display: grid; gap: 8px; }
 .empty-chat strong { color: var(--text); font-family: var(--font-display); font-size: 18px; }
 .empty-chat code { background: color-mix(in srgb, var(--accent) 14%, var(--bg-surface)); padding: 1px 5px; border-radius: 4px; color: var(--accent-strong); }

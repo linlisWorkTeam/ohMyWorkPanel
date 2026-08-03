@@ -1,7 +1,13 @@
 ﻿import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { FormEvent, KeyboardEvent, memo, useEffect, useRef, useState, type ReactNode } from "react";
+import { FormEvent, KeyboardEvent, memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { api, getAuthToken, onUnauthorized, requiresAuth, setAuthToken } from "./api";
+import {
+  agentReplyDefaultOpen,
+  BOTTOM_THRESHOLD_PX,
+  extractReplyPreview,
+  isNearBottom,
+} from "./chatUi";
 import { currentMentionQuery, findMentionedMemberIds } from "./mentions";
 import { appendChannelDelta, hasRenderableContent, parseMessageContent } from "./messageContent";
 import type { ChatEvent, Group, GroupState, Member, PresetRole, RuntimeSettings, TaskRun } from "./types";
@@ -69,10 +75,24 @@ export function App() {
   const [mentionIndex, setMentionIndex] = useState(0);
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const stickToBottom = useRef(true);
-  const firstGroupLoad = useRef(true);
+  const forceScrollGroupId = useRef<string | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const currentGroupIdRef = useRef<string | undefined>(undefined);
+  const [showJumpBottom, setShowJumpBottom] = useState(false);
   currentGroupIdRef.current = current?.group.id;
+
+  const scrollMessagesToBottom = (force = false) => {
+    const node = messageListRef.current;
+    if (!node) return;
+    if (!force && !stickToBottom.current) return;
+    const apply = () => {
+      node.scrollTop = node.scrollHeight;
+      stickToBottom.current = true;
+      setShowJumpBottom(false);
+    };
+    apply();
+    requestAnimationFrame(apply);
+  };
 
   const refresh = async (groupId = current?.group.id) => {
     if (!groupId) return;
@@ -114,8 +134,10 @@ export function App() {
         const boot = await api.bootstrap();
         if (disposed) return;
         setGroups(boot.groups);
-        if (boot.groups[0]) await refresh(boot.groups[0].id);
-        else setShowCreate(true);
+        if (boot.groups[0]) {
+          forceScrollGroupId.current = boot.groups[0].id;
+          await refresh(boot.groups[0].id);
+        } else setShowCreate(true);
         setSettings(await api.getSettings());
         try { setPresetRoles(await api.getPresetRoles()); } catch { /* optional */ }
         if (!disposed) {
@@ -139,8 +161,10 @@ export function App() {
         const boot = await api.bootstrap();
         if (disposed) return;
         setGroups(boot.groups);
-        if (boot.groups[0]) await refresh(boot.groups[0].id);
-        else setShowCreate(true);
+        if (boot.groups[0]) {
+          forceScrollGroupId.current = boot.groups[0].id;
+          await refresh(boot.groups[0].id);
+        } else setShowCreate(true);
         setSettings(await api.getSettings());
         try { setPresetRoles(await api.getPresetRoles()); } catch { /* optional */ }
       } catch (reason) {
@@ -242,29 +266,33 @@ export function App() {
   const mentionQuery = currentMentionQuery(composer);
   useEffect(() => { setMentionIndex(0); }, [mentionQuery, current?.group.id]);
 
-  // Scroll: stick to bottom when new content arrives while user is near bottom.
+  // Scroll: enter group → last line; stick while near bottom on new content.
   const lastMessage = current?.messages[current.messages.length - 1];
-  const lastKey = `${current?.group.id}:${current?.messages.length}:${lastMessage?.content.length ?? 0}`;
-  useEffect(() => {
-    const node = messageListRef.current;
-    if (!node) return;
-    if (stickToBottom.current || firstGroupLoad.current) {
-      node.scrollTop = node.scrollHeight;
-      firstGroupLoad.current = false;
-    }
-  }, [lastKey]);
+  const lastKey = `${current?.group.id}:${current?.messages.length}:${lastMessage?.content.length ?? 0}:${mainView}`;
+  useLayoutEffect(() => {
+    if (mainView !== "chat") return;
+    const groupId = current?.group.id;
+    if (!groupId) return;
+    const entering = forceScrollGroupId.current === groupId;
+    if (entering) forceScrollGroupId.current = null;
+    scrollMessagesToBottom(entering || stickToBottom.current);
+  }, [lastKey, mainView, current?.group.id]);
 
   const handleMessageScroll = () => {
     const node = messageListRef.current;
     if (!node) return;
-    stickToBottom.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
+    const near = isNearBottom(node.scrollTop, node.scrollHeight, node.clientHeight, BOTTOM_THRESHOLD_PX);
+    stickToBottom.current = near;
+    setShowJumpBottom(!near);
   };
 
   const selectGroup = (group: Group) => {
-    firstGroupLoad.current = true;
+    forceScrollGroupId.current = group.id;
     stickToBottom.current = true;
+    setShowJumpBottom(false);
     setComposer("");
     setShowSidebar(false);
+    setMainView("chat");
     void refresh(group.id).catch((reason) => setError(readError(reason)));
   };
 
@@ -472,8 +500,12 @@ export function App() {
             onError={(msg) => setError(msg)}
           />
         ) : <>
+        <div className="message-list-shell">
         <div className="message-list" ref={messageListRef} onScroll={handleMessageScroll}>
           {current.messages.length === 0 && <div className="empty-chat"><strong>{current.group.name}</strong><span>添加 Agent 后，在消息中输入 <code>@名称</code> 开始协作。</span><span className="empty-chat-sub">Enter 发送 · Shift+Enter 换行 · @ 触发成员菜单</span></div>}
+          {current.messages.length > MESSAGE_WINDOW && (
+            <div className="day-divider"><span>仅显示最近 {MESSAGE_WINDOW} 条（共 {current.messages.length}）</span></div>
+          )}
           {visibleMessages.map((message, index) => {
             const prev = index > 0 ? visibleMessages[index - 1] : null;
             const showDay = !prev || dayLabel(prev.createdAt) !== dayLabel(message.createdAt);
@@ -484,9 +516,6 @@ export function App() {
               </div>
             );
           })}
-          {current.messages.length > MESSAGE_WINDOW && (
-            <div className="day-divider"><span>仅显示最近 {MESSAGE_WINDOW} 条（共 {current.messages.length}）</span></div>
-          )}
           {current.runs
             .filter((run) => (run.status === "queued" || run.status === "running") && (!run.outputMessageId || !current.messages.some((message) => message.id === run.outputMessageId)))
             .map((run) => {
@@ -501,6 +530,17 @@ export function App() {
                 </div>
               );
             })}
+        </div>
+        {showJumpBottom && (
+          <button
+            type="button"
+            className="jump-bottom-btn"
+            onClick={() => scrollMessagesToBottom(true)}
+            title="回到最下方"
+          >
+            ↓ 最新
+          </button>
+        )}
         </div>
         <footer className="composer-wrap">
           {mentionSuggestions.length > 0 && (
@@ -613,6 +653,22 @@ const MessageBubble = memo(function MessageBubble({ message, members, runs, owne
   const own = message.senderMemberId === ownerId;
   const responding = message.status === "streaming" || run?.status === "queued" || run?.status === "running";
   const hasContent = hasRenderableContent(message.content);
+  const foldAgent = !own && hasContent;
+  const [expanded, setExpanded] = useState(() => agentReplyDefaultOpen(responding));
+  useEffect(() => {
+    if (responding) setExpanded(true);
+  }, [responding]);
+  const body = hasContent ? (
+    <>
+      <MessagePartsBody content={message.content} streaming={responding} />
+      {responding && <span className="stream-caret" aria-hidden />}
+    </>
+  ) : (
+    <TypingIndicator label={
+      run?.phase ? (PHASE_LABEL[run.phase] ?? run.phase)
+        : run?.status === "queued" ? "排队中" : "…"
+    } />
+  );
   return (
     <article className={`message-row ${own ? "own" : ""} ${responding ? "is-responding" : ""}`}>
       <Avatar member={sender} responding={responding && !own} />
@@ -627,16 +683,17 @@ const MessageBubble = memo(function MessageBubble({ message, members, runs, owne
           {run?.reviewStatus && <ReviewBadge reviewStatus={run.reviewStatus} />}
         </div>
         <div className={`bubble ${message.status}${responding ? " streaming" : ""}`}>
-          {hasContent ? (
-            <>
-              <MessagePartsBody content={message.content} streaming={responding} />
-              {responding && <span className="stream-caret" aria-hidden />}
-            </>
+          {foldAgent ? (
+            <details
+              className="agent-reply-fold"
+              open={expanded}
+              onToggle={(event) => setExpanded(event.currentTarget.open)}
+            >
+              <summary>{responding ? "流式输出中…" : extractReplyPreview(message.content)}</summary>
+              {body}
+            </details>
           ) : (
-            <TypingIndicator label={
-              run?.phase ? (PHASE_LABEL[run.phase] ?? run.phase)
-                : run?.status === "queued" ? "排队中" : "…"
-            } />
+            body
           )}
         </div>
         {run?.errorMessage && <p className="run-error">{run.errorMessage}</p>}
@@ -662,16 +719,16 @@ function MessagePartsBody({ content, streaming }: { content: string; streaming: 
   return (
     <div className="message-parts">
       {thinking && (
-        <details className="part-thinking" open={streaming}>
-          <summary>思考过程</summary>
+        <details className="part-thinking">
+          <summary>思考过程{streaming ? "（生成中）" : ""}</summary>
           <pre>{thinking.text}</pre>
         </details>
       )}
       {artifact && (
-        <div className="part-artifact">
-          <div className="part-label">中间产物</div>
+        <details className="part-artifact">
+          <summary>中间产物{streaming ? "（生成中）" : ""}</summary>
           <pre>{artifact.text}</pre>
-        </div>
+        </details>
       )}
       {finals.map((part, index) => (
         <div key={`final-${index}`} className="part-final">{part.text}</div>

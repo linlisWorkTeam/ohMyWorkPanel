@@ -78,7 +78,12 @@ impl AdapterKind {
     /// Resolve the executable to launch. Configured path wins; otherwise prefer the first
     /// candidate found on PATH, else the preferred default name (for detect/spawn errors).
     pub fn resolve_executable(self, configured: Option<&str>) -> Result<String, String> {
-        if let Some(path) = configured.map(str::trim).filter(|s| !s.is_empty()) {
+        // Gateway URLs are not spawnable binaries (common OpenClaw misconfig).
+        if let Some(path) = configured
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .filter(|s| !s.starts_with("http://") && !s.starts_with("https://"))
+        {
             return Ok(path.to_string());
         }
         let candidates = self.candidate_executables();
@@ -108,7 +113,7 @@ impl AdapterKind {
             Self::Codex => codex::build_args(prompt),
             Self::ClaudeCode => claude::build_args(prompt),
             Self::OpenCode => opencode::build_args(prompt),
-            Self::OpenClaw => openclaw::build_args(prompt),
+            Self::OpenClaw => openclaw::build_args(prompt, session_id),
             Self::Cursor => cursor::build_args(prompt, session_id),
         }
     }
@@ -340,8 +345,35 @@ mod tests {
         );
         assert_eq!(
             AdapterKind::OpenClaw.build_args("do work", None),
-            vec!["run", "do work"]
+            vec![
+                "agent",
+                "--agent",
+                "main",
+                "--message",
+                "do work",
+                "--json"
+            ]
         );
+        assert_eq!(
+            AdapterKind::OpenClaw.build_args("do work", Some("sess-1")),
+            vec![
+                "agent",
+                "--session-id",
+                "sess-1",
+                "--message",
+                "do work",
+                "--json"
+            ]
+        );
+    }
+
+    #[test]
+    fn openclaw_ignores_http_executable_path() {
+        let resolved = AdapterKind::OpenClaw
+            .resolve_executable(Some("http://localhost:18789"))
+            .expect("resolve");
+        assert!(!resolved.starts_with("http"));
+        assert!(resolved.contains("openclaw") || resolved == "openclaw");
     }
 
     #[test]
