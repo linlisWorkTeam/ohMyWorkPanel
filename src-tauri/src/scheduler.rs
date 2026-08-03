@@ -1,25 +1,101 @@
 use crate::adapters::{self, AdapterKind};
 use crate::db::{
-    create_task_run, get_group, get_members, get_settings_from, id, insert_run_event,
-    member_from_row, message_from_row, now, open_db, run_from_row, settings_or, AppResult,
+    create_task_run, get_cli_session_id, get_group, get_members, get_settings_from, id,
+    insert_run_event, member_from_row, message_from_row, now, open_db, run_from_row, set_cli_session_id,
+    settings_or, AppResult,
 };
-use crate::models::{ChatEvent, ExecutionContext, TaskRun};
-use crate::AppState;
-use rusqlite::params;
+use crate::event_sender::EventSender;
+use crate::logger;
+use crate::message_content::{apply_channel_delta, parts_to_plain_text};
+use crate::models::{ChatEvent, ExecutionContext, Experience, TaskRun};
+#[cfg(feature = "gui")]
+use tauri::Emitter;
+use rusqlite::{params, OptionalExtension};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
+        Arc, Mutex,
     },
 };
-use tauri::{AppHandle, Emitter};
+use std::path::PathBuf;
 
-pub fn emit(app: &AppHandle, event: ChatEvent) {
-    let _ = app.emit("chat-event", event);
+/// Common scheduler state available to both Tauri and Web modes
+#[derive(Clone, Debug)]
+pub struct SchedulerState {
+    pub db_path: PathBuf,
+    pub event_sender: EventSender,
+    pub cancellations: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
+    pub scheduling_groups: Arc<Mutex<std::collections::HashSet<String>>>,
 }
 
-pub fn schedule_group(state: AppState, app: AppHandle, group_id: String) {
+pub fn emit(state: &SchedulerState, event: ChatEvent) {
+    // Tauri mode
+    #[cfg(feature = "gui")]
+    if let EventSender::Tauri(app) = &state.event_sender {
+        let _ = app.emit("chat-event", &event);
+        return;
+    }
+    // Web mode: serialize full ChatEvent (camelCase + delta) for the browser WS client
+    let EventSender::Web(tx) = &state.event_sender else {
+        return;
+    };
+    if let Ok(payload) = serde_json::to_string(&event) {
+        let _ = tx.send(payload);
+    }
+}
+
+/// Decide which queued runs may start now (read-only planning).
+/// Same agent stays serial; different agents may run in parallel up to `available` slots.
+pub(crate) fn plan_queued_starts(
+    conn: &rusqlite::Connection,
+    group_id: &str,
+    available: i64,
+) -> AppResult<Vec<(String, String)>> {
+    if available <= 0 {
+        return Ok(Vec::new());
+    }
+    let mut busy_agents: HashSet<String> = HashSet::new();
+    {
+        let mut stmt = conn
+            .prepare(
+                "SELECT DISTINCT agent_member_id FROM task_runs WHERE group_id=?1 AND status='running'",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![group_id], |r| r.get::<_, String>(0))
+            .map_err(|e| e.to_string())?;
+        for row in rows {
+            busy_agents.insert(row.map_err(|e| e.to_string())?);
+        }
+    }
+    let mut stmt = conn
+        .prepare(
+            "SELECT id,agent_member_id FROM task_runs WHERE group_id=?1 AND status='queued' ORDER BY created_at",
+        )
+        .map_err(|e| e.to_string())?;
+    let queued = stmt
+        .query_map(params![group_id], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    let mut starts = Vec::new();
+    for (run_id, agent_id) in queued {
+        if starts.len() as i64 >= available {
+            break;
+        }
+        if busy_agents.contains(&agent_id) {
+            continue;
+        }
+        busy_agents.insert(agent_id.clone());
+        starts.push((run_id, agent_id));
+    }
+    Ok(starts)
+}
+
+pub fn schedule_group(state: SchedulerState, group_id: String) {
     let inserted = {
         let Ok(mut guard) = state.scheduling_groups.lock() else {
             return;
@@ -40,20 +116,9 @@ pub fn schedule_group(state: AppState, app: AppHandle, group_id: String) {
             )
             .map_err(|e| e.to_string())?;
         let available = (settings.max_concurrent_runs - running).max(0);
-        let mut stmt = conn
-            .prepare(
-                "SELECT id,agent_member_id FROM task_runs WHERE group_id=?1 AND status='queued' ORDER BY created_at LIMIT ?2",
-            )
-            .map_err(|e| e.to_string())?;
-        let queued = stmt
-            .query_map(params![group_id, available], |r| {
-                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
-            })
-            .map_err(|e| e.to_string())?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())?;
+        let planned = plan_queued_starts(&conn, &group_id, available)?;
         let mut starts = Vec::new();
-        for (run_id, agent_id) in queued {
+        for (run_id, agent_id) in planned {
             let message_id = id();
             conn.execute(
                 "INSERT INTO messages(id,group_id,sender_member_id,parent_run_id,content,status,created_at) VALUES(?1,?2,?3,?4,'','streaming',?5)",
@@ -79,7 +144,7 @@ pub fn schedule_group(state: AppState, app: AppHandle, group_id: String) {
         Ok(starts) => {
             for (run_id, message_id) in starts {
                 emit(
-                    &app,
+                    &state,
                     ChatEvent {
                         kind: "run_status".into(),
                         group_id: group_id.clone(),
@@ -88,17 +153,18 @@ pub fn schedule_group(state: AppState, app: AppHandle, group_id: String) {
                         status: Some("running".into()),
                         delta: None,
                         error: None,
+                        channel: None,
+                        replace: None,
                     },
                 );
                 let child_state = state.clone();
-                let child_app = app.clone();
                 tokio::spawn(async move {
-                    execute_run(child_state, child_app, run_id).await;
+                    execute_run(child_state, run_id).await;
                 });
             }
         }
         Err(error) => emit(
-            &app,
+            &state,
             ChatEvent {
                 kind: "scheduler_error".into(),
                 group_id,
@@ -107,16 +173,18 @@ pub fn schedule_group(state: AppState, app: AppHandle, group_id: String) {
                 delta: None,
                 status: None,
                 error: Some(error),
+                channel: None,
+                replace: None,
             },
         ),
     }
 }
 
-fn get_execution_context(state: &AppState, run_id: &str) -> AppResult<ExecutionContext> {
+fn get_execution_context(state: &SchedulerState, run_id: &str) -> AppResult<ExecutionContext> {
     let conn = open_db(&state.db_path)?;
     let run: TaskRun = conn
         .query_row(
-            "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,created_at,started_at,completed_at FROM task_runs WHERE id=?1",
+            "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at FROM task_runs WHERE id=?1",
             params![run_id],
             run_from_row,
         )
@@ -124,7 +192,7 @@ fn get_execution_context(state: &AppState, run_id: &str) -> AppResult<ExecutionC
     let group = get_group(&conn, &run.group_id)?;
     let agent = conn
         .query_row(
-            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,m.created_at FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
+            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
             params![run.agent_member_id],
             member_from_row,
         )
@@ -151,7 +219,9 @@ fn get_execution_context(state: &AppState, run_id: &str) -> AppResult<ExecutionC
         .iter()
         .map(|m| (m.id.clone(), m.display_name.clone()))
         .collect();
-    let lines = history
+    // Cap history to keep argv under OS ARG_MAX and avoid multi-minute hangs.
+    const MAX_HISTORY_CHARS: usize = 24_000;
+    let mut line_parts: Vec<String> = history
         .iter()
         .map(|m| {
             format!(
@@ -160,19 +230,98 @@ fn get_execution_context(state: &AppState, run_id: &str) -> AppResult<ExecutionC
                     .get(&m.sender_member_id)
                     .cloned()
                     .unwrap_or_else(|| "成员".into()),
-                m.content
+                truncate_chars(&parts_to_plain_text(&m.content), 2_000)
             )
         })
-        .collect::<Vec<_>>()
-        .join("\n");
+        .collect();
+    let mut lines = line_parts.join("\n");
+    while lines.len() > MAX_HISTORY_CHARS && line_parts.len() > 1 {
+        line_parts.remove(0);
+        lines = line_parts.join("\n");
+    }
+    if lines.chars().count() > MAX_HISTORY_CHARS {
+        lines = format!(
+            "…(前文已截断)\n{}",
+            truncate_chars_end(&lines, MAX_HISTORY_CHARS)
+        );
+    }
     let root = history
         .iter()
         .find(|m| m.id == run.root_message_id)
-        .map(|m| m.content.clone())
+        .map(|m| truncate_chars(&parts_to_plain_text(&m.content), 8_000))
         .unwrap_or_default();
+
+    // G3: Inject relevant past experiences from shared memory
+    let experiences = (|| -> AppResult<Vec<Experience>> {
+        let query_text = root.split_whitespace().take(10).collect::<Vec<_>>().join(" ");
+        if query_text.is_empty() { return Ok(vec![]); }
+        let mut stmt = conn.prepare(
+            "SELECT id,group_id,source_member_id,title,content,tags,created_at,updated_at FROM experiences WHERE group_id=?1 AND (content LIKE ?2 OR title LIKE ?2 OR tags LIKE ?2) ORDER BY created_at DESC LIMIT 5"
+        ).map_err(|e| e.to_string())?;
+        let pattern = format!("%{}%", query_text);
+        let rows = stmt.query_map(params![group.id, pattern], |r| {
+            Ok(Experience {
+                id: r.get(0)?,
+                group_id: r.get(1)?,
+                source_member_id: r.get(2)?,
+                title: r.get(3)?,
+                content: r.get(4)?,
+                tags: r.get(5)?,
+                created_at: r.get(6)?,
+                updated_at: r.get(7)?,
+            })
+        }).map_err(|e| e.to_string())?;
+        let mut results = Vec::new();
+        for row in rows { results.push(row.map_err(|e| e.to_string())?); }
+        Ok(results)
+    })().unwrap_or_default();
+
+    let experience_block = if experiences.is_empty() {
+        String::new()
+    } else {
+        let entries: Vec<String> = experiences.iter().map(|e|
+            format!("- ({}) {}: {}", e.title, e.tags, &e.content[..e.content.len().min(200)])
+        ).collect();
+        format!("\n相关经验记忆：\n{}", entries.join("\n"))
+    };
+
+    // G2: Inject review context if this is a review task
+    let review_block = if let Some(ref parent_id) = run.parent_run_id {
+        (|| -> Option<String> {
+            let conn = open_db(&state.db_path).ok()?;
+            let parent: TaskRun = conn.query_row(
+                "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at FROM task_runs WHERE id=?1",
+                params![parent_id],
+                run_from_row,
+            ).ok()?;
+            if parent.review_status.as_deref() == Some("pending") && parent.reviewer_member_id.as_deref() == Some(&agent.id) {
+                let parent_output = parent.output_message_id.as_ref().and_then(|mid| {
+                    conn.query_row("SELECT content FROM messages WHERE id=?1", params![mid], |r| r.get::<_,String>(0)).ok()
+                }).unwrap_or_default();
+                let parent_output = parts_to_plain_text(&parent_output);
+                // Get the original agent's display name
+                let orig_agent_name: String = conn.query_row(
+                    "SELECT display_name FROM members WHERE id=?1", params![parent.agent_member_id], |r| r.get::<_,String>(0)
+                ).unwrap_or_else(|_| parent.agent_member_id.clone());
+                Some(format!(
+                    "\n\n❗ 当前任务是审查 @{} 的工作成果。请仔细审查以下内容，判断是否通过。\n- 如果通过，在回复中包含「**APPROVED**」\n- 如果需要修改，在回复中包含「CHANGES_REQUESTED: <修改建议>」\n\n待审查内容：\n{}",
+                    orig_agent_name, parent_output
+                ))
+            } else { None }
+        })()
+    } else { None };
+
+    let announcement_block = format_announcement_block(&group.announcement, 4096);
     let prompt = format!(
-        "你是群聊中的 Agent「{}」。职责：{}。\n工作目录：{}\n请只完成当前任务，明确说明结果与风险。需要其他 Agent 协作时，仅在你是管理员时使用 @成员名 提及。\n任务根消息：{}\n最近群聊：\n{}",
-        agent.display_name, agent.role_description, group.workspace_path, root, lines
+        "你是群聊中的 Agent「{}」。职责：{}。\n工作目录：{}{}\n请只完成当前任务，明确说明结果与风险。需要其他 Agent 协作时，使用 @成员名 提及。\n任务根消息：{}\n最近群聊：{}\n你可以将重要经验通过 `!保存经验 <标题>: <内容> #标签` 保存。{}{}",
+        agent.display_name,
+        agent.role_description,
+        group.workspace_path,
+        announcement_block,
+        root,
+        lines,
+        experience_block,
+        review_block.as_deref().unwrap_or_default()
     );
     Ok(ExecutionContext {
         run,
@@ -183,11 +332,11 @@ fn get_execution_context(state: &AppState, run_id: &str) -> AppResult<ExecutionC
     })
 }
 
-async fn execute_run(state: AppState, app: AppHandle, run_id: String) {
+async fn execute_run(state: SchedulerState, run_id: String) {
     let context = match get_execution_context(&state, &run_id) {
         Ok(v) => v,
         Err(error) => {
-            finish_failed(&state, &app, &run_id, &error).await;
+            finish_failed(&state, &run_id, &error).await;
             return;
         }
     };
@@ -195,74 +344,201 @@ async fn execute_run(state: AppState, app: AppHandle, run_id: String) {
     if let Ok(mut tokens) = state.cancellations.lock() {
         tokens.insert(run_id.clone(), token.clone());
     }
-    let outcome = run_agent(&state, &app, &context, &token).await;
+    let outcome = run_agent(&state, &context, &token).await;
     if token.load(Ordering::SeqCst) {
     } else if let Err(error) = outcome {
-        finish_failed(&state, &app, &run_id, &error).await;
+        finish_failed(&state, &run_id, &error).await;
     } else {
-        finish_completed(&state, &app, &context).await;
+        finish_completed(&state, &context).await;
     }
     if let Ok(mut tokens) = state.cancellations.lock() {
         tokens.remove(&run_id);
     }
-    schedule_group(state, app, context.group.id);
+    schedule_group(state, context.group.id);
 }
 
 async fn run_agent(
-    state: &AppState,
-    app: &AppHandle,
+    state: &SchedulerState,
     context: &ExecutionContext,
     token: &Arc<AtomicBool>,
 ) -> AppResult<()> {
     let adapter_name = context.agent.adapter.as_deref().unwrap_or("mock");
     let kind = AdapterKind::parse(adapter_name)?;
-    let on_delta = |delta: String| {
-        let state = state.clone();
-        let app = app.clone();
+    let make_on_delta = || {
+        let state_clone = state.clone();
         let run = context.run.clone();
-        async move { append_delta(&state, &app, &run, &delta) }
+        move |channel: String, delta: String, replace: bool| {
+            let state = state_clone.clone();
+            let run = run.clone();
+            async move { append_delta(&state, &run, &channel, &delta, replace) }
+        }
     };
 
     if kind == AdapterKind::Mock {
-        return adapters::run_mock_stream(token, on_delta).await;
+        adapters::run_mock_stream(token, make_on_delta()).await?;
+        return Ok(());
     }
 
     let executable = kind.resolve_executable(context.agent.executable_path.as_deref())?;
-    adapters::run_streaming(
+    let mut session_id = if kind == AdapterKind::Cursor {
+        let conn = open_db(&state.db_path)?;
+        get_cli_session_id(&conn, &context.agent.id)?
+    } else {
+        None
+    };
+
+    let prompt = if kind == AdapterKind::Cursor && session_id.is_some() {
+        short_resume_prompt(context)
+    } else {
+        context.prompt.clone()
+    };
+
+    let result = adapters::run_streaming(
         kind,
         &executable,
         std::path::Path::new(&context.group.workspace_path),
-        &context.prompt,
+        &prompt,
+        session_id.as_deref(),
         context.settings.run_timeout_seconds as u64,
         token,
-        on_delta,
+        make_on_delta(),
     )
-    .await
+    .await;
+
+    let captured = match result {
+        Ok(captured) => captured,
+        Err(error)
+            if kind == AdapterKind::Cursor
+                && session_id.is_some()
+                && is_resume_failure(&error) =>
+        {
+            // Invalid session → clear and retry once without resume.
+            let conn = open_db(&state.db_path)?;
+            set_cli_session_id(&conn, &context.agent.id, None)?;
+            session_id = None;
+            adapters::run_streaming(
+                kind,
+                &executable,
+                std::path::Path::new(&context.group.workspace_path),
+                &context.prompt,
+                None,
+                context.settings.run_timeout_seconds as u64,
+                token,
+                make_on_delta(),
+            )
+            .await?
+        }
+        Err(error) => return Err(error),
+    };
+
+    if kind == AdapterKind::Cursor {
+        if let Some(id) = captured.or(session_id) {
+            let conn = open_db(&state.db_path)?;
+            set_cli_session_id(&conn, &context.agent.id, Some(&id))?;
+        }
+    }
+    Ok(())
+}
+
+fn format_announcement_block(announcement: &str, max_chars: usize) -> String {
+    let trimmed = announcement.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    let body = truncate_chars(trimmed, max_chars);
+    format!("\n\n【群公告 / 项目级规则 — 所有 Agent 必须遵守】\n{body}\n")
+}
+
+fn short_resume_prompt(context: &ExecutionContext) -> String {
+    let task = extract_root_from_prompt(&context.prompt);
+    let announcement_block = format_announcement_block(&context.group.announcement, 2048);
+    format!(
+        "你是群聊中的 Agent「{}」。职责：{}。\n工作目录：{}{}\n请只完成当前任务，明确说明结果与风险。需要其他 Agent 协作时，使用 @成员名 提及。\n任务根消息：{}\n（续接同一 CLI session，无需重复历史。）\n你可以将重要经验通过 `!保存经验 <标题>: <内容> #标签` 保存。",
+        context.agent.display_name,
+        context.agent.role_description,
+        context.group.workspace_path,
+        announcement_block,
+        task
+    )
+}
+
+fn extract_root_from_prompt(prompt: &str) -> String {
+    const START: &str = "任务根消息：";
+    const END: &str = "\n最近群聊：";
+    if let Some(start) = prompt.find(START) {
+        let rest = &prompt[start + START.len()..];
+        if let Some(end) = rest.find(END) {
+            return rest[..end].to_string();
+        }
+        return rest.lines().next().unwrap_or("").to_string();
+    }
+    "请继续处理群聊中刚 @ 你的最新任务。".into()
+}
+
+fn truncate_chars(input: &str, max_chars: usize) -> String {
+    let count = input.chars().count();
+    if count <= max_chars {
+        return input.to_string();
+    }
+    let trimmed: String = input.chars().take(max_chars).collect();
+    format!("{trimmed}…(截断)")
+}
+
+fn truncate_chars_end(input: &str, max_chars: usize) -> String {
+    let count = input.chars().count();
+    if count <= max_chars {
+        return input.to_string();
+    }
+    input.chars().skip(count - max_chars).collect()
+}
+
+fn is_resume_failure(error: &str) -> bool {
+    let lower = error.to_ascii_lowercase();
+    lower.contains("resume")
+        || lower.contains("session")
+        || lower.contains("chat")
+        || lower.contains("not found")
+        || lower.contains("unknown")
+        || lower.contains("invalid")
 }
 
 fn append_delta(
-    state: &AppState,
-    app: &AppHandle,
+    state: &SchedulerState,
     run: &TaskRun,
+    channel: &str,
     delta: &str,
+    replace: bool,
 ) -> AppResult<()> {
+    if delta.is_empty() {
+        return Ok(());
+    }
     let conn = open_db(&state.db_path)?;
     let output_id = run
         .output_message_id
         .as_ref()
         .ok_or_else(|| "任务缺少输出消息。".to_string())?;
-    let changed = conn
-        .execute(
-            "UPDATE messages SET content=content || ?1 WHERE id=?2 AND status='streaming'",
-            params![delta, output_id],
+    let current: String = match conn
+        .query_row(
+            "SELECT content FROM messages WHERE id=?1 AND status='streaming'",
+            params![output_id],
+            |r| r.get(0),
         )
-        .map_err(|e| e.to_string())?;
-    if changed == 0 {
-        return Ok(());
-    }
-    insert_run_event(&conn, &run.id, "delta", delta)?;
+        .optional()
+        .map_err(|e| e.to_string())?
+    {
+        Some(value) => value,
+        None => return Ok(()),
+    };
+    let next = apply_channel_delta(&current, channel, delta, replace);
+    conn.execute(
+        "UPDATE messages SET content=?1 WHERE id=?2 AND status='streaming'",
+        params![next, output_id],
+    )
+    .map_err(|e| e.to_string())?;
+    let payload = serde_json::json!({ "channel": channel, "delta": delta, "replace": replace }).to_string();
+    insert_run_event(&conn, &run.id, "delta", &payload)?;
     emit(
-        app,
+        state,
         ChatEvent {
             kind: "message_delta".into(),
             group_id: run.group_id.clone(),
@@ -271,17 +547,19 @@ fn append_delta(
             delta: Some(delta.into()),
             status: Some("streaming".into()),
             error: None,
+            channel: Some(channel.into()),
+            replace: Some(replace),
         },
     );
     Ok(())
 }
 
-async fn finish_failed(state: &AppState, app: &AppHandle, run_id: &str, error: &str) {
+async fn finish_failed(state: &SchedulerState, run_id: &str, error: &str) {
     let result = (|| -> AppResult<(String, Option<String>)> {
         let conn = open_db(&state.db_path)?;
         let run: TaskRun = conn
             .query_row(
-                "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,created_at,started_at,completed_at FROM task_runs WHERE id=?1",
+                "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at FROM task_runs WHERE id=?1",
                 params![run_id],
                 run_from_row,
             )
@@ -306,7 +584,7 @@ async fn finish_failed(state: &AppState, app: &AppHandle, run_id: &str, error: &
     })();
     if let Ok((group_id, message_id)) = result {
         emit(
-            app,
+            state,
             ChatEvent {
                 kind: "run_status".into(),
                 group_id,
@@ -315,14 +593,98 @@ async fn finish_failed(state: &AppState, app: &AppHandle, run_id: &str, error: &
                 delta: None,
                 status: Some("failed".into()),
                 error: Some(error.into()),
+                channel: None,
+                replace: None,
             },
         );
     }
 }
 
-async fn finish_completed(state: &AppState, app: &AppHandle, context: &ExecutionContext) {
-    let result = (|| -> AppResult<Option<String>> {
+async fn finish_completed(state: &SchedulerState, context: &ExecutionContext) {
+    // G2: Check if this run is a review response for a parent task
+    if let Some(ref parent_run_id) = context.run.parent_run_id {
+        if let Some(ref _reviewer_id) = context.run.reviewer_member_id {
+            // This IS the review run - check if parent needs review result
+        } else {
+            // Check if parent is awaiting review
+            let check_parent_review = (|| -> AppResult<Option<String>> {
+                let conn = open_db(&state.db_path)?;
+                let parent: TaskRun = conn.query_row(
+                    "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at FROM task_runs WHERE id=?1",
+                    params![parent_run_id],
+                    run_from_row,
+                ).map_err(|e| e.to_string())?;
+                if parent.review_status.as_deref() == Some("pending") && parent.reviewer_member_id.as_deref() == Some(&context.agent.id) {
+                    let output_id = context.run.output_message_id.as_ref().ok_or_else(|| "缺少输出".to_string())?;
+                    let output_content: String = conn.query_row(
+                        "SELECT content FROM messages WHERE id=?1", params![output_id], |r| r.get::<_,String>(0)
+                    ).map_err(|e| e.to_string())?;
+                    let approved = parts_to_plain_text(&output_content)
+                        .to_uppercase()
+                        .contains("APPROVED");
+                    let new_status = if approved { "completed" } else { "changes_requested" };
+                    let new_review = if approved { "approved" } else { "rejected" };
+                    conn.execute(
+                        "UPDATE task_runs SET review_status=?1,status=?2 WHERE id=?3",
+                        params![new_review, new_status, parent_run_id],
+                    ).map_err(|e| e.to_string())?;
+                    insert_run_event(&conn, parent_run_id, &format!("review_{}", new_review),
+                        &format!(r#"{{"reviewer":"{}","output":"{}"}}"#, context.agent.id, output_content))?;
+                    logger::info(&conn, "review", &format!("review {} by {} for run {}", new_review, context.agent.display_name, parent_run_id), None);
+                    return Ok(Some(new_status.into()));
+                }
+                Ok(None)
+            })();
+            let _ = check_parent_review;
+        }
+    }
+    let result = (|| -> AppResult<Option<(String, bool)>> {
         let conn = open_db(&state.db_path)?;
+        let output_id = context
+            .run
+            .output_message_id
+            .as_ref()
+            .ok_or_else(|| "任务缺少输出消息。".to_string())?;
+        let content_raw: String = conn
+            .query_row(
+                "SELECT content FROM messages WHERE id=?1",
+                params![output_id],
+                |r| r.get::<_, String>(0),
+            )
+            .map_err(|e| e.to_string())?;
+        let content = parts_to_plain_text(&content_raw);
+        // G2: Check for review request via !review @AgentName
+        let members = get_members(&conn, &context.group.id)?;
+        let mut reviewer_id = None;
+        for m in &members {
+            if m.kind == "agent" && m.is_active && m.id != context.agent.id {
+                if content.contains(&format!("!review @{}", m.display_name)) {
+                    reviewer_id = Some(m.id.clone());
+                    break;
+                }
+            }
+        }
+        if let Some(ref rev_id) = reviewer_id {
+            // Task goes to "awaiting_review" instead of "completed"
+            conn.execute(
+                "UPDATE task_runs SET status='awaiting_review',review_status='pending',reviewer_member_id=?1,completed_at=?2 WHERE id=?3 AND status='running'",
+                params![rev_id, now(), context.run.id],
+            ).map_err(|e| e.to_string())?;
+            conn.execute(
+                "UPDATE messages SET content=CASE WHEN length(content)=0 THEN '已完成。' ELSE content END,status='completed' WHERE id=?1",
+                params![output_id],
+            ).map_err(|e| e.to_string())?;
+            insert_run_event(&conn, &context.run.id, "awaiting_review",
+                &format!(r#"{{"reviewer":"{}"}}"#, rev_id))?;
+            // Create review run for the reviewer
+            let review_run_id = create_task_run(
+                &conn, &context.group.id, output_id, rev_id,
+                Some(&context.run.id), context.run.depth + 1,
+            )?;
+            logger::info(&conn, "review", &format!("review requested by {}: run {} → {}", context.agent.display_name, context.run.id, review_run_id), None);
+            return Ok(Some((output_id.clone(), true)));
+        }
+        // No review: normal completion
         let changed = conn
             .execute(
                 "UPDATE task_runs SET status='completed',completed_at=?1 WHERE id=?2 AND status='running'",
@@ -332,48 +694,46 @@ async fn finish_completed(state: &AppState, app: &AppHandle, context: &Execution
         if changed == 0 {
             return Ok(None);
         }
-        let output_id = context
-            .run
-            .output_message_id
-            .as_ref()
-            .ok_or_else(|| "任务缺少输出消息。".to_string())?;
         conn.execute(
             "UPDATE messages SET content=CASE WHEN length(content)=0 THEN '已完成。' ELSE content END,status='completed' WHERE id=?1",
             params![output_id],
-        )
-        .map_err(|e| e.to_string())?;
+        ).map_err(|e| e.to_string())?;
         insert_run_event(&conn, &context.run.id, "completed", "{}")?;
-        Ok(Some(output_id.clone()))
+        Ok(Some((output_id.clone(), false)))
     })();
-    if let Ok(Some(message_id)) = result {
+    if let Ok(Some((message_id, is_review))) = result {
+        let status = if is_review { "awaiting_review" } else { "completed" };
         emit(
-            app,
+            state,
             ChatEvent {
                 kind: "run_status".into(),
                 group_id: context.group.id.clone(),
                 run_id: Some(context.run.id.clone()),
                 message_id: Some(message_id.clone()),
                 delta: None,
-                status: Some("completed".into()),
+                status: Some(status.into()),
                 error: None,
+                channel: None,
+                replace: None,
             },
         );
-        delegate_from_admin(state, app, context, &message_id).await;
+        delegate_from_admin(state, context, &message_id).await;
     }
 }
 
 async fn delegate_from_admin(
-    state: &AppState,
-    app: &AppHandle,
+    state: &SchedulerState,
     context: &ExecutionContext,
     output_message_id: &str,
 ) {
     let created = (|| -> AppResult<Vec<String>> {
         let conn = open_db(&state.db_path)?;
         let group = get_group(&conn, &context.group.id)?;
-        if group.admin_member_id.as_deref() != Some(context.agent.id.as_str())
-            || context.run.depth >= context.settings.max_delegation_depth
-        {
+        // Don't delegate further from review runs
+        if context.run.reviewer_member_id.is_some() || context.run.review_status.as_deref() == Some("pending") {
+            return Ok(vec![]);
+        }
+        if context.run.depth >= context.settings.max_delegation_depth {
             return Ok(vec![]);
         }
         let content = conn
@@ -387,10 +747,11 @@ async fn delegate_from_admin(
         let target_ids = members
             .iter()
             .filter(|m| {
-                m.kind == "agent"
-                    && m.is_active
-                    && m.id != context.agent.id
-                    && content.contains(&format!("@{}", m.display_name))
+                if m.kind != "agent" || !m.is_active || m.id == context.agent.id {
+                    return false;
+                }
+                // Check for @mention (A2A) or !review @mention (review request)
+                content.contains(&format!("@{}", m.display_name))
             })
             .map(|m| m.id.clone())
             .collect::<Vec<_>>();
@@ -413,7 +774,88 @@ async fn delegate_from_admin(
     })();
     if let Ok(run_ids) = created {
         if !run_ids.is_empty() {
-            schedule_group(state.clone(), app.clone(), context.group.id.clone());
+            schedule_group(state.clone(), context.group.id.clone());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::plan_queued_starts;
+    use crate::db::{init_db, open_db};
+    use rusqlite::params;
+
+    fn seed_group(path: &std::path::Path) {
+        init_db(path).unwrap();
+        let conn = open_db(path).unwrap();
+        conn.execute(
+            "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at) VALUES('g','g','.', 'u',NULL,1)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,tags) VALUES('u','g','user','u','#000','',1,1,'')",
+            [],
+        )
+        .unwrap();
+        for (id, name) in [("a", "AgentA"), ("b", "AgentB")] {
+            conn.execute(
+                "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,tags) VALUES(?1,'g','agent',?2,'#000','',1,1,'')",
+                params![id, name],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at,cli_session_id) VALUES(?1,'mock',NULL,'unknown',1,NULL)",
+                params![id],
+            )
+            .unwrap();
+        }
+        conn.execute(
+            "INSERT INTO messages VALUES('m','g','u',NULL,'x','completed',1)",
+            [],
+        )
+        .unwrap();
+        // A already running; A queued; B queued — only B should start.
+        conn.execute(
+            "INSERT INTO task_runs(id,group_id,root_message_id,agent_member_id,depth,status,created_at) VALUES('r-run','g','m','a',0,'running',1)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO task_runs(id,group_id,root_message_id,agent_member_id,depth,status,created_at) VALUES('r-a','g','m','a',0,'queued',2)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO task_runs(id,group_id,root_message_id,agent_member_id,depth,status,created_at) VALUES('r-b','g','m','b',0,'queued',3)",
+            [],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn same_agent_stays_serial_other_agent_can_start() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        seed_group(file.path());
+        let conn = open_db(file.path()).unwrap();
+        let starts = plan_queued_starts(&conn, "g", 3).unwrap();
+        assert_eq!(starts, vec![("r-b".into(), "b".into())]);
+    }
+
+    #[test]
+    fn available_zero_starts_nothing() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        seed_group(file.path());
+        let conn = open_db(file.path()).unwrap();
+        let starts = plan_queued_starts(&conn, "g", 0).unwrap();
+        assert!(starts.is_empty());
+    }
+
+    #[test]
+    fn announcement_block_empty_and_present() {
+        assert!(super::format_announcement_block("", 100).is_empty());
+        let block = super::format_announcement_block("必须跑测试门禁", 100);
+        assert!(block.contains("群公告"));
+        assert!(block.contains("必须跑测试门禁"));
     }
 }

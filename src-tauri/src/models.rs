@@ -19,6 +19,10 @@ pub struct Group {
     pub owner_member_id: String,
     pub admin_member_id: Option<String>,
     pub created_at: i64,
+    #[serde(default)]
+    pub announcement: String,
+    #[serde(default)]
+    pub announcement_updated_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,6 +38,7 @@ pub struct Member {
     pub adapter: Option<String>,
     pub executable_path: Option<String>,
     pub runtime_status: Option<String>,
+    pub tags: String,
     pub created_at: i64,
 }
 
@@ -61,6 +66,8 @@ pub struct TaskRun {
     pub status: String,
     pub output_message_id: Option<String>,
     pub error_message: Option<String>,
+    pub review_status: Option<String>,
+    pub reviewer_member_id: Option<String>,
     pub created_at: i64,
     pub started_at: Option<i64>,
     pub completed_at: Option<i64>,
@@ -119,6 +126,12 @@ pub struct ChatEvent {
     pub delta: Option<String>,
     pub status: Option<String>,
     pub error: Option<String>,
+    /// thinking | artifact | final — omitted/None means final for older clients
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub channel: Option<String>,
+    /// When true, `delta` replaces the channel text instead of appending.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replace: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -246,6 +259,19 @@ pub struct ExecutionContext {
      pub sort_order: Option<i64>,
  }
  
+ #[derive(Debug, Clone, Serialize, Deserialize)]
+ #[serde(rename_all = "camelCase")]
+ pub struct Experience {
+     pub id: String,
+     pub group_id: String,
+     pub source_member_id: String,
+     pub title: String,
+     pub content: String,
+     pub tags: String,
+     pub created_at: i64,
+     pub updated_at: i64,
+ }
+
  #[derive(Debug, Clone, Serialize)]
  #[serde(rename_all = "camelCase")]
  pub struct RoadmapState {

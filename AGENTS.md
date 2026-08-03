@@ -10,7 +10,7 @@ AI agent 贡献者请遵循以下项目约定。
 | 桌面壳 | Tauri 2 |
 | 后端 | Rust 2021, rusqlite 0.32 |
 | 包管理 | pnpm（`pnpm-workspace.yaml`） |
-| 测试 | 前端 Vitest / Rust `cargo test` |
+| 测试 | 前端 Vitest / Rust `cargo test`；策略见 `docs/testing-strategy.md`；canary 门禁 `scripts/test-gate.sh` |
 
 ## 项目结构
 
@@ -56,12 +56,17 @@ scripts/
 | `pnpm install` | 安装依赖 |
 | `pnpm tauri dev` | 启动桌面应用（开发） |
 | `pnpm test` | 前端 Vitest |
-| `cd src-tauri && cargo test` | Rust 单测 |
+| `pnpm run test:gate` / `./scripts/test-gate.sh` | 部署前门禁（Vitest + `cargo test --lib`） |
+| `cd src-tauri && cargo test --no-default-features --lib` | Rust 单测（与门禁一致） |
 | `cd src-tauri && cargo build` | Rust 编译检查 |
-| `powershell -File scripts/smoke-adapters.ps1` | 适配器 smoke |
+| `powershell -File scripts/smoke-adapters.ps1` | 适配器 smoke（不进门禁） |
+| `./scripts/deploy-canary.sh` | 先跑门禁再构建/部署灰度 |
 
 ## 注意事项
 
+- **Commit 前**：遵守 `.cursor/rules/pre-commit-test-gate.mdc`——复核自动化测试设计，并跑通 `pnpm run test:gate`（禁止用 `LINLIS_SKIP_TEST_GATE` 绕过后提交）。
+- **工作区路径**：建群只能选**服务器上已存在的绝对路径**（`ServerPathPicker` / `/api/fs/list`），不是浏览器本机路径。
+- **群公告**：等同全员项目级 rule，写入后注入 Agent prompt，并尝试同步工作区 `.cursor/rules/group-announcement.mdc`。
 - 本机需 Node 20+、Rust stable、WebView2（Windows）。
 - Agent 运行依赖本机已登录的 CLI（codex/claude/opencode/agent）。
 - `cargo test` 需在 `src-tauri/` 目录运行。

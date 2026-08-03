@@ -1,0 +1,39 @@
+---
+description: 每次 commit 前必须复核自动化测试设计并通过全部测试门禁
+alwaysApply: true
+---
+
+# Commit 前自动化测试复核
+
+在用户要求 **git commit**（或你即将创建 commit）之前，必须完成下列复核；任一失败则 **禁止 commit**，先补测/修红再提交。
+
+## 1. 复核「自动化测试设计」
+
+对照本次 diff（staged + 将要纳入 commit 的改动）：
+
+- 行为/契约变更是否有对应单测或集成测（新增或更新）？
+- 纯函数/调度/解析/鉴权等逻辑是否落在 `*.test.ts` 或 Rust `#[cfg(test)]`？
+- 若本次仅文档/注释/纯样式且无行为变化：在 commit 说明或回复中写明「无行为变更，测试设计 N/A」，仍须跑通门禁。
+- 策略与分层见 [`docs/testing-strategy.md`](docs/testing-strategy.md)；关键回归（同 Agent 串行、parts 兼容、JWT 等）不得无覆盖就合入。
+
+```text
+❌ BAD: 改了 scheduler / parse / messageContent，只手测，无断言，直接 commit
+✅ GOOD: 补或更新用例 → 跑门禁全绿 → 再 commit
+```
+
+## 2. 跑通全部自动化测试门禁
+
+在仓库根目录执行（不得用 `LINLIS_SKIP_TEST_GATE=1` 绕过）：
+
+```bash
+pnpm run test:gate
+# 等价: bash scripts/test-gate.sh
+```
+
+门禁包含：前端 Vitest + `cargo test --no-default-features --lib`。必须 exit 0。
+
+## 3. Commit 时的最低标准
+
+- 回复/交接中简要写明：测试设计结论 + 门禁已通过。
+- 真 CLI smoke（`smoke-adapters.ps1`）**不**替代门禁；缺 CLI 不阻塞，但门禁必须绿。
+- 测试不得写入生产数据目录 `/AI/LinlisWorkPanel/data`。

@@ -2,11 +2,12 @@ mod claude;
 mod codex;
 mod cursor;
 mod mock;
+mod openclaw;
 mod opencode;
 pub mod parse;
 
 use crate::db::AppResult;
-use parse::parse_agent_line;
+use parse::{parse_agent_event, parse_agent_line, DeltaMode, ParsedEvent};
 use std::{
     path::Path,
     process::Stdio,
@@ -22,7 +23,7 @@ use tokio::{
     time::sleep,
 };
 
-pub use mock::STREAM_CHUNKS;
+pub use mock::STREAM_EVENTS;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AdapterKind {
@@ -30,6 +31,7 @@ pub enum AdapterKind {
     Codex,
     ClaudeCode,
     OpenCode,
+    OpenClaw,
     Cursor,
 }
 
@@ -40,6 +42,7 @@ impl AdapterKind {
             "codex" => Ok(Self::Codex),
             "claude-code" => Ok(Self::ClaudeCode),
             "opencode" => Ok(Self::OpenCode),
+            "openclaw" => Ok(Self::OpenClaw),
             "cursor" => Ok(Self::Cursor),
             other => Err(format!("不支持的 Agent 适配器：{other}")),
         }
@@ -51,6 +54,7 @@ impl AdapterKind {
             Self::Codex => "codex",
             Self::ClaudeCode => "claude-code",
             Self::OpenCode => "opencode",
+            Self::OpenClaw => "openclaw",
             Self::Cursor => "cursor",
         }
     }
@@ -61,6 +65,7 @@ impl AdapterKind {
             Self::Codex => &["codex"],
             Self::ClaudeCode => &["claude"],
             Self::OpenCode => &["opencode"],
+            Self::OpenClaw => openclaw::candidate_executables(),
             Self::Cursor => cursor::candidate_executables(),
         }
     }
@@ -96,18 +101,24 @@ impl AdapterKind {
             .to_string())
     }
 
-    pub fn build_args(self, prompt: &str) -> Vec<String> {
+    pub fn build_args(self, prompt: &str, session_id: Option<&str>) -> Vec<String> {
         match self {
             Self::Mock => Vec::new(),
             Self::Codex => codex::build_args(prompt),
             Self::ClaudeCode => claude::build_args(prompt),
             Self::OpenCode => opencode::build_args(prompt),
-            Self::Cursor => cursor::build_args(prompt),
+            Self::OpenClaw => openclaw::build_args(prompt),
+            Self::Cursor => cursor::build_args(prompt, session_id),
         }
     }
 
     pub fn parse_line(self, line: &str) -> String {
         parse_agent_line(line)
+    }
+
+    pub fn parse_event(self, line: &str) -> ParsedEvent {
+        let _ = self;
+        parse_agent_event(line)
     }
 }
 
@@ -177,42 +188,50 @@ fn prepare_command(executable: &str) -> Command {
     Command::new(executable)
 }
 
-pub async fn run_mock_stream<F, Fut>(token: &Arc<AtomicBool>, mut on_delta: F) -> AppResult<()>
+pub async fn run_mock_stream<F, Fut>(token: &Arc<AtomicBool>, mut on_delta: F) -> AppResult<Option<String>>
 where
-    F: FnMut(String) -> Fut,
+    F: FnMut(String, String, bool) -> Fut,
     Fut: std::future::Future<Output = AppResult<()>>,
 {
-    for chunk in STREAM_CHUNKS {
+    for (channel, chunk) in STREAM_EVENTS {
         if token.load(Ordering::SeqCst) {
-            return Ok(());
+            return Ok(None);
         }
-        on_delta((*chunk).to_string()).await?;
+        on_delta((*channel).to_string(), (*chunk).to_string(), false).await?;
         sleep(Duration::from_millis(280)).await;
     }
-    Ok(())
+    Ok(None)
 }
 
+/// Run adapter process. `on_delta(channel, text, replace)`. Returns captured CLI session id if any.
 pub async fn run_streaming<F, Fut>(
     kind: AdapterKind,
     executable: &str,
     workspace: &Path,
     prompt: &str,
+    session_id: Option<&str>,
     timeout_secs: u64,
     token: &Arc<AtomicBool>,
     mut on_delta: F,
-) -> AppResult<()>
+) -> AppResult<Option<String>>
 where
-    F: FnMut(String) -> Fut,
+    F: FnMut(String, String, bool) -> Fut,
     Fut: std::future::Future<Output = AppResult<()>>,
 {
     let adapter = kind.as_str();
+    if workspace == Path::new("/") || !workspace.exists() {
+        return Err(format!(
+            "工作目录无效：{}。请把群工作目录设为具体项目路径（不能是 /）。",
+            workspace.display()
+        ));
+    }
     let mut command = prepare_command(executable);
     command
-       .current_dir(workspace)
-       .args(kind.build_args(prompt))
+        .current_dir(workspace)
+        .args(kind.build_args(prompt, session_id))
         .stdin(Stdio::null())
-       .stdout(Stdio::piped())
-       .stderr(Stdio::piped());
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
 
     let mut child = command
         .spawn()
@@ -232,13 +251,18 @@ where
     });
     let mut lines = BufReader::new(stdout).lines();
     let started = Instant::now();
+    let mut captured_session: Option<String> = None;
     loop {
         tokio::select! {
             result = lines.next_line() => match result {
                 Ok(Some(line)) => {
-                    let output = kind.parse_line(&line);
-                    if !output.is_empty() {
-                        on_delta(output).await?;
+                    let event = kind.parse_event(&line);
+                    if let Some(id) = event.session_id {
+                        captured_session = Some(id);
+                    }
+                    if !event.text.is_empty() {
+                        let replace = event.mode == DeltaMode::Replace;
+                        on_delta(event.channel, event.text, replace).await?;
                     }
                 }
                 Ok(None) => break,
@@ -247,7 +271,7 @@ where
             _ = sleep(Duration::from_millis(200)) => {
                 if token.load(Ordering::SeqCst) {
                     let _ = child.kill().await;
-                    return Ok(());
+                    return Ok(captured_session);
                 }
                 if started.elapsed() > Duration::from_secs(timeout_secs) {
                     let _ = child.kill().await;
@@ -268,7 +292,7 @@ where
             format!("{adapter} 异常退出：{}", stderr.trim())
         });
     }
-    Ok(())
+    Ok(captured_session)
 }
 
 #[cfg(test)]
@@ -278,20 +302,44 @@ mod tests {
     #[test]
     fn build_args_match_cli_contracts() {
         assert_eq!(
-            AdapterKind::Codex.build_args("do work"),
+            AdapterKind::Codex.build_args("do work", None),
             vec!["exec", "--json", "--skip-git-repo-check", "do work"]
         );
         assert_eq!(
-            AdapterKind::ClaudeCode.build_args("do work"),
+            AdapterKind::ClaudeCode.build_args("do work", None),
             vec!["-p", "--output-format", "stream-json", "--verbose", "do work"]
         );
         assert_eq!(
-            AdapterKind::OpenCode.build_args("do work"),
+            AdapterKind::OpenCode.build_args("do work", None),
             vec!["run", "do work", "--format", "json"]
         );
         assert_eq!(
-            AdapterKind::Cursor.build_args("do work"),
-            vec!["-p", "do work", "--output-format", "stream-json"]
+            AdapterKind::Cursor.build_args("do work", None),
+            vec![
+                "--trust",
+                "-p",
+                "do work",
+                "--output-format",
+                "stream-json",
+                "--stream-partial-output"
+            ]
+        );
+        assert_eq!(
+            AdapterKind::Cursor.build_args("do work", Some("chat-abc")),
+            vec![
+                "--trust",
+                "--resume",
+                "chat-abc",
+                "-p",
+                "do work",
+                "--output-format",
+                "stream-json",
+                "--stream-partial-output"
+            ]
+        );
+        assert_eq!(
+            AdapterKind::OpenClaw.build_args("do work", None),
+            vec!["run", "do work"]
         );
     }
 

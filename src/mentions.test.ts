@@ -4,7 +4,7 @@ import type { Member } from "./types";
 
 const member = (id: string, displayName: string): Member => ({
   id, groupId: "g", kind: "agent", displayName, avatarColor: "#000", roleDescription: "",
-  isActive: true, adapter: "mock", executablePath: null, runtimeStatus: "ready", createdAt: 0
+  isActive: true, adapter: "mock", executablePath: null, runtimeStatus: "ready", tags: "", createdAt: 0
 });
 
 describe("findMentionedMemberIds", () => {

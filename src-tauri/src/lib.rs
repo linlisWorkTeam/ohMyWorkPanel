@@ -5,16 +5,18 @@ mod adapters;
 mod commands;
 mod ocr;
 pub mod db;
+pub mod fs_browse;
+mod message_content;
 mod models;
-
-#[cfg(feature = "gui")]
-mod scheduler;
+pub mod logger;
+pub mod event_sender;
+pub mod ops;
+pub mod scheduler;
 pub mod web;
 
 use db::init_db;
 use std::{
     collections::{HashMap, HashSet},
-    fs,
     path::PathBuf,
     sync::{atomic::AtomicBool, Arc, Mutex},
 };
@@ -81,6 +83,22 @@ pub fn run() {
             commands::delete_feature_task,
             // PM: Aggregated
             commands::get_roadmap_state,
+            // Shared Memory: Experiences
+            commands::save_experience,
+            commands::query_experiences,
+            commands::delete_experience,
+            // Logs
+            commands::list_logs,
+            commands::count_logs,
+            commands::clear_logs,
+            commands::list_server_dir,
+            commands::update_group_workspace_cmd,
+            commands::get_group_announcement,
+            commands::set_group_announcement_cmd,
+            commands::ops_release_status,
+            commands::ops_job_status,
+            commands::ops_run_test_gate,
+            commands::ops_deploy_canary,
         ])
         .run(tauri::generate_context!())
         .expect("Failed to launch LinlisWorkPanel");

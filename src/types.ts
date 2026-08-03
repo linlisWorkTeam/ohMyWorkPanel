@@ -1,5 +1,5 @@
 ﻿export type MemberKind = "user" | "agent";
-export type RunStatus = "queued" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
+export type RunStatus = "queued" | "running" | "awaiting_review" | "changes_requested" | "completed" | "failed" | "cancelled" | "interrupted";
 
 export interface Group {
   id: string;
@@ -8,6 +8,43 @@ export interface Group {
   ownerMemberId: string;
   adminMemberId: string | null;
   createdAt: number;
+  announcement?: string;
+  announcementUpdatedAt?: number | null;
+}
+
+export interface DirEntryInfo {
+  name: string;
+  path: string;
+  isDir: boolean;
+}
+
+export interface DirListing {
+  path: string;
+  parent: string | null;
+  entries: DirEntryInfo[];
+}
+
+export interface ReleaseSlotStatus {
+  slot: string;
+  port: number;
+  httpStatus: number | null;
+  release: Record<string, unknown> | null;
+  dataDir: string;
+}
+
+export interface ReleaseStatus {
+  prod: ReleaseSlotStatus;
+  canary: ReleaseSlotStatus;
+  note: string;
+}
+
+export interface OpsJobState {
+  running: boolean;
+  kind: string;
+  exitCode: number | null;
+  log: string;
+  startedAt: number | null;
+  finishedAt: number | null;
 }
 
 export interface Member {
@@ -18,9 +55,10 @@ export interface Member {
   avatarColor: string;
   roleDescription: string;
   isActive: boolean;
-  adapter: "mock" | "codex" | "claude-code" | "opencode" | "cursor" | null;
+  adapter: "mock" | "codex" | "claude-code" | "opencode" | "openclaw" | "cursor" | null;
   executablePath: string | null;
   runtimeStatus: "unknown" | "ready" | "unavailable" | null;
+  tags: string;
   createdAt: number;
 }
 
@@ -44,6 +82,8 @@ export interface TaskRun {
   status: RunStatus;
   outputMessageId: string | null;
   errorMessage: string | null;
+  reviewStatus: "pending" | "approved" | "rejected" | null;
+  reviewerMemberId: string | null;
   createdAt: number;
   startedAt: number | null;
   completedAt: number | null;
@@ -64,6 +104,10 @@ export interface ChatEvent {
   delta: string | null;
   status: RunStatus | string | null;
   error: string | null;
+  /** thinking | artifact | final */
+  channel?: string | null;
+  /** When true, delta replaces channel text instead of appending */
+  replace?: boolean | null;
 }
 
 export interface PresetRole {
@@ -171,7 +215,50 @@ export interface RuntimeSettings {
  }
  
  export interface UpdateFeatureTaskInput {
-   title?: string;
-   done?: boolean;
-   sortOrder?: number;
- }
+  title?: string;
+  done?: boolean;
+  sortOrder?: number;
+}
+
+// === Shared Memory: Experiences ===
+
+export interface Experience {
+  id: string;
+  groupId: string;
+  sourceMemberId: string;
+  title: string;
+  content: string;
+  tags: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface SaveExperienceInput {
+  groupId: string;
+  /** Tauri 模式使用；Web 模式由服务端从登录令牌取用户身份 */
+  sourceMemberId: string;
+  title: string;
+  content: string;
+  tags?: string;
+}
+
+// === Logs ===
+
+export type LogLevel = "debug" | "info" | "warn" | "error";
+
+export interface LogEntry {
+  id: string;
+  level: string;
+  source: string;
+  message: string;
+  details: string | null;
+  createdAt: number;
+}
+
+export interface LogQueryFilter {
+  limit?: number;
+  offset?: number;
+  level?: LogLevel;
+  source?: string;
+  since?: number;
+}

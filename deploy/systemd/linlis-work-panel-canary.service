@@ -1,0 +1,17 @@
+[Unit]
+Description=LinlisWorkPanel Web Server (CANARY — test slot)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/linlis-workpanel/canary
+ExecStart=/opt/linlis-workpanel/canary/bin/linlis-work-panel-server
+Environment=LINLIS_DATA_DIR=/AI/LinlisWorkPanel/data-canary
+Environment=LINLIS_WEB_DIST=/opt/linlis-workpanel/canary/dist
+Environment=LINLIS_PORT=8081
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

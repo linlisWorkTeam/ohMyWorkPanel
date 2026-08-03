@@ -20,7 +20,9 @@ const PRIORITY_COLOR: Record<string, string> = {
 };
 
 function timeAgo(ts: number) {
-  const min = Math.floor((Date.now() - ts * 1000) / 60000);
+  // Backend timestamps are milliseconds since epoch (db.now()).
+  const millis = ts < 1e12 ? ts * 1000 : ts;
+  const min = Math.floor((Date.now() - millis) / 60000);
   if (min < 1) return "刚刚";
   if (min < 60) return `${min}分钟前`;
   const h = Math.floor(min / 60);
@@ -42,9 +44,11 @@ export function PmPanel({ groupId, members, onError }: PmPanelProps) {
   const [tab, setTab] = useState<"roadmap" | "features">("roadmap");
   const [state, setState] = useState<RoadmapState | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (soft = false) => {
+    if (!soft) setLoading(true);
+    else setRefreshing(true);
     try {
       const s = await api.getRoadmapState(groupId);
       setState(s);
@@ -52,10 +56,13 @@ export function PmPanel({ groupId, members, onError }: PmPanelProps) {
       onError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [groupId, onError]);
 
   useEffect(() => { void load(); }, [load]);
+
+  const refreshSoft = () => void load(true);
 
   if (loading) return <div className="pm-loading">加载中…</div>;
   if (!state) return <div className="pm-loading">无法加载项目管理数据</div>;
@@ -65,12 +72,13 @@ export function PmPanel({ groupId, members, onError }: PmPanelProps) {
       <nav className="pm-tabs">
         <button className={`pm-tab ${tab === "roadmap" ? "active" : ""}`} onClick={() => setTab("roadmap")}>路线图</button>
         <button className={`pm-tab ${tab === "features" ? "active" : ""}`} onClick={() => setTab("features")}>功能看板</button>
+        {refreshing && <span className="pm-refreshing" title="刷新中">同步中…</span>}
       </nav>
       <div className="pm-body">
         {tab === "roadmap" ? (
-          <RoadmapView groupId={groupId} items={state.items} onUpdate={load} onError={onError} />
+          <RoadmapView groupId={groupId} items={state.items} onUpdate={refreshSoft} onError={onError} />
         ) : (
-          <FeatureKanban groupId={groupId} features={state.features} tasks={state.tasks} members={members} onUpdate={load} onError={onError} />
+          <FeatureKanban groupId={groupId} features={state.features} tasks={state.tasks} members={members} roadmapItems={state.items} onUpdate={refreshSoft} onError={onError} />
         )}
       </div>
     </div>
@@ -173,8 +181,8 @@ function RoadmapForm({ groupId, initial, onSubmit, onCancel }: {
 
 const STATUSES = ["backlog", "in_progress", "review", "done"];
 
-function FeatureKanban({ groupId, features, tasks, members, onUpdate, onError }: {
-  groupId: string; features: Feature[]; tasks: FeatureTask[]; members: Member[]; onUpdate: () => void; onError: (m: string) => void;
+function FeatureKanban({ groupId, features, tasks, members, roadmapItems, onUpdate, onError }: {
+  groupId: string; features: Feature[]; tasks: FeatureTask[]; members: Member[]; roadmapItems: RoadmapItem[]; onUpdate: () => void; onError: (m: string) => void;
 }) {
   const [showForm, setShowForm] = useState(false);
 
@@ -195,10 +203,20 @@ function FeatureKanban({ groupId, features, tasks, members, onUpdate, onError }:
         <span className="pm-count">共 {features.length} 个功能</span>
         <button className="pm-btn primary sm" onClick={() => setShowForm(true)}>＋ 新建功能</button>
       </div>
-      {showForm && <FeatureForm groupId={groupId} members={members} features={features} onSubmit={handleCreate} onCancel={() => setShowForm(false)} />}
+      {showForm && <FeatureForm groupId={groupId} members={members} roadmapItems={roadmapItems} onSubmit={handleCreate} onCancel={() => setShowForm(false)} />}
       <div className="kanban-board">
         {STATUSES.map((status) => (
-          <div key={status} className="kanban-col">
+          <div
+            key={status}
+            className="kanban-col"
+            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
+            onDrop={(e) => {
+              e.preventDefault();
+              const featureId = e.dataTransfer.getData("text/feature-id");
+              const from = e.dataTransfer.getData("text/feature-status");
+              if (featureId && from !== status) handleUpdateFeature(featureId, { status });
+            }}
+          >
             <h4 className="kanban-col-title">{STATUS_LABEL[status] || status}
               <span className="pm-count">{features.filter((f) => f.status === status).length}</span>
             </h4>
@@ -249,7 +267,15 @@ function FeatureCard({ feature, featureTasks, members, onUpdate, onError, onDele
   };
 
   return (
-    <div className="feature-card">
+    <div
+      className="feature-card"
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData("text/feature-id", feature.id);
+        e.dataTransfer.setData("text/feature-status", feature.status);
+        e.dataTransfer.effectAllowed = "move";
+      }}
+    >
       <div className="feature-card-header" onClick={() => setExpanded(!expanded)}>
         <div className="feature-card-title">
           <strong>{feature.title}</strong>
@@ -300,15 +326,15 @@ function FeatureCard({ feature, featureTasks, members, onUpdate, onError, onDele
         <button className="pm-link sm" onClick={() => setEditing(true)}>编辑</button>
         <button className="pm-link danger sm" onClick={onDelete}>删除</button>
       </div>
-      {editing && <FeatureForm groupId={feature.groupId} members={members} features={[]} initial={feature} onSubmit={async (input) => {
+      {editing && <FeatureForm groupId={feature.groupId} members={members} roadmapItems={[]} initial={feature} onSubmit={async (input) => {
         try { await api.updateFeature(feature.id, input); setEditing(false); onUpdate(); } catch (e: unknown) { onError(e instanceof Error ? e.message : String(e)); }
       }} onCancel={() => setEditing(false)} />}
     </div>
   );
 }
 
-function FeatureForm({ groupId, members, features, initial, onSubmit, onCancel }: {
-  groupId: string; members: Member[]; features: Feature[]; initial?: Feature; onSubmit: (input: CreateFeatureInput) => void; onCancel: () => void;
+function FeatureForm({ groupId, members, roadmapItems, initial, onSubmit, onCancel }: {
+  groupId: string; members: Member[]; roadmapItems: RoadmapItem[]; initial?: Feature; onSubmit: (input: CreateFeatureInput) => void; onCancel: () => void;
 }) {
   const [title, setTitle] = useState(initial?.title ?? "");
   const [desc, setDesc] = useState(initial?.description ?? "");
@@ -332,6 +358,14 @@ function FeatureForm({ groupId, members, features, initial, onSubmit, onCancel }
           {members.filter((m) => m.isActive).map((m) => <option key={m.id} value={m.id}>{m.displayName}</option>)}
         </select>
       </div>
+      {roadmapItems.length > 0 && (
+        <div className="pm-inline-row">
+          <select value={roadmapItemId} onChange={(e) => setRoadmapItemId(e.target.value)} className="pm-select">
+            <option value="">不关联路线图</option>
+            {roadmapItems.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
+          </select>
+        </div>
+      )}
       <div className="pm-inline-actions">
         <button className="pm-btn quiet sm" onClick={onCancel}>取消</button>
         <button className="pm-btn primary sm" disabled={!title.trim()} onClick={() => onSubmit({ groupId, title: title.trim(), description: desc || undefined, status, priority, area: area || undefined, assigneeMemberId: assigneeId || undefined, targetRoadmapItemId: roadmapItemId || undefined })}>

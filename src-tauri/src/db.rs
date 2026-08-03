@@ -1,5 +1,5 @@
 use crate::models::{
-    Feature, FeatureTask, Group, GroupState, Member, Message, RoadmapItem, RuntimeSettings, TaskRun,
+    Experience, Feature, FeatureTask, Group, GroupState, Member, Message, RoadmapItem, RuntimeSettings, TaskRun,
 };
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension, Row};
@@ -26,12 +26,16 @@ pub fn open_db(path: &Path) -> AppResult<Connection> {
 
 pub fn init_db(path: &Path) -> AppResult<()> {
     let connection = open_db(path)?;
+    // Initialize logs table
+    crate::logger::init_logs_table(&connection)?;
     connection
         .execute_batch(
             "
         CREATE TABLE IF NOT EXISTS groups (
           id TEXT PRIMARY KEY, name TEXT NOT NULL, workspace_path TEXT NOT NULL,
-          owner_member_id TEXT NOT NULL, admin_member_id TEXT, created_at INTEGER NOT NULL
+          owner_member_id TEXT NOT NULL, admin_member_id TEXT, created_at INTEGER NOT NULL,
+          announcement TEXT NOT NULL DEFAULT '',
+          announcement_updated_at INTEGER
         );
         CREATE TABLE IF NOT EXISTS members (
           id TEXT PRIMARY KEY, group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
@@ -56,7 +60,8 @@ pub fn init_db(path: &Path) -> AppResult<()> {
           id TEXT PRIMARY KEY, group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
           root_message_id TEXT NOT NULL REFERENCES messages(id), agent_member_id TEXT NOT NULL REFERENCES members(id),
           parent_run_id TEXT, depth INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL,
-          output_message_id TEXT, error_message TEXT, created_at INTEGER NOT NULL,
+          output_message_id TEXT, error_message TEXT, review_status TEXT,
+          reviewer_member_id TEXT, created_at INTEGER NOT NULL,
           started_at INTEGER, completed_at INTEGER
         );
         CREATE TABLE IF NOT EXISTS run_events (
@@ -99,9 +104,45 @@ pub fn init_db(path: &Path) -> AppResult<()> {
          CREATE INDEX IF NOT EXISTS idx_roadmap_items_group ON roadmap_items(group_id, sort_order);
          CREATE INDEX IF NOT EXISTS idx_features_group ON features(group_id, status, sort_order);
          CREATE INDEX IF NOT EXISTS idx_feature_tasks_feature ON feature_tasks(feature_id, sort_order);
+
+         CREATE TABLE IF NOT EXISTS experiences (
+           id TEXT PRIMARY KEY, group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+           source_member_id TEXT NOT NULL, title TEXT NOT NULL, content TEXT NOT NULL,
+           tags TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+         );
+         CREATE INDEX IF NOT EXISTS idx_exp_group ON experiences(group_id);
+         CREATE INDEX IF NOT EXISTS idx_exp_tags ON experiences(tags);
         ",
         )
         .map_err(|e| e.to_string())?;
+    // Migration: add review columns to task_runs for existing databases
+    for col in &["review_status", "reviewer_member_id"] {
+        let _ = connection.execute(
+            &format!("ALTER TABLE task_runs ADD COLUMN {} TEXT", col),
+            [],
+        );
+    }
+    // Phase 2: agent_tags column for smart routing
+    for col in &["tags"] {
+        let _ = connection.execute(
+            &format!("ALTER TABLE members ADD COLUMN {} TEXT NOT NULL DEFAULT ''", col),
+            [],
+        );
+    }
+    // Cursor (and future) CLI session reuse per agent member
+    let _ = connection.execute(
+        "ALTER TABLE agent_profiles ADD COLUMN cli_session_id TEXT",
+        [],
+    );
+    // Group announcement (= project-level rule for all agents)
+    let _ = connection.execute(
+        "ALTER TABLE groups ADD COLUMN announcement TEXT NOT NULL DEFAULT ''",
+        [],
+    );
+    let _ = connection.execute(
+        "ALTER TABLE groups ADD COLUMN announcement_updated_at INTEGER",
+        [],
+    );
     for (key, value) in [
         ("max_concurrent_runs", "3"),
         ("run_timeout_seconds", "900"),
@@ -115,14 +156,15 @@ pub fn init_db(path: &Path) -> AppResult<()> {
             )
             .map_err(|e| e.to_string())?;
     }
-    // Default preset roles
+    // Default preset roles (always refresh known-good defaults for WorkPanel)
     let default_roles = serde_json::json!([
-        {"name":"????","adapter":"codex","roleDescription":"????????????????","avatarColor":"#2b6cb0"},
-        {"name":"?????","adapter":"codex","roleDescription":"????????????????","avatarColor":"#38a169"},
-        {"name":"UI?????","adapter":"codex","roleDescription":"?????????????????","avatarColor":"#d69e2e"}
+        {"name":"Codex","adapter":"codex","roleDescription":"项目开发主力（Codex CLI）","avatarColor":"#2b6cb0"},
+        {"name":"OpenClaw","adapter":"openclaw","roleDescription":"产品设计、拉通对齐与运维","avatarColor":"#d69e2e"},
+        {"name":"Cursor Agent","adapter":"cursor","roleDescription":"Cursor CLI（agent / cursor-agent）","avatarColor":"#38a169"}
     ]);
     connection.execute(
-        "INSERT OR IGNORE INTO app_settings(key, value) VALUES('preset_roles', ?1)",
+        "INSERT INTO app_settings(key, value) VALUES('preset_roles', ?1)
+         ON CONFLICT(key) DO UPDATE SET value=excluded.value",
         params![default_roles.to_string()],
     ).map_err(|e| e.to_string())?;
     connection
@@ -137,6 +179,98 @@ pub fn init_db(path: &Path) -> AppResult<()> {
             [],
         )
         .map_err(|e| e.to_string())?;
+    ensure_default_seed(&connection)?;
+    Ok(())
+}
+
+/// Built-in admin `root`/`root` + default LinlisWorkPanel group with Codex / OpenClaw / Cursor Agent.
+pub fn ensure_default_seed(connection: &Connection) -> AppResult<()> {
+    const ROOT_USER_ID: &str = "seed-user-root";
+    const GROUP_ID: &str = "seed-group-workpanel";
+    const OWNER_MEMBER_ID: &str = "seed-member-owner-root";
+    const CODEX_MEMBER_ID: &str = "seed-member-codex";
+    const OPENCLAW_MEMBER_ID: &str = "seed-member-openclaw";
+    const CURSOR_MEMBER_ID: &str = "seed-member-cursor";
+    const WORKSPACE: &str = "/AI/LinlisWorkPanel";
+
+    let created_at = now();
+    let password_hash = crate::auth::hash_password("root")?;
+
+    connection
+        .execute(
+            "INSERT INTO users(id, username, password_hash, created_at) VALUES(?1, 'root', ?2, ?3)
+             ON CONFLICT(username) DO UPDATE SET password_hash=excluded.password_hash",
+            params![ROOT_USER_ID, password_hash, created_at],
+        )
+        .map_err(|e| e.to_string())?;
+
+    let group_exists: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM groups WHERE id=?1",
+            params![GROUP_ID],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+    if group_exists > 0 {
+        return Ok(());
+    }
+
+    connection
+        .execute(
+            "INSERT INTO groups(id, name, workspace_path, owner_member_id, admin_member_id, created_at)
+             VALUES(?1, 'LinlisWorkPanel', ?2, ?3, ?4, ?5)",
+            params![GROUP_ID, WORKSPACE, OWNER_MEMBER_ID, CODEX_MEMBER_ID, created_at],
+        )
+        .map_err(|e| e.to_string())?;
+
+    connection
+        .execute(
+            "INSERT INTO members(id, group_id, kind, display_name, avatar_color, role_description, is_active, created_at)
+             VALUES(?1, ?2, 'user', 'root', '#5167f6', '管理员', 1, ?3)",
+            params![OWNER_MEMBER_ID, GROUP_ID, created_at],
+        )
+        .map_err(|e| e.to_string())?;
+
+    let agents = [
+        (
+            CODEX_MEMBER_ID,
+            "Codex",
+            "codex",
+            "#2b6cb0",
+            "项目开发主力（Codex CLI）",
+        ),
+        (
+            OPENCLAW_MEMBER_ID,
+            "OpenClaw",
+            "openclaw",
+            "#d69e2e",
+            "产品设计、拉通对齐与运维",
+        ),
+        (
+            CURSOR_MEMBER_ID,
+            "Cursor Agent",
+            "cursor",
+            "#38a169",
+            "Cursor CLI（agent / cursor-agent）",
+        ),
+    ];
+    for (member_id, name, adapter, color, desc) in agents {
+        connection
+            .execute(
+                "INSERT INTO members(id, group_id, kind, display_name, avatar_color, role_description, is_active, created_at)
+                 VALUES(?1, ?2, 'agent', ?3, ?4, ?5, 1, ?6)",
+                params![member_id, GROUP_ID, name, color, desc, created_at],
+            )
+            .map_err(|e| e.to_string())?;
+        connection
+            .execute(
+                "INSERT INTO agent_profiles(member_id, adapter, executable_path, runtime_status, updated_at)
+                 VALUES(?1, ?2, NULL, 'unknown', ?3)",
+                params![member_id, adapter, created_at],
+            )
+            .map_err(|e| e.to_string())?;
+    }
+
     Ok(())
 }
 
@@ -148,6 +282,8 @@ pub fn group_from_row(row: &Row<'_>) -> rusqlite::Result<Group> {
         owner_member_id: row.get(3)?,
         admin_member_id: row.get(4)?,
         created_at: row.get(5)?,
+        announcement: row.get::<_, Option<String>>(6)?.unwrap_or_default(),
+        announcement_updated_at: row.get(7)?,
     })
 }
 
@@ -163,7 +299,8 @@ pub fn member_from_row(row: &Row<'_>) -> rusqlite::Result<Member> {
         adapter: row.get(7)?,
         executable_path: row.get(8)?,
         runtime_status: row.get(9)?,
-        created_at: row.get(10)?,
+        tags: row.get(10)?,
+        created_at: row.get(11)?,
     })
 }
 
@@ -190,16 +327,18 @@ pub fn run_from_row(row: &Row<'_>) -> rusqlite::Result<TaskRun> {
         status: row.get(6)?,
         output_message_id: row.get(7)?,
         error_message: row.get(8)?,
-        created_at: row.get(9)?,
-        started_at: row.get(10)?,
-        completed_at: row.get(11)?,
+        review_status: row.get(9)?,
+        reviewer_member_id: row.get(10)?,
+        created_at: row.get(11)?,
+        started_at: row.get(12)?,
+        completed_at: row.get(13)?,
     })
 }
 
 pub fn get_groups(connection: &Connection) -> AppResult<Vec<Group>> {
     let mut stmt = connection
         .prepare(
-            "SELECT id,name,workspace_path,owner_member_id,admin_member_id,created_at FROM groups ORDER BY created_at DESC",
+            "SELECT id,name,workspace_path,owner_member_id,admin_member_id,created_at,COALESCE(announcement,''),announcement_updated_at FROM groups ORDER BY created_at DESC",
         )
         .map_err(|e| e.to_string())?;
     let rows = stmt
@@ -213,7 +352,7 @@ pub fn get_groups(connection: &Connection) -> AppResult<Vec<Group>> {
 pub fn get_group(connection: &Connection, group_id: &str) -> AppResult<Group> {
     connection
         .query_row(
-            "SELECT id,name,workspace_path,owner_member_id,admin_member_id,created_at FROM groups WHERE id=?1",
+            "SELECT id,name,workspace_path,owner_member_id,admin_member_id,created_at,COALESCE(announcement,''),announcement_updated_at FROM groups WHERE id=?1",
             params![group_id],
             group_from_row,
         )
@@ -222,10 +361,45 @@ pub fn get_group(connection: &Connection, group_id: &str) -> AppResult<Group> {
         .ok_or_else(|| "找不到群聊。".to_string())
 }
 
+pub fn set_group_announcement(
+    connection: &Connection,
+    group_id: &str,
+    announcement: &str,
+) -> AppResult<Group> {
+    let ts = now();
+    let n = connection
+        .execute(
+            "UPDATE groups SET announcement=?1, announcement_updated_at=?2 WHERE id=?3",
+            params![announcement, ts, group_id],
+        )
+        .map_err(|e| e.to_string())?;
+    if n == 0 {
+        return Err("找不到群聊。".into());
+    }
+    get_group(connection, group_id)
+}
+
+pub fn update_group_workspace(
+    connection: &Connection,
+    group_id: &str,
+    workspace_path: &str,
+) -> AppResult<Group> {
+    let n = connection
+        .execute(
+            "UPDATE groups SET workspace_path=?1 WHERE id=?2",
+            params![workspace_path, group_id],
+        )
+        .map_err(|e| e.to_string())?;
+    if n == 0 {
+        return Err("找不到群聊。".into());
+    }
+    get_group(connection, group_id)
+}
+
 pub fn get_members(connection: &Connection, group_id: &str) -> AppResult<Vec<Member>> {
     let mut stmt = connection
         .prepare(
-            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,m.created_at
+            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at
          FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.group_id=?1 ORDER BY m.created_at",
         )
         .map_err(|e| e.to_string())?;
@@ -254,7 +428,7 @@ pub fn get_messages(connection: &Connection, group_id: &str) -> AppResult<Vec<Me
 pub fn get_runs(connection: &Connection, group_id: &str) -> AppResult<Vec<TaskRun>> {
     let mut stmt = connection
         .prepare(
-            "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,created_at,started_at,completed_at FROM task_runs WHERE group_id=?1 ORDER BY created_at",
+            "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at FROM task_runs WHERE group_id=?1 ORDER BY created_at",
         )
         .map_err(|e| e.to_string())?;
     let rows = stmt
@@ -305,6 +479,27 @@ pub fn settings_or(conn: &Connection, key: &str, default: i64) -> AppResult<i64>
         .map_err(|e| e.to_string())?
         .and_then(|x| x.parse().ok())
         .unwrap_or(default))
+}
+
+pub fn get_cli_session_id(conn: &Connection, member_id: &str) -> AppResult<Option<String>> {
+    let value: Option<Option<String>> = conn
+        .query_row(
+            "SELECT cli_session_id FROM agent_profiles WHERE member_id=?1",
+            params![member_id],
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    Ok(value.flatten().filter(|s| !s.trim().is_empty()))
+}
+
+pub fn set_cli_session_id(conn: &Connection, member_id: &str, session_id: Option<&str>) -> AppResult<()> {
+    conn.execute(
+        "UPDATE agent_profiles SET cli_session_id=?1, updated_at=?2 WHERE member_id=?3",
+        params![session_id, now(), member_id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 pub fn get_preset_roles(connection: &Connection) -> AppResult<Vec<crate::models::PresetRole>> {
@@ -628,7 +823,49 @@ pub fn active_agent_ids(
          tasks: all_tasks,
      })
  }
- 
+
+// === Shared Memory: Experiences ===
+
+pub fn save_experience(conn: &Connection, group_id: &str, source_member_id: &str, title: &str, content: &str, tags: &str) -> AppResult<String> {
+    let eid = id();
+    let now_ts = now();
+    conn.execute(
+        "INSERT INTO experiences(id,group_id,source_member_id,title,content,tags,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8)",
+        params![eid, group_id, source_member_id, title, content, tags, now_ts, now_ts],
+    ).map_err(|e| e.to_string())?;
+    Ok(eid)
+}
+
+pub fn query_experiences(conn: &Connection, group_id: &str, query: &str, limit: i64) -> AppResult<Vec<Experience>> {
+    let limit = limit.min(50).max(1);
+    let pattern = format!("%{}%", query);
+    let mut stmt = conn.prepare(
+        "SELECT id,group_id,source_member_id,title,content,tags,created_at,updated_at FROM experiences WHERE group_id=?1 AND (content LIKE ?2 OR title LIKE ?3 OR tags LIKE ?4) ORDER BY created_at DESC LIMIT ?5"
+    ).map_err(|e| e.to_string())?;
+    let rows = stmt.query_map(params![group_id, pattern, pattern, pattern, limit], |r| {
+        Ok(Experience {
+            id: r.get(0)?,
+            group_id: r.get(1)?,
+            source_member_id: r.get(2)?,
+            title: r.get(3)?,
+            content: r.get(4)?,
+            tags: r.get(5)?,
+            created_at: r.get(6)?,
+            updated_at: r.get(7)?,
+        })
+    }).map_err(|e| e.to_string())?;
+    let mut results = Vec::new();
+    for row in rows {
+        results.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(results)
+}
+
+pub fn delete_experience(conn: &Connection, id: &str) -> AppResult<bool> {
+    let n = conn.execute("DELETE FROM experiences WHERE id=?1", params![id]).map_err(|e| e.to_string())?;
+    Ok(n > 0)
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -640,22 +877,22 @@ mod tests {
         init_db(file.path()).unwrap();
         let conn = open_db(file.path()).unwrap();
         conn.execute(
-            "INSERT INTO groups VALUES('g','g','.', 'u',NULL,1)",
+            "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at) VALUES('g','g','.', 'u',NULL,1)",
             [],
         )
         .unwrap();
         conn.execute(
-            "INSERT INTO members VALUES('u','g','user','u','#000','',1,1)",
+            "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,tags) VALUES('u','g','user','u','#000','',1,1,'')",
             [],
         )
         .unwrap();
         conn.execute(
-            "INSERT INTO members VALUES('a','g','agent','a','#000','',1,1)",
+            "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,tags) VALUES('a','g','agent','a','#000','',1,1,'')",
             [],
         )
         .unwrap();
         conn.execute(
-            "INSERT INTO agent_profiles VALUES('a','mock',NULL,'unknown',1)",
+            "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at,cli_session_id) VALUES('a','mock',NULL,'unknown',1,NULL)",
             [],
         )
         .unwrap();

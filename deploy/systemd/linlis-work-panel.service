@@ -1,0 +1,17 @@
+[Unit]
+Description=LinlisWorkPanel Web Server (PRODUCTION — frozen slot)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/linlis-workpanel/prod
+ExecStart=/opt/linlis-workpanel/prod/bin/linlis-work-panel-server
+Environment=LINLIS_DATA_DIR=/AI/LinlisWorkPanel/data
+Environment=LINLIS_WEB_DIST=/opt/linlis-workpanel/prod/dist
+Environment=LINLIS_PORT=8080
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

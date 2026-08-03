@@ -6,24 +6,38 @@ use crate::db::{
     create_feature_db, get_features, update_feature_db, delete_feature_db,
     create_feature_task_db, get_feature_tasks, update_feature_task_db, delete_feature_task_db,
     get_roadmap_state_db,
+    save_experience as save_experience_db, query_experiences as query_experiences_db,
+    delete_experience as delete_experience_db,
 };
+use crate::logger::{self, LogEntry, LogQuery};
 use crate::models::{
     AddMemberInput, Bootstrap, ChatEvent, CreateGroupInput, GroupState, Member, Message, PresetRole,
     RuntimeSettings, SendResult, TaskRun,
     RoadmapItem, Feature, FeatureTask, CreateRoadmapItemInput, UpdateRoadmapItemInput,
     CreateFeatureInput, UpdateFeatureInput, CreateFeatureTaskInput, UpdateFeatureTaskInput,
-    RoadmapState,
+    RoadmapState, Experience,
 };
-use crate::scheduler::{emit, schedule_group};
+use crate::scheduler::{emit, schedule_group, SchedulerState};
+use crate::event_sender::EventSender;
 use crate::AppState;
 use rusqlite::{params, OptionalExtension};
 use std::{
-    path::Path,
-    sync::atomic::Ordering,
+    collections::{HashMap, HashSet},
+    sync::{atomic::Ordering, Arc, Mutex},
     time::Duration,
 };
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 use tokio::process::Command;
+
+/// Convert Tauri AppState+AppHandle to SchedulerState for use by scheduler functions
+fn to_scheduler(state: &AppState, app: &AppHandle) -> SchedulerState {
+    SchedulerState {
+        db_path: state.db_path.clone(),
+        event_sender: EventSender::Tauri(app.clone()),
+        cancellations: state.cancellations.clone(),
+        scheduling_groups: state.scheduling_groups.clone(),
+    }
+}
 
 #[tauri::command]
 pub fn bootstrap(state: State<'_, AppState>) -> AppResult<Bootstrap> {
@@ -74,13 +88,10 @@ pub fn update_runtime_settings(
 pub fn create_group(input: CreateGroupInput, state: State<'_, AppState>) -> AppResult<GroupState> {
     let name = input.name.trim();
     let owner_name = input.owner_name.trim();
-    let workspace = Path::new(input.workspace_path.trim());
     if name.is_empty() || owner_name.is_empty() {
         return Err("群名称和群主名称不能为空。".into());
     }
-    if !workspace.is_dir() {
-        return Err("工作目录不存在或不可访问。".into());
-    }
+    let workspace = crate::fs_browse::resolve_server_dir(&input.workspace_path)?;
     let group_id = id();
     let owner_id = id();
     let created_at = now();
@@ -158,7 +169,7 @@ pub fn add_member(input: AddMemberInput, state: State<'_, AppState>) -> AppResul
         .map_err(|e| e.to_string())?;
     }
     conn.query_row(
-        "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,m.created_at FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
+        "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
         params![member_id],
         member_from_row,
     )
@@ -180,7 +191,7 @@ pub async fn remove_member(
     }
     let member: Member = conn
         .query_row(
-            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,m.created_at FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1 AND m.group_id=?2",
+            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1 AND m.group_id=?2",
             params![member_id, group_id],
             member_from_row,
         )
@@ -224,9 +235,7 @@ pub async fn remove_member(
         )
         .map_err(|e| e.to_string())?;
     }
-    emit(
-        &app,
-        ChatEvent {
+    let _ = app.emit("chat-event", ChatEvent {
             kind: "member_removed".into(),
             group_id,
             run_id: None,
@@ -234,6 +243,8 @@ pub async fn remove_member(
             delta: None,
             status: None,
             error: None,
+            channel: None,
+            replace: None,
         },
     );
     Ok(())
@@ -338,9 +349,7 @@ pub async fn send_message(
         )?);
     }
     drop(conn);
-    emit(
-        &app,
-        ChatEvent {
+    let _ = app.emit("chat-event", ChatEvent {
             kind: "message_created".into(),
             group_id: group_id.clone(),
             run_id: None,
@@ -348,9 +357,11 @@ pub async fn send_message(
             delta: None,
             status: Some("completed".into()),
             error: None,
+            channel: None,
+            replace: None,
         },
     );
-    schedule_group(state, app, group_id.clone());
+    schedule_group(to_scheduler(&state, &app), group_id.clone());
     Ok(SendResult { message, run_ids })
 }
 
@@ -364,7 +375,7 @@ pub async fn cancel_run(
     let conn = open_db(&state.db_path)?;
     let run: TaskRun = conn
         .query_row(
-            "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,created_at,started_at,completed_at FROM task_runs WHERE id=?1",
+            "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at FROM task_runs WHERE id=?1",
             params![run_id],
             run_from_row,
         )
@@ -395,9 +406,7 @@ pub async fn cancel_run(
         .map_err(|e| e.to_string())?;
     }
     insert_run_event(&conn, &run_id, "cancelled", "{}")?;
-    emit(
-        &app,
-        ChatEvent {
+    let _ = app.emit("chat-event", ChatEvent {
             kind: "run_status".into(),
             group_id: run.group_id,
             run_id: Some(run_id),
@@ -405,6 +414,8 @@ pub async fn cancel_run(
             delta: None,
             status: Some("cancelled".into()),
             error: None,
+            channel: None,
+            replace: None,
         },
     );
     Ok(())
@@ -420,7 +431,7 @@ pub async fn retry_run(
     let conn = open_db(&state.db_path)?;
     let old: TaskRun = conn
         .query_row(
-            "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,created_at,started_at,completed_at FROM task_runs WHERE id=?1",
+            "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at FROM task_runs WHERE id=?1",
             params![run_id],
             run_from_row,
         )
@@ -436,7 +447,7 @@ pub async fn retry_run(
         old.depth,
     )?;
     drop(conn);
-    schedule_group(state, app, old.group_id);
+    schedule_group(to_scheduler(&state, &app), old.group_id);
     Ok(new_id)
 }
 
@@ -572,9 +583,137 @@ pub fn get_preset_roles_command(state: State<'_, AppState>) -> AppResult<Vec<Pre
      delete_feature_task_db(&open_db(&state.db_path)?, &id)
  }
  
- // === PM: Aggregated State ===
- 
- #[tauri::command]
- pub fn get_roadmap_state(group_id: String, state: State<'_, AppState>) -> AppResult<RoadmapState> {
-     get_roadmap_state_db(&open_db(&state.db_path)?, &group_id)
- }
+// === PM: Aggregated State ===
+
+#[tauri::command]
+pub fn get_roadmap_state(group_id: String, state: State<'_, AppState>) -> AppResult<RoadmapState> {
+    get_roadmap_state_db(&open_db(&state.db_path)?, &group_id)
+}
+
+// === Shared Memory: Experiences ===
+
+#[tauri::command]
+pub fn save_experience(
+    group_id: String,
+    source_member_id: String,
+    title: String,
+    content: String,
+    tags: Option<String>,
+    state: State<'_, AppState>,
+) -> AppResult<String> {
+    save_experience_db(
+        &open_db(&state.db_path)?,
+        &group_id,
+        &source_member_id,
+        &title,
+        &content,
+        tags.as_deref().unwrap_or(""),
+    )
+}
+
+#[tauri::command]
+pub fn query_experiences(
+    group_id: String,
+    query: Option<String>,
+    limit: Option<i64>,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<Experience>> {
+    query_experiences_db(
+        &open_db(&state.db_path)?,
+        &group_id,
+        query.as_deref().unwrap_or(""),
+        limit.unwrap_or(20),
+    )
+}
+
+#[tauri::command]
+pub fn delete_experience(id: String, state: State<'_, AppState>) -> AppResult<bool> {
+    delete_experience_db(&open_db(&state.db_path)?, &id)
+}
+
+// === Logs ===
+
+#[tauri::command]
+pub fn list_logs(
+    limit: Option<i64>,
+    offset: Option<i64>,
+    level: Option<String>,
+    source: Option<String>,
+    since: Option<i64>,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<LogEntry>> {
+    logger::query_logs(&open_db(&state.db_path)?, &LogQuery { limit, offset, level, source, since })
+}
+
+#[tauri::command]
+pub fn count_logs(level: Option<String>, state: State<'_, AppState>) -> AppResult<i64> {
+    logger::count_logs(&open_db(&state.db_path)?, level.as_deref())
+}
+
+#[tauri::command]
+pub fn clear_logs(state: State<'_, AppState>) -> AppResult<()> {
+    let conn = open_db(&state.db_path)?;
+    logger::clear_logs(&conn)?;
+    logger::info(&conn, "logs", "logs cleared by user", None);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn list_server_dir(path: String) -> AppResult<crate::fs_browse::DirListing> {
+    crate::fs_browse::list_server_dir(&path)
+}
+
+#[tauri::command]
+pub fn update_group_workspace_cmd(
+    group_id: String,
+    workspace_path: String,
+    state: State<'_, AppState>,
+) -> AppResult<crate::models::Group> {
+    let workspace = crate::fs_browse::resolve_server_dir(&workspace_path)?;
+    let conn = open_db(&state.db_path)?;
+    crate::db::update_group_workspace(&conn, &group_id, workspace.to_string_lossy().as_ref())
+}
+
+#[tauri::command]
+pub fn get_group_announcement(
+    group_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<crate::models::Group> {
+    let conn = open_db(&state.db_path)?;
+    get_group(&conn, &group_id)
+}
+
+#[tauri::command]
+pub fn set_group_announcement_cmd(
+    group_id: String,
+    announcement: String,
+    state: State<'_, AppState>,
+) -> AppResult<crate::models::Group> {
+    let conn = open_db(&state.db_path)?;
+    let g = crate::db::set_group_announcement(&conn, &group_id, announcement.trim())?;
+    let _ = crate::fs_browse::sync_announcement_rule(
+        std::path::Path::new(&g.workspace_path),
+        &g.announcement,
+    );
+    Ok(g)
+}
+
+#[tauri::command]
+pub async fn ops_release_status() -> crate::ops::ReleaseStatus {
+    crate::ops::release_status().await
+}
+
+#[tauri::command]
+pub fn ops_job_status() -> crate::ops::OpsJobState {
+    crate::ops::ops_job_snapshot()
+}
+
+#[tauri::command]
+pub fn ops_run_test_gate() -> AppResult<()> {
+    crate::ops::kickoff_test_gate()
+}
+
+#[tauri::command]
+pub fn ops_deploy_canary() -> AppResult<()> {
+    crate::ops::kickoff_deploy_canary()
+}

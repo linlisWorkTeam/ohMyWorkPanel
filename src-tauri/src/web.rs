@@ -14,6 +14,8 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 
 use crate::auth::Claims;
+use crate::logger::{self, LogEntry, LogQuery};
+use crate::scheduler::{self, SchedulerState};
 use crate::db::{
     active_agent_ids, create_feature_db, create_feature_task_db,
     create_roadmap_item_db, create_task_run, delete_feature_db,
@@ -22,30 +24,40 @@ use crate::db::{
     get_group as db_get_group,
     get_preset_roles, get_roadmap_items, get_roadmap_state_db, get_runs,
     get_settings_from, group_state, id, member_from_row, now, open_db,
-    update_feature_db, update_feature_task_db, update_roadmap_item_db,
+    set_group_announcement, update_feature_db, update_feature_task_db,
+    update_group_workspace, update_roadmap_item_db,
 };
+use crate::fs_browse::{self, DirListing};
+use crate::ops;
 use crate::models::{
-    CreateFeatureInput, CreateFeatureTaskInput, CreateRoadmapItemInput, Feature,
-    FeatureTask, Group, GroupState, Member, Message, PresetRole, RoadmapItem,
+    CreateFeatureInput, CreateFeatureTaskInput, CreateRoadmapItemInput, Experience,
+    Feature, FeatureTask, Group, GroupState, Member, Message, PresetRole, RoadmapItem,
     RoadmapState, RuntimeSettings, TaskRun, UpdateFeatureInput, UpdateFeatureTaskInput,
     UpdateRoadmapItemInput,
 };
 // Helper to emit events to WebSocket clients
 fn web_emit(tx: &broadcast::Sender<String>, group_id: &str, kind: &str, message_id: Option<&str>, run_id: Option<&str>, status: Option<&str>, error: Option<&str>) {
-    let mut obj = serde_json::Map::new();
-    obj.insert("kind".into(), json!(kind));
-    obj.insert("group_id".into(), json!(group_id));
-    if let Some(v) = message_id { obj.insert("message_id".into(), json!(v)); }
-    if let Some(v) = run_id { obj.insert("run_id".into(), json!(v)); }
-    if let Some(v) = status { obj.insert("status".into(), json!(v)); }
-    if let Some(v) = error { obj.insert("error".into(), json!(v)); }
-    let _ = tx.send(serde_json::to_string(&obj).unwrap_or_default());
+    let event = crate::models::ChatEvent {
+        kind: kind.into(),
+        group_id: group_id.into(),
+        run_id: run_id.map(str::to_string),
+        message_id: message_id.map(str::to_string),
+        delta: None,
+        status: status.map(str::to_string),
+        error: error.map(str::to_string),
+        channel: None,
+        replace: None,
+    };
+    if let Ok(payload) = serde_json::to_string(&event) {
+        let _ = tx.send(payload);
+    }
 }
 
 // === Shared State ===
 pub struct AppState {
     pub db_path: std::path::PathBuf,
     pub tx: broadcast::Sender<String>,
+    pub sched: SchedulerState,
 }
 
 // === Claims Extractor ===
@@ -75,14 +87,25 @@ where
 
 // === Auth Middleware ===
 async fn auth_middleware(req: Request<axum::body::Body>, next: Next) -> Response {
-    let auth_header = req
+    let header_token = req
         .headers()
         .get("Authorization")
         .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "));
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .map(|s| s.to_string());
+    let query_token = req.uri().query().and_then(|q| {
+        q.split('&').find_map(|pair| {
+            let mut parts = pair.splitn(2, '=');
+            match (parts.next(), parts.next()) {
+                (Some("token"), Some(v)) if !v.is_empty() => Some(v.to_string()),
+                _ => None,
+            }
+        })
+    });
+    let token = header_token.or(query_token);
 
-    match auth_header {
-        Some(token) => match crate::auth::validate_jwt(token) {
+    match token {
+        Some(token) => match crate::auth::validate_jwt(&token) {
             Ok(_) => next.run(req).await,
             Err(e) => (StatusCode::UNAUTHORIZED, e).into_response(),
         },
@@ -109,8 +132,8 @@ async fn register(
     State(state): State<Arc<AppState>>,
     Json(input): Json<RegisterInput>,
 ) -> Result<Json<AuthResponse>, (StatusCode, String)> {
-    if input.username.len() < 2 || input.password.len() < 4 {
-        return Err((StatusCode::BAD_REQUEST, "username >=2, password >=4".into()));
+    if input.username.trim().is_empty() || input.password.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "username and password required".into()));
     }
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     if conn
@@ -131,6 +154,8 @@ async fn register(
 
     let token = crate::auth::create_jwt(&user_id, &input.username)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+
+    logger::info(&conn, "auth", &format!("user registered: {}", input.username), None);
     Ok(Json(AuthResponse { token, user_id, username: input.username }))
 }
 
@@ -145,16 +170,21 @@ async fn login(
             params![input.username],
             |r| Ok((r.get(0)?, r.get(1)?)),
         )
-        .map_err(|_| (StatusCode::UNAUTHORIZED, "bad credentials".into()))?;
+        .map_err(|_| {
+            logger::warn(&conn, "auth", &format!("failed login attempt for user: {}", input.username), None);
+            (StatusCode::UNAUTHORIZED, "bad credentials".into())
+        })?;
 
     if !crate::auth::verify_password(&input.password, &hash)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
     {
+        logger::warn(&conn, "auth", &format!("wrong password for user: {}", input.username), None);
         return Err((StatusCode::UNAUTHORIZED, "bad credentials".into()));
     }
 
     let token = crate::auth::create_jwt(&uid, &input.username)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    logger::info(&conn, "auth", &format!("user logged in: {}", input.username), None);
     Ok(Json(AuthResponse { token, user_id: uid, username: input.username }))
 }
 
@@ -180,6 +210,7 @@ async fn get_group(
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct CreateGroupInputWeb {
     name: String,
     workspace_path: String,
@@ -191,6 +222,8 @@ async fn create_group_web(
     State(state): State<Arc<AppState>>,
     Json(input): Json<CreateGroupInputWeb>,
 ) -> Result<Json<GroupState>, (StatusCode, String)> {
+    let workspace = fs_browse::resolve_server_dir(&input.workspace_path)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     let group_id = id();
     let owner_member_id = id();
@@ -198,7 +231,7 @@ async fn create_group_web(
 
     conn.execute(
         "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at) VALUES(?1,?2,?3,?4,NULL,?5)",
-        params![group_id, input.name, input.workspace_path, owner_member_id, created_at],
+        params![group_id, input.name, workspace.to_string_lossy().as_ref(), owner_member_id, created_at],
     )
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -207,7 +240,7 @@ async fn create_group_web(
         params![owner_member_id, group_id, input.owner_name, created_at],
     )
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
- 
+
      // Auto-create agent members from selected preset roles
      if let Some(role_names) = &input.preset_roles {
          let json_val: String = conn
@@ -233,12 +266,17 @@ async fn create_group_web(
          }
      }
 
-    group_state(&conn, &group_id).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+    logger::info(&conn, "group", &format!("group created: {} (id: {})", input.name, group_id), None);
+    group_state(&conn, &group_id).map(Json).map_err(|e| {
+        logger::error(&conn, "group", &format!("failed to get group state after creation: {e}"), None);
+        (StatusCode::INTERNAL_SERVER_ERROR, e)
+    })
 }
 
 // === Message Routes ===
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct SendMessageInput {
     group_id: String,
     sender_member_id: String,
@@ -254,7 +292,7 @@ async fn send_message_web(
         return Err((StatusCode::BAD_REQUEST, "empty message".into()));
     }
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
- 
+
      // Validate sender is active member in this group
      let sender_count = conn
          .query_row(
@@ -266,11 +304,11 @@ async fn send_message_web(
      if sender_count != 1 {
          return Err((StatusCode::FORBIDDEN, "sender not in group".into()));
      }
- 
+
      // Validate group exists
      let group = db_get_group(&conn, &input.group_id)
          .map_err(|e| (StatusCode::NOT_FOUND, e))?;
- 
+
     let msg = Message {
         id: id(),
         group_id: input.group_id.clone(),
@@ -285,7 +323,7 @@ async fn send_message_web(
         params![msg.id, msg.group_id, msg.sender_member_id, msg.content, msg.status, msg.created_at],
     )
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
- 
+
      // Insert mentions
      for mentioned in &input.mention_member_ids {
          let _ = conn.execute(
@@ -293,7 +331,7 @@ async fn send_message_web(
              params![msg.id, mentioned, input.group_id],
          );
      }
- 
+
      // Find target agents
      let mut target_agents = active_agent_ids(&conn, &input.group_id, &input.mention_member_ids)
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
@@ -302,7 +340,7 @@ async fn send_message_web(
              target_agents.push(admin);
          }
      }
- 
+
      // Create task runs for target agents
      let mut run_ids: Vec<String> = Vec::new();
      for agent_id in target_agents {
@@ -311,7 +349,9 @@ async fn send_message_web(
              Err(_) => {}
          }
      }
- 
+
+     logger::info(&conn, "message", &format!("message sent to group {}: {} chars, {} agents triggered", &input.group_id, input.content.len(), run_ids.len()), None);
+
      // Emit via WebSocket broadcast
      web_emit(
          &state.tx,
@@ -361,8 +401,9 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
 }
 
  // === Members CRUD ===
- 
+
  #[derive(Debug, Deserialize)]
+ #[serde(rename_all = "camelCase")]
  struct AddMemberInputWeb {
      group_id: String,
      kind: String,
@@ -372,7 +413,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
      adapter: Option<String>,
      executable_path: Option<String>,
  }
- 
+
  async fn add_member_web(
      State(state): State<Arc<AppState>>,
      Json(input): Json<AddMemberInputWeb>,
@@ -403,14 +444,15 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
      }
      let member = conn
          .query_row(
-             "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,m.created_at FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
+             "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
              params![member_id],
              member_from_row,
          )
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+     logger::info(&conn, "member", &format!("member added: {} ({}) in group {}", input.display_name, input.kind, input.group_id), None);
      Ok(Json(member))
  }
- 
+
  async fn remove_member_web(
      State(state): State<Arc<AppState>>,
      Path((group_id, member_id)): Path<(String, String)>,
@@ -422,16 +464,20 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
      }
      conn.execute("UPDATE members SET is_active=0 WHERE id=?1", params![member_id])
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+     logger::warn(&conn, "member", &format!("member {} removed from group {}", member_id, group_id), None);
      web_emit(&state.tx, &group_id, "member_removed", None, None, None, None);
      Ok(Json(()))
  }
- 
+
  async fn set_admin_web(
      State(state): State<Arc<AppState>>,
      Path(group_id): Path<String>,
      Json(body): Json<serde_json::Value>,
  ) -> Result<Json<GroupState>, (StatusCode, String)> {
-     let member_id = body.get("member_id").and_then(|v| v.as_str());
+     let member_id = body
+         .get("memberId")
+         .or_else(|| body.get("member_id"))
+         .and_then(|v| v.as_str());
      let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
      let _ = db_get_group(&conn, &group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
      if let Some(id) = member_id {
@@ -446,9 +492,9 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
      group_state(&conn, &group_id).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
  }
- 
+
  // === Runs ===
- 
+
  async fn list_runs_web(
      State(state): State<Arc<AppState>>,
      Path(group_id): Path<String>,
@@ -456,7 +502,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
      let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
      get_runs(&conn, &group_id).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
  }
- 
+
  async fn cancel_run_web(
      State(state): State<Arc<AppState>>,
      Path(run_id): Path<String>,
@@ -468,33 +514,35 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
      if changed > 0 {
          conn.execute("UPDATE messages SET status='cancelled' WHERE id=(SELECT output_message_id FROM task_runs WHERE id=?1) AND status='streaming'", params![run_id])
              .ok();
+         logger::warn(&conn, "run", &format!("run {} cancelled", run_id), None);
          web_emit(&state.tx, "", "run_status", None, Some(&run_id), Some("cancelled"), None);
      }
      Ok(Json(()))
  }
- 
+
  async fn retry_run_web(
      State(state): State<Arc<AppState>>,
      Path(run_id): Path<String>,
  ) -> Result<Json<String>, (StatusCode, String)> {
      let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
      let old: TaskRun = conn
-         .query_row("SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,created_at,started_at,completed_at FROM task_runs WHERE id=?1", params![run_id], crate::db::run_from_row)
+         .query_row("SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at FROM task_runs WHERE id=?1", params![run_id], crate::db::run_from_row)
          .map_err(|e| (StatusCode::NOT_FOUND, format!("run not found: {e}")))?;
      let new_id = create_task_run(&conn, &old.group_id, &old.root_message_id, &old.agent_member_id, old.parent_run_id.as_deref(), old.depth)
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     logger::info(&conn, "run", &format!("run {} retried as {}", run_id, new_id), None);
      Ok(Json(new_id))
  }
- 
+
  // === Settings ===
- 
+
  async fn get_settings_web(
      State(state): State<Arc<AppState>>,
  ) -> Result<Json<RuntimeSettings>, (StatusCode, String)> {
      let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
      get_settings_from(&conn).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
  }
- 
+
  async fn update_settings_web(
      State(state): State<Arc<AppState>>,
      Json(settings): Json<RuntimeSettings>,
@@ -517,25 +565,33 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
      }
      get_settings_from(&conn).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
  }
- 
+
  // === OCR ===
- 
+
  async fn ocr_image_web(
      Json(input): Json<serde_json::Value>,
  ) -> Result<Json<String>, (StatusCode, String)> {
-     let path = input.get("image_path").and_then(|v| v.as_str()).ok_or((StatusCode::BAD_REQUEST, "missing image_path".into()))?;
+     let path = input
+         .get("imagePath")
+         .or_else(|| input.get("image_path"))
+         .and_then(|v| v.as_str())
+         .ok_or((StatusCode::BAD_REQUEST, "missing imagePath".into()))?;
      crate::ocr::ocr_image(path).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
  }
- 
+
  async fn ocr_base64_web(
      Json(input): Json<serde_json::Value>,
  ) -> Result<Json<String>, (StatusCode, String)> {
-     let data = input.get("base64_data").and_then(|v| v.as_str()).ok_or((StatusCode::BAD_REQUEST, "missing base64_data".into()))?;
+     let data = input
+         .get("base64Data")
+         .or_else(|| input.get("base64_data"))
+         .and_then(|v| v.as_str())
+         .ok_or((StatusCode::BAD_REQUEST, "missing base64Data".into()))?;
      crate::ocr::ocr_image_base64(data).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
  }
- 
+
  // === Preset Roles ===
- 
+
  async fn get_preset_roles_web(
      State(state): State<Arc<AppState>>,
  ) -> Result<Json<Vec<PresetRole>>, (StatusCode, String)> {
@@ -544,7 +600,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
 }
 
  // === PM: Roadmap Items ===
- 
+
  async fn list_roadmap_items_web(
      State(state): State<Arc<AppState>>,
      Path(group_id): Path<String>,
@@ -552,7 +608,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
      let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
      get_roadmap_items(&conn, &group_id).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
  }
- 
+
  async fn create_roadmap_item_web(
      State(state): State<Arc<AppState>>,
      Json(input): Json<CreateRoadmapItemInput>,
@@ -562,7 +618,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
          .map(Json)
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
  }
- 
+
  async fn update_roadmap_item_web(
      State(state): State<Arc<AppState>>,
      Path(id): Path<String>,
@@ -572,7 +628,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
          .map(Json)
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
  }
- 
+
  async fn delete_roadmap_item_web(
      State(state): State<Arc<AppState>>,
      Path(id): Path<String>,
@@ -581,9 +637,9 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
          .map(|_| Json(()))
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
  }
- 
+
  // === PM: Features ===
- 
+
  async fn list_features_web(
      State(state): State<Arc<AppState>>,
      Path(group_id): Path<String>,
@@ -591,7 +647,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
      let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
      get_features(&conn, &group_id).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
  }
- 
+
  async fn create_feature_web(
      State(state): State<Arc<AppState>>,
      Json(input): Json<CreateFeatureInput>,
@@ -601,7 +657,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
          .map(Json)
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
  }
- 
+
  async fn update_feature_web(
      State(state): State<Arc<AppState>>,
      Path(id): Path<String>,
@@ -611,7 +667,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
          .map(Json)
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
  }
- 
+
  async fn delete_feature_web(
      State(state): State<Arc<AppState>>,
      Path(id): Path<String>,
@@ -620,9 +676,9 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
          .map(|_| Json(()))
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
  }
- 
+
  // === PM: Feature Tasks ===
- 
+
  async fn list_feature_tasks_web(
      State(state): State<Arc<AppState>>,
      Path(feature_id): Path<String>,
@@ -630,7 +686,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
      let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
      get_feature_tasks(&conn, &feature_id).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
  }
- 
+
  async fn create_feature_task_web(
      State(state): State<Arc<AppState>>,
      Json(input): Json<CreateFeatureTaskInput>,
@@ -640,7 +696,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
          .map(Json)
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
  }
- 
+
  async fn update_feature_task_web(
      State(state): State<Arc<AppState>>,
      Path(id): Path<String>,
@@ -650,7 +706,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
          .map(Json)
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
  }
- 
+
  async fn delete_feature_task_web(
      State(state): State<Arc<AppState>>,
      Path(id): Path<String>,
@@ -659,9 +715,9 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
          .map(|_| Json(()))
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
  }
- 
+
  // === PM: Aggregated State ===
- 
+
  async fn get_roadmap_state_web(
      State(state): State<Arc<AppState>>,
      Path(group_id): Path<String>,
@@ -669,8 +725,229 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
      let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
      get_roadmap_state_db(&conn, &group_id).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
  }
- 
-// === Router Builder ===
+
+ // === Logs ===
+
+ async fn list_logs_web(
+     State(state): State<Arc<AppState>>,
+     axum::extract::Query(q): axum::extract::Query<LogQuery>,
+ ) -> Result<Json<Vec<LogEntry>>, (StatusCode, String)> {
+     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     logger::query_logs(&conn, &q).map(Json).map_err(|e| {
+         logger::error(&conn, "logs", &format!("failed to query logs: {e}"), None);
+         (StatusCode::INTERNAL_SERVER_ERROR, e)
+     })
+ }
+
+ async fn count_logs_web(
+     State(state): State<Arc<AppState>>,
+     axum::extract::Query(q): axum::extract::Query<LogQuery>,
+ ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     let count = logger::count_logs(&conn, q.level.as_deref(), q.source.as_deref()).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     Ok(Json(serde_json::json!({"count": count})))
+ }
+
+ async fn clear_logs_web(
+     State(state): State<Arc<AppState>>,
+ ) -> Result<Json<()>, (StatusCode, String)> {
+     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     logger::clear_logs(&conn).map_err(|e| {
+         logger::error(&conn, "logs", &format!("failed to clear logs: {e}"), None);
+         (StatusCode::INTERNAL_SERVER_ERROR, e)
+     })?;
+     logger::info(&conn, "logs", "logs cleared by user", None);
+     Ok(Json(()))
+ }
+
+ // === Shared Memory (Experiences) ===
+
+ #[derive(Deserialize)]
+ #[serde(rename_all = "camelCase")]
+ struct SaveExperienceInput {
+     group_id: String,
+     title: String,
+     content: String,
+     #[serde(default)]
+     tags: String,
+     /// Optional group member id as the recorded source; falls back to the logged-in user.
+     source_member_id: Option<String>,
+ }
+
+ #[derive(Deserialize)]
+ #[serde(rename_all = "camelCase")]
+ struct QueryExperienceInput {
+     #[serde(default = "default_group")]
+     group_id: String,
+     #[serde(default)]
+     query: String,
+     #[serde(default = "default_limit")]
+     limit: i64,
+ }
+
+ fn default_group() -> String { String::new() }
+ fn default_limit() -> i64 { 20 }
+
+ async fn save_experience_web(
+     ClaimsExtractor(claims): ClaimsExtractor,
+     State(state): State<Arc<AppState>>,
+     Json(input): Json<SaveExperienceInput>,
+ ) -> Result<Json<String>, (StatusCode, String)> {
+     let conn = crate::db::open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     let source_id = input
+         .source_member_id
+         .as_deref()
+         .filter(|value| !value.trim().is_empty())
+         .unwrap_or(&claims.sub);
+     let eid = crate::db::save_experience(&conn, &input.group_id, source_id, &input.title, &input.content, &input.tags)
+         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     Ok(Json(eid))
+ }
+
+ async fn query_experiences_web(
+     State(state): State<Arc<AppState>>,
+     axum::extract::Query(input): axum::extract::Query<QueryExperienceInput>,
+ ) -> Result<Json<Vec<Experience>>, (StatusCode, String)> {
+     let conn = crate::db::open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     let results = crate::db::query_experiences(&conn, &input.group_id, &input.query, input.limit)
+         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     Ok(Json(results))
+ }
+
+ async fn delete_experience_web(
+     Path(id): Path<String>,
+     State(state): State<Arc<AppState>>,
+ ) -> Result<Json<bool>, (StatusCode, String)> {
+     let conn = crate::db::open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     let ok = crate::db::delete_experience(&conn, &id)
+         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     Ok(Json(ok))
+ }
+
+ // === Router Builder ===
+
+/// Start a background task that polls for queued runs periodically
+pub fn start_scheduler_background(state: SchedulerState) {
+    tokio::spawn(async move {
+        // Give server time to start
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+        // Get all group IDs
+        let groups: Vec<String> = match (|| -> Result<Vec<String>, String> {
+            let conn = crate::db::open_db(&state.db_path)?;
+            let mut stmt = conn.prepare("SELECT id FROM groups").map_err(|e| e.to_string())?;
+            let ids = stmt.query_map([], |r| r.get::<_, String>(0))
+                .map_err(|e| e.to_string())?
+                .filter_map(|r| r.ok())
+                .collect();
+            Ok(ids)
+        })() {
+            Ok(ids) => ids,
+            Err(_) => return,
+        };
+        for gid in &groups {
+            scheduler::schedule_group(state.clone(), gid.clone());
+        }
+        // Periodic poll every 5 seconds
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            let groups: Vec<String> = match (|| -> Result<Vec<String>, String> {
+                let conn = crate::db::open_db(&state.db_path)?;
+                let mut stmt = conn.prepare("SELECT DISTINCT group_id FROM task_runs WHERE status='queued'").map_err(|e| e.to_string())?;
+                let ids = stmt.query_map([], |r| r.get::<_, String>(0))
+                    .map_err(|e| e.to_string())?
+                    .filter_map(|r| r.ok())
+                    .collect();
+                Ok(ids)
+            })() {
+                Ok(ids) => ids,
+                Err(_) => continue,
+            };
+            for gid in &groups {
+                scheduler::schedule_group(state.clone(), gid.clone());
+            }
+        }
+    });
+}
+
+async fn list_server_dir_web(
+    axum::extract::Query(q): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Result<Json<DirListing>, (StatusCode, String)> {
+    let path = q.get("path").map(|s| s.as_str()).unwrap_or("/");
+    fs_browse::list_server_dir(path)
+        .map(Json)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AnnouncementBody {
+    announcement: String,
+}
+
+async fn get_announcement_web(
+    State(state): State<Arc<AppState>>,
+    Path(group_id): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let g = db_get_group(&conn, &group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    Ok(Json(json!({
+        "groupId": g.id,
+        "announcement": g.announcement,
+        "announcementUpdatedAt": g.announcement_updated_at,
+    })))
+}
+
+async fn put_announcement_web(
+    State(state): State<Arc<AppState>>,
+    Path(group_id): Path<String>,
+    Json(body): Json<AnnouncementBody>,
+) -> Result<Json<Group>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let g = set_group_announcement(&conn, &group_id, body.announcement.trim())
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    let _ = fs_browse::sync_announcement_rule(
+        std::path::Path::new(&g.workspace_path),
+        &g.announcement,
+    );
+    Ok(Json(g))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceBody {
+    workspace_path: String,
+}
+
+async fn put_workspace_web(
+    State(state): State<Arc<AppState>>,
+    Path(group_id): Path<String>,
+    Json(body): Json<WorkspaceBody>,
+) -> Result<Json<Group>, (StatusCode, String)> {
+    let workspace = fs_browse::resolve_server_dir(&body.workspace_path)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let g = update_group_workspace(&conn, &group_id, workspace.to_string_lossy().as_ref())
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    Ok(Json(g))
+}
+
+async fn ops_release_status_web() -> Json<ops::ReleaseStatus> {
+    Json(ops::release_status().await)
+}
+
+async fn ops_job_web() -> Json<ops::OpsJobState> {
+    Json(ops::ops_job_snapshot())
+}
+
+async fn ops_test_gate_web() -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    ops::kickoff_test_gate().map_err(|e| (StatusCode::CONFLICT, e))?;
+    Ok(Json(json!({ "ok": true, "job": ops::ops_job_snapshot() })))
+}
+
+async fn ops_deploy_canary_web() -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    ops::kickoff_deploy_canary().map_err(|e| (StatusCode::CONFLICT, e))?;
+    Ok(Json(json!({ "ok": true, "job": ops::ops_job_snapshot() })))
+}
 
 pub fn build_router(state: Arc<AppState>) -> Router {
     let auth_routes = Router::new()
@@ -683,6 +960,13 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/api/groups", get(list_groups))
          .route("/api/groups", post(create_group_web))
         .route("/api/groups/{id}", get(get_group))
+        .route("/api/groups/{id}/announcement", get(get_announcement_web).put(put_announcement_web))
+        .route("/api/groups/{id}/workspace", put(put_workspace_web))
+        .route("/api/fs/list", get(list_server_dir_web))
+        .route("/api/ops/release-status", get(ops_release_status_web))
+        .route("/api/ops/job", get(ops_job_web))
+        .route("/api/ops/test-gate", post(ops_test_gate_web))
+        .route("/api/ops/deploy-canary", post(ops_deploy_canary_web))
          // Members
          .route("/api/groups/{group_id}/members", post(add_member_web))
          .route("/api/groups/{group_id}/members/{member_id}", delete(remove_member_web))
@@ -718,6 +1002,14 @@ pub fn build_router(state: Arc<AppState>) -> Router {
          .route("/api/feature-tasks/{id}", delete(delete_feature_task_web))
          // PM: Aggregated State
          .route("/api/groups/{group_id}/roadmap-state", get(get_roadmap_state_web))
+         // Logs
+         .route("/api/logs", get(list_logs_web))
+         .route("/api/logs/count", get(count_logs_web))
+         .route("/api/logs", delete(clear_logs_web))
+         // Shared Memory (Experiences)
+         .route("/api/experiences", post(save_experience_web))
+         .route("/api/experiences", get(query_experiences_web))
+         .route("/api/experiences/{id}", delete(delete_experience_web))
          // WebSocket
         .route("/ws", get(ws_handler))
         .route_layer(middleware::from_fn(auth_middleware));

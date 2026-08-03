@@ -56,3 +56,23 @@ pub fn validate_jwt(token: &str) -> Result<Claims, String> {
     .map_err(|e| format!("jwt validate failed: {e}"))?;
     Ok(token_data.claims)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn password_hash_roundtrip() {
+        let hash = hash_password("root").unwrap();
+        assert!(verify_password("root", &hash).unwrap());
+        assert!(!verify_password("wrong", &hash).unwrap());
+    }
+
+    #[test]
+    fn jwt_roundtrip() {
+        let token = create_jwt("uid-1", "root").unwrap();
+        let claims = validate_jwt(&token).unwrap();
+        assert_eq!(claims.sub, "uid-1");
+        assert_eq!(claims.username, "root");
+    }
+}

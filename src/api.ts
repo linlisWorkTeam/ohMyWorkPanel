@@ -5,9 +5,25 @@ import type {
   CreateRoadmapItemInput, UpdateRoadmapItemInput,
   CreateFeatureInput, UpdateFeatureInput,
   CreateFeatureTaskInput, UpdateFeatureTaskInput,
+  Experience, SaveExperienceInput, LogEntry, LogLevel, LogQueryFilter,
+  DirListing, Group, ReleaseStatus, OpsJobState,
 } from "./types";
 
+/** Desktop/Tauri builds do not require JWT login. */
+export const requiresAuth = false;
+export function setAuthToken(_token: string | null) {}
+export function getAuthToken(): string | null {
+  return null;
+}
+export function onUnauthorized(_listener: () => void): () => void {
+  return () => {};
+}
+
 export const api = {
+  login: (_username: string, _password: string) =>
+    Promise.reject(new Error("Desktop mode does not use web login")) as Promise<{ token: string; user_id: string; username: string }>,
+  register: (_username: string, _password: string) =>
+    Promise.reject(new Error("Desktop mode does not use web register")) as Promise<{ token: string; user_id: string; username: string }>,
   bootstrap: () => invoke<{ groups: GroupState["group"][] }>("bootstrap"),
   getGroupState: (groupId: string) => invoke<GroupState>("get_group_state", { groupId }),
   createGroup: (input: { name: string; workspacePath: string; ownerName: string; presetRoles?: string[] }) =>
@@ -49,4 +65,36 @@ export const api = {
 
   // PM: Aggregated State
   getRoadmapState: (groupId: string) => invoke<RoadmapState>("get_roadmap_state", { groupId }),
+
+  // Shared Memory: Experiences
+  saveExperience: (input: SaveExperienceInput) =>
+    invoke<string>("save_experience", {
+      groupId: input.groupId, sourceMemberId: input.sourceMemberId,
+      title: input.title, content: input.content, tags: input.tags ?? null,
+    }),
+  queryExperiences: (groupId: string, query?: string, limit?: number) =>
+    invoke<Experience[]>("query_experiences", { groupId, query: query ?? null, limit: limit ?? null }),
+  deleteExperience: (id: string) => invoke<boolean>("delete_experience", { id }),
+
+  // Logs
+  listLogs: (filter: LogQueryFilter = {}) =>
+    invoke<LogEntry[]>("list_logs", {
+      limit: filter.limit ?? null, offset: filter.offset ?? null,
+      level: filter.level ?? null, source: filter.source ?? null, since: filter.since ?? null,
+    }),
+  countLogs: (level?: LogLevel, source?: string) =>
+    invoke<number>("count_logs", { level: level ?? null, source: source ?? null }).then((count) => ({ count })),
+  clearLogs: () => invoke<void>("clear_logs"),
+
+  listServerDir: (path: string) => invoke<DirListing>("list_server_dir", { path }),
+  updateGroupWorkspace: (groupId: string, workspacePath: string) =>
+    invoke<Group>("update_group_workspace_cmd", { groupId, workspacePath }),
+  getGroupAnnouncement: (groupId: string) =>
+    invoke<Group>("get_group_announcement", { groupId }),
+  setGroupAnnouncement: (groupId: string, announcement: string) =>
+    invoke<Group>("set_group_announcement_cmd", { groupId, announcement }),
+  opsReleaseStatus: () => invoke<ReleaseStatus>("ops_release_status"),
+  opsJob: () => invoke<OpsJobState>("ops_job_status"),
+  opsRunTestGate: () => invoke<void>("ops_run_test_gate"),
+  opsDeployCanary: () => invoke<void>("ops_deploy_canary"),
 };
