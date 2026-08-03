@@ -1,10 +1,20 @@
 // WebSocket-backed stub for @tauri-apps/api/event — used in web builds only.
 // Subscribes to server-sent events via a shared WebSocket connection.
 
+import {
+  heartbeatPayload,
+  isIgnorableWsKind,
+  reconnectDelayMs,
+  WS_CLIENT_HEARTBEAT_MS,
+  WS_RECONNECTED_KIND,
+} from "../realtimeWs";
+
 type WsListener = (event: { payload: any }) => void;
 const listeners = new Map<string, Set<WsListener>>();
 let sharedWs: WebSocket | null = null;
 let authToken: string | null = null;
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+let visibilityBound = false;
 const TOKEN_KEY = "linlis_auth_token";
 
 function wsUrl(token: string | null): string {
@@ -22,6 +32,7 @@ export function _setWebAuthToken(token: string | null) {
     try { sharedWs.close(); } catch { /* ignore */ }
     sharedWs = null;
   }
+  stopHeartbeat();
   if (token && listeners.size > 0) ensureWs();
 }
 
@@ -65,11 +76,42 @@ function scheduleReconnect() {
   if (reconnectTimer) return;
   if (listeners.size === 0) return;
   reconnectAttempts += 1;
-  const delay = Math.min(30000, 1000 * 2 ** (reconnectAttempts - 1));
+  const delay = reconnectDelayMs(reconnectAttempts);
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
     ensureWs();
   }, delay);
+}
+
+function stopHeartbeat() {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
+}
+
+function startHeartbeat(ws: WebSocket) {
+  stopHeartbeat();
+  heartbeatTimer = setInterval(() => {
+    if (ws.readyState !== WebSocket.OPEN) return;
+    try {
+      ws.send(heartbeatPayload());
+    } catch {
+      try { ws.close(); } catch { /* ignore */ }
+    }
+  }, WS_CLIENT_HEARTBEAT_MS);
+}
+
+function bindVisibility() {
+  if (visibilityBound || typeof document === "undefined") return;
+  visibilityBound = true;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    if (listeners.size === 0) return;
+    ensureWs();
+    // Tab focused again: ask UI to pull latest in case we missed frames while backgrounded.
+    dispatch("chat-event", { kind: WS_RECONNECTED_KIND, groupId: null });
+  });
 }
 
 function ensureWs() {
@@ -81,12 +123,21 @@ function ensureWs() {
   if (sharedWs) {
     try { sharedWs.close(); } catch { /* ignore */ }
   }
+  stopHeartbeat();
   sharedWs = new WebSocket(url);
-  sharedWs.onopen = () => { reconnectAttempts = 0; };
-  sharedWs.onmessage = (e: MessageEvent) => {
+  const ws = sharedWs;
+  ws.onopen = () => {
+    reconnectAttempts = 0;
+    startHeartbeat(ws);
+    dispatch("chat-event", { kind: WS_RECONNECTED_KIND, groupId: null });
+  };
+  ws.onmessage = (e: MessageEvent) => {
     try {
       const data = JSON.parse(e.data as string) as Record<string, unknown>;
       const payload = normalizePayload(data);
+      if (isIgnorableWsKind(typeof payload.kind === "string" ? payload.kind : null)) {
+        return;
+      }
       // Match Tauri desktop: App listens on "chat-event"
       dispatch("chat-event", payload);
       // Also allow kind-specific listeners if any
@@ -97,8 +148,12 @@ function ensureWs() {
       // non-JSON messages or events don't need dispatching
     }
   };
-  sharedWs.onclose = () => scheduleReconnect();
-  sharedWs.onerror = () => { try { sharedWs?.close(); } catch { /* ignore */ } };
+  ws.onclose = () => {
+    stopHeartbeat();
+    scheduleReconnect();
+  };
+  ws.onerror = () => { try { ws.close(); } catch { /* ignore */ } };
+  bindVisibility();
 }
 
 export async function listen<T>(

@@ -21,6 +21,9 @@ export interface Group {
   createdAt: number;
   announcement?: string;
   announcementUpdatedAt?: number | null;
+  /** project (default) | chat */
+  groupKind?: "project" | "chat" | string;
+  archived?: boolean;
 }
 
 export interface DirEntryInfo {
@@ -75,6 +78,8 @@ export interface Member {
   apiKeySet?: boolean;
   keepAlive?: boolean;
   warmStatus?: string | null;
+  /** Preferred model; empty/null = provider default */
+  model?: string | null;
 }
 
 export interface Message {
@@ -111,6 +116,14 @@ export interface GroupState {
   members: Member[];
   messages: Message[];
   runs: TaskRun[];
+  /** Older than hot window (default 100) still in DB */
+  messagesHasMore?: boolean;
+  messagesTotal?: number;
+}
+
+export interface MessagePage {
+  messages: Message[];
+  hasMore: boolean;
 }
 
 export interface ChatEvent {
@@ -188,6 +201,19 @@ export interface RuntimeSettings {
    features: Feature[];
    tasks: FeatureTask[];
  }
+
+export interface RoadmapOrchestration {
+  id: string;
+  groupId: string;
+  roadmapItemId: string;
+  status: string;
+  cursorFeatureId: string | null;
+  cursorTaskId: string | null;
+  currentRunId: string | null;
+  errorMessage: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
  
  export interface CreateRoadmapItemInput {
    groupId: string;

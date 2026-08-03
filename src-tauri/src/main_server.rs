@@ -77,6 +77,7 @@ async fn main() {
     // Start background scheduler for agent runs
     web::start_scheduler_background(sched.clone());
     linlis_work_panel_lib::keepalive::start_keepalive_loop(sched);
+    linlis_work_panel_lib::metrics::start_perf_loop(db_path.clone());
 
     let dist_dir = env::var("LINLIS_WEB_DIST").unwrap_or_else(|_| "../dist".to_string());
     println!("Static: {}", dist_dir);

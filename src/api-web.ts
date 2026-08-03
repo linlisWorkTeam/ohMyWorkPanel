@@ -1,8 +1,8 @@
 ﻿// Web API layer - replaces api.ts when running in browser (non-Tauri mode).
 // Uses fetch() + WebSocket instead of Tauri invoke().
 import type {
-  GroupState, Member, PresetRole, RuntimeSettings, Message,
-  RoadmapItem, Feature, FeatureTask, RoadmapState,
+  GroupState, Member, MessagePage, PresetRole, RuntimeSettings, Message,
+  RoadmapItem, Feature, FeatureTask, RoadmapState, RoadmapOrchestration,
   CreateRoadmapItemInput, UpdateRoadmapItemInput,
   CreateFeatureInput, UpdateFeatureInput,
   CreateFeatureTaskInput, UpdateFeatureTaskInput,
@@ -128,11 +128,21 @@ export const api = {
   getGroupState: (groupId: string) =>
     apiFetch<GroupState>(`/api/groups/${groupId}`),
 
+  listMessagesBefore: (groupId: string, beforeCreatedAt: number, beforeId: string, limit = 50) => {
+    const q = new URLSearchParams({
+      beforeCreatedAt: String(beforeCreatedAt),
+      beforeId,
+      limit: String(limit),
+    });
+    return apiFetch<MessagePage>(`/api/groups/${groupId}/messages?${q}`);
+  },
+
   createGroup: (input: {
     name: string;
     workspacePath: string;
     ownerName: string;
     presetRoles?: string[];
+    groupKind?: "project" | "chat";
   }) =>
     apiFetch<GroupState>("/api/groups", {
       method: "POST",
@@ -149,10 +159,23 @@ export const api = {
     executablePath?: string;
     chatbotProvider?: "opencode-go" | "deepseek";
     apiKey?: string;
+    model?: string;
   }) =>
     apiFetch<Member>(`/api/groups/${input.groupId}/members`, {
       method: "POST",
       body: JSON.stringify(input),
+    }),
+
+  setGroupArchived: (groupId: string, archived: boolean) =>
+    apiFetch<Group>(`/api/groups/${groupId}/archive`, {
+      method: "PUT",
+      body: JSON.stringify({ archived }),
+    }),
+
+  updateMemberModel: (memberId: string, model: string | null) =>
+    apiFetch<Member>(`/api/members/${memberId}/model`, {
+      method: "PUT",
+      body: JSON.stringify({ model }),
     }),
 
   removeMember: (groupId: string, memberId: string) =>
@@ -256,6 +279,17 @@ export const api = {
   // PM: Aggregated State
   getRoadmapState: (groupId: string) =>
     apiFetch<RoadmapState>(`/api/groups/${groupId}/roadmap-state`),
+
+  listRoadmapOrchestrations: (groupId: string) =>
+    apiFetch<RoadmapOrchestration[]>(`/api/groups/${groupId}/roadmap-orchestrations`),
+  startRoadmapItem: (id: string) =>
+    apiFetch<RoadmapOrchestration>(`/api/roadmap-items/${id}/start`, { method: "POST" }),
+  pauseRoadmapOrchestration: (id: string) =>
+    apiFetch<RoadmapOrchestration>(`/api/roadmap-orchestrations/${id}/pause`, { method: "POST" }),
+  resumeRoadmapOrchestration: (id: string) =>
+    apiFetch<RoadmapOrchestration>(`/api/roadmap-orchestrations/${id}/resume`, { method: "POST" }),
+  cancelRoadmapOrchestration: (id: string) =>
+    apiFetch<RoadmapOrchestration>(`/api/roadmap-orchestrations/${id}/cancel`, { method: "POST" }),
 
   // Shared Memory: Experiences (sourceMemberId 可指定群内成员；缺省由服务端回落到登录用户)
   saveExperience: (input: SaveExperienceInput) =>

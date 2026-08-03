@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
-  GroupState, Member, PresetRole, RuntimeSettings,
+  GroupState, Member, MessagePage, PresetRole, RuntimeSettings,
   RoadmapItem, Feature, FeatureTask, RoadmapState,
   CreateRoadmapItemInput, UpdateRoadmapItemInput,
   CreateFeatureInput, UpdateFeatureInput,
@@ -26,13 +26,22 @@ export const api = {
     Promise.reject(new Error("Desktop mode does not use web register")) as Promise<{ token: string; user_id: string; username: string }>,
   bootstrap: () => invoke<{ groups: GroupState["group"][] }>("bootstrap"),
   getGroupState: (groupId: string) => invoke<GroupState>("get_group_state", { groupId }),
-  createGroup: (input: { name: string; workspacePath: string; ownerName: string; presetRoles?: string[] }) =>
+  listMessagesBefore: (groupId: string, beforeCreatedAt: number, beforeId: string, limit?: number) =>
+    invoke<MessagePage>("list_messages_before", { groupId, beforeCreatedAt, beforeId, limit }),
+  createGroup: (input: {
+    name: string; workspacePath: string; ownerName: string; presetRoles?: string[];
+    groupKind?: "project" | "chat";
+  }) =>
     invoke<GroupState>("create_group", { input }),
   addMember: (input: {
     groupId: string; kind: "user" | "agent" | "chatbot"; displayName: string; roleDescription: string;
     avatarColor?: string; adapter?: string; executablePath?: string;
-    chatbotProvider?: "opencode-go" | "deepseek"; apiKey?: string;
+    chatbotProvider?: "opencode-go" | "deepseek"; apiKey?: string; model?: string;
   }) => invoke<Member>("add_member", { input }),
+  setGroupArchived: (groupId: string, archived: boolean) =>
+    invoke<Group>("set_group_archived_cmd", { groupId, archived }),
+  updateMemberModel: (memberId: string, model: string | null) =>
+    invoke<Member>("update_member_model_cmd", { memberId, model }),
   removeMember: (groupId: string, memberId: string) => invoke<void>("remove_member", { groupId, memberId }),
   setAdmin: (groupId: string, memberId: string | null) => invoke<GroupState>("set_admin", { groupId, memberId }),
   sendMessage: (groupId: string, senderMemberId: string, content: string, mentionMemberIds: string[]) =>
@@ -66,6 +75,12 @@ export const api = {
 
   // PM: Aggregated State
   getRoadmapState: (groupId: string) => invoke<RoadmapState>("get_roadmap_state", { groupId }),
+
+  listRoadmapOrchestrations: async () => [] as import("./types").RoadmapOrchestration[],
+  startRoadmapItem: async (_id: string) => { throw new Error("路线图编排请在 Web 灰度环境使用"); },
+  pauseRoadmapOrchestration: async (_id: string) => { throw new Error("路线图编排请在 Web 灰度环境使用"); },
+  resumeRoadmapOrchestration: async (_id: string) => { throw new Error("路线图编排请在 Web 灰度环境使用"); },
+  cancelRoadmapOrchestration: async (_id: string) => { throw new Error("路线图编排请在 Web 灰度环境使用"); },
 
   // Shared Memory: Experiences
   saveExperience: (input: SaveExperienceInput) =>

@@ -11,8 +11,10 @@ pub mod memory;
 mod message_content;
 mod models;
 pub mod logger;
+pub mod metrics;
 pub mod event_sender;
 pub mod ops;
+pub mod orchestrator;
 pub mod scheduler;
 pub mod web;
 
@@ -55,6 +57,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::bootstrap,
             commands::get_group_state,
+            commands::list_messages_before,
             commands::get_runtime_settings,
             commands::update_runtime_settings,
             commands::create_group,
@@ -102,6 +105,8 @@ pub fn run() {
             commands::ops_job_status,
             commands::ops_run_test_gate,
             commands::ops_deploy_canary,
+            commands::set_group_archived_cmd,
+            commands::update_member_model_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("Failed to launch LinlisWorkPanel");

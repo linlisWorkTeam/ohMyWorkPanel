@@ -23,7 +23,7 @@ use crate::db::{
     get_feature_tasks, get_groups,
     get_group as db_get_group,
     get_preset_roles, get_roadmap_items, get_roadmap_state_db, get_runs,
-    get_settings_from, group_state, id, member_from_row, now, open_db,
+    get_messages_before, get_settings_from, group_state, id, member_from_row, now, open_db,
     set_group_announcement, update_feature_db, update_feature_task_db,
     update_group_workspace, update_roadmap_item_db,
 };
@@ -219,22 +219,37 @@ struct CreateGroupInputWeb {
     workspace_path: String,
     owner_name: String,
     preset_roles: Option<Vec<String>>,
+    group_kind: Option<String>,
+}
+
+fn normalize_group_kind(raw: Option<&str>) -> String {
+    match raw.map(str::trim).unwrap_or("project") {
+        "chat" => "chat".into(),
+        _ => "project".into(),
+    }
 }
 
 async fn create_group_web(
     State(state): State<Arc<AppState>>,
     Json(input): Json<CreateGroupInputWeb>,
 ) -> Result<Json<GroupState>, (StatusCode, String)> {
-    let workspace = fs_browse::resolve_server_dir(&input.workspace_path)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    let group_kind = normalize_group_kind(input.group_kind.as_deref());
+    let workspace_path = if group_kind == "chat" {
+        String::new()
+    } else {
+        fs_browse::resolve_server_dir(&input.workspace_path)
+            .map_err(|e| (StatusCode::BAD_REQUEST, e))?
+            .to_string_lossy()
+            .into_owned()
+    };
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     let group_id = id();
     let owner_member_id = id();
     let created_at = now();
 
     conn.execute(
-        "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at) VALUES(?1,?2,?3,?4,NULL,?5)",
-        params![group_id, input.name, workspace.to_string_lossy().as_ref(), owner_member_id, created_at],
+        "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at,group_kind,archived) VALUES(?1,?2,?3,?4,NULL,?5,?6,0)",
+        params![group_id, input.name, workspace_path, owner_member_id, created_at, group_kind],
     )
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -366,6 +381,10 @@ async fn send_message_web(
          None,
      );
 
+     if !run_ids.is_empty() {
+         scheduler::schedule_group(state.sched.clone(), input.group_id.clone());
+     }
+
      Ok(Json(json!({
          "message": msg,
          "runIds": run_ids,
@@ -383,21 +402,62 @@ async fn ws_handler(
 
 async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
     let mut rx = state.tx.subscribe();
+    // Keep proxies from idle-closing the socket; browsers deliver Text frames to JS.
+    let mut beat = tokio::time::interval(std::time::Duration::from_secs(25));
+    beat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         tokio::select! {
+            _ = beat.tick() => {
+                let payload = json!({
+                    "kind": "heartbeat",
+                    "ts": now(),
+                });
+                if socket
+                    .send(WsMessage::Text(payload.to_string().into()))
+                    .await
+                    .is_err()
+                {
+                    break;
+                }
+            }
             msg = rx.recv() => {
                 match msg {
                     Ok(text) => {
                         if socket.send(WsMessage::Text(text.into())).await.is_err() { break; }
                     }
                     // Client fell behind: drop lagged messages but keep the socket alive.
-                    Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(broadcast::error::RecvError::Lagged(_)) => {
+                        let hint = json!({ "kind": "ws_reconnected", "ts": now() });
+                        if socket
+                            .send(WsMessage::Text(hint.to_string().into()))
+                            .await
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
                     Err(broadcast::error::RecvError::Closed) => break,
                 }
             }
             ws_msg = socket.recv() => {
                 match ws_msg {
                     Some(Ok(WsMessage::Close(_))) | None => break,
+                    Some(Ok(WsMessage::Ping(payload))) => {
+                        if socket.send(WsMessage::Pong(payload)).await.is_err() { break; }
+                    }
+                    Some(Ok(WsMessage::Text(text))) => {
+                        // Client heartbeat / ignore; optional ack keeps NAT mappings warm.
+                        if text.contains("heartbeat") {
+                            let ack = json!({ "kind": "heartbeat", "ts": now() });
+                            if socket
+                                .send(WsMessage::Text(ack.to_string().into()))
+                                .await
+                                .is_err()
+                            {
+                                break;
+                            }
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -419,6 +479,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
      executable_path: Option<String>,
      chatbot_provider: Option<String>,
      api_key: Option<String>,
+     model: Option<String>,
  }
 
  async fn add_member_web(
@@ -431,7 +492,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
      let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
      let group = db_get_group(&conn, &input.group_id)
          .map_err(|e| (StatusCode::NOT_FOUND, e))?;
-     if input.kind == "chatbot" {
+     if input.kind == "chatbot" && group.group_kind != "chat" {
          let exists: i64 = conn
              .query_row(
                  "SELECT COUNT(*) FROM members WHERE group_id=?1 AND kind='chatbot' AND is_active=1",
@@ -440,7 +501,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
              )
              .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
          if exists > 0 {
-             return Err((StatusCode::CONFLICT, "每个群只能添加一个聊天机器人".into()));
+             return Err((StatusCode::CONFLICT, "项目群只能添加一个聊天机器人；聊天群可添加多个。".into()));
          }
      }
      let member_id = id();
@@ -457,22 +518,36 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
      .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
      if input.kind == "agent" {
          let adapter = input.adapter.unwrap_or_else(|| "mock".into());
-         let default_ws = crate::memory::default_agent_workspace(
-             std::path::Path::new(&group.workspace_path),
-             &member_id,
-         );
-         let _ = crate::memory::ensure_linlis_layout(
-             std::path::Path::new(&group.workspace_path),
-             Some(&member_id),
-         );
+         let default_ws = if group.workspace_path.trim().is_empty() {
+             None
+         } else {
+             let _ = crate::memory::ensure_linlis_layout(
+                 std::path::Path::new(&group.workspace_path),
+                 Some(&member_id),
+             );
+             Some(
+                 crate::memory::default_agent_workspace(
+                     std::path::Path::new(&group.workspace_path),
+                     &member_id,
+                 )
+                 .to_string_lossy()
+                 .into_owned(),
+             )
+         };
+         let model = input
+             .model
+             .as_deref()
+             .map(str::trim)
+             .filter(|s| !s.is_empty());
          conn.execute(
-             "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at,workspace_path,warm_status) VALUES(?1,?2,?3,'unknown',?4,?5,'cold')",
+             "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at,workspace_path,warm_status,model) VALUES(?1,?2,?3,'unknown',?4,?5,'cold',?6)",
              params![
                  member_id,
                  adapter,
                  input.executable_path.filter(|p| !p.trim().is_empty()),
                  created_at,
-                 default_ws.to_string_lossy().as_ref()
+                 default_ws,
+                 model
              ],
          )
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -489,15 +564,21 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
              .map(str::trim)
              .filter(|s| !s.is_empty())
              .ok_or_else(|| (StatusCode::BAD_REQUEST, "聊天机器人必须填写 API Key".into()))?;
+         let model = input
+             .model
+             .as_deref()
+             .map(str::trim)
+             .filter(|s| !s.is_empty())
+             .unwrap_or("deepseek-v4-flash");
          conn.execute(
-             "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at,api_key,warm_status) VALUES(?1,?2,NULL,'ready',?3,?4,'cold')",
-             params![member_id, adapter, created_at, api_key],
+             "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at,api_key,warm_status,model) VALUES(?1,?2,NULL,'ready',?3,?4,'cold',?5)",
+             params![member_id, adapter, created_at, api_key, model],
          )
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
      }
      let member = conn
          .query_row(
-             "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
+             "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
              params![member_id],
              member_from_row,
          )
@@ -561,6 +642,46 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct ArchiveBody {
+    archived: bool,
+}
+
+async fn put_group_archive_web(
+    State(state): State<Arc<AppState>>,
+    Path(group_id): Path<String>,
+    Json(body): Json<ArchiveBody>,
+) -> Result<Json<crate::models::Group>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    crate::db::set_group_archived(&conn, &group_id, body.archived)
+        .map(Json)
+        .map_err(|e| (StatusCode::NOT_FOUND, e))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MemberModelBody {
+    model: Option<String>,
+}
+
+async fn put_member_model_web(
+    State(state): State<Arc<AppState>>,
+    Path(member_id): Path<String>,
+    Json(body): Json<MemberModelBody>,
+) -> Result<Json<Member>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    crate::db::set_member_model(&conn, &member_id, body.model.as_deref())
+        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    conn.query_row(
+        &format!("{} WHERE m.id=?1", crate::db::MEMBER_SELECT),
+        params![member_id],
+        member_from_row,
+    )
+    .map(Json)
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct MemberWorkspaceBody {
     workspace_path: String,
 }
@@ -573,7 +694,7 @@ async fn put_member_workspace_web(
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     let member = conn
         .query_row(
-            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
+            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
             params![member_id],
             member_from_row,
         )
@@ -592,12 +713,45 @@ async fn put_member_workspace_web(
         .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
     let member = conn
         .query_row(
-            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
+            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
             params![member_id],
             member_from_row,
         )
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(member))
+}
+
+// === Messages (history pages) ===
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ListMessagesQuery {
+    before_created_at: Option<i64>,
+    before_id: Option<String>,
+    limit: Option<i64>,
+}
+
+async fn list_messages_web(
+    State(state): State<Arc<AppState>>,
+    Path(group_id): Path<String>,
+    axum::extract::Query(q): axum::extract::Query<ListMessagesQuery>,
+) -> Result<Json<crate::models::MessagePage>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let _ = db_get_group(&conn, &group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    let limit = q.limit.unwrap_or(50).clamp(1, 200);
+    let (before_created_at, before_id) = match (q.before_created_at, q.before_id.as_deref()) {
+        (Some(ts), Some(id)) if !id.is_empty() => (ts, id.to_string()),
+        _ => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                "beforeCreatedAt and beforeId are required for older pages".into(),
+            ));
+        }
+    };
+    let messages = get_messages_before(&conn, &group_id, before_created_at, &before_id, limit)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let has_more = messages.len() as i64 >= limit;
+    Ok(Json(crate::models::MessagePage { messages, has_more }))
 }
 
  // === Runs ===
@@ -1056,6 +1210,56 @@ async fn ops_deploy_canary_web() -> Result<Json<serde_json::Value>, (StatusCode,
     Ok(Json(json!({ "ok": true, "job": ops::ops_job_snapshot() })))
 }
 
+// === Roadmap orchestration ===
+
+async fn start_roadmap_item_web(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<crate::models::RoadmapOrchestration>, (StatusCode, String)> {
+    crate::orchestrator::start_roadmap_item(&state.db_path, &id, &state.tx, state.sched.clone())
+        .map(Json)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+}
+
+async fn pause_orchestration_web(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<crate::models::RoadmapOrchestration>, (StatusCode, String)> {
+    crate::orchestrator::pause_orchestration(&state.db_path, &id, &state.tx)
+        .map(Json)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+}
+
+async fn resume_orchestration_web(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<crate::models::RoadmapOrchestration>, (StatusCode, String)> {
+    crate::orchestrator::resume_orchestration(&state.db_path, &id, &state.tx, state.sched.clone())
+        .map(Json)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+}
+
+async fn cancel_orchestration_web(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<crate::models::RoadmapOrchestration>, (StatusCode, String)> {
+    crate::orchestrator::cancel_orchestration(&state.db_path, &id, &state.tx)
+        .map(Json)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+}
+
+async fn list_orchestrations_web(
+    State(state): State<Arc<AppState>>,
+    Path(group_id): Path<String>,
+) -> Result<Json<Vec<crate::models::RoadmapOrchestration>>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    crate::orchestrator::ensure_orchestrations_table(&conn)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    crate::orchestrator::list_orchestrations(&conn, &group_id)
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
+
 pub fn build_router(state: Arc<AppState>) -> Router {
     let auth_routes = Router::new()
         .route("/api/auth/register", post(register))
@@ -1069,6 +1273,8 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/api/groups/{id}", get(get_group))
         .route("/api/groups/{id}/announcement", get(get_announcement_web).put(put_announcement_web))
         .route("/api/groups/{id}/workspace", put(put_workspace_web))
+        .route("/api/groups/{id}/archive", put(put_group_archive_web))
+        .route("/api/members/{member_id}/model", put(put_member_model_web))
         .route("/api/fs/list", get(list_server_dir_web))
         .route("/api/ops/release-status", get(ops_release_status_web))
         .route("/api/ops/job", get(ops_job_web))
@@ -1081,6 +1287,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
          .route("/api/groups/{group_id}/admin", put(set_admin_web))
          // Messages
         .route("/api/messages", post(send_message_web))
+        .route("/api/groups/{group_id}/messages", get(list_messages_web))
          // Runs
          .route("/api/groups/{group_id}/runs", get(list_runs_web))
          .route("/api/runs/{run_id}/cancel", post(cancel_run_web))
@@ -1098,6 +1305,11 @@ pub fn build_router(state: Arc<AppState>) -> Router {
          .route("/api/roadmap-items", post(create_roadmap_item_web))
          .route("/api/roadmap-items/{id}", put(update_roadmap_item_web))
          .route("/api/roadmap-items/{id}", delete(delete_roadmap_item_web))
+         .route("/api/roadmap-items/{id}/start", post(start_roadmap_item_web))
+         .route("/api/roadmap-orchestrations/{id}/pause", post(pause_orchestration_web))
+         .route("/api/roadmap-orchestrations/{id}/resume", post(resume_orchestration_web))
+         .route("/api/roadmap-orchestrations/{id}/cancel", post(cancel_orchestration_web))
+         .route("/api/groups/{group_id}/roadmap-orchestrations", get(list_orchestrations_web))
          // PM: Features
          .route("/api/groups/{group_id}/features", get(list_features_web))
          .route("/api/features", post(create_feature_web))

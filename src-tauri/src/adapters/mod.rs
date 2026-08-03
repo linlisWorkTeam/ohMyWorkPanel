@@ -3,6 +3,7 @@ mod claude;
 mod codex;
 mod cursor;
 mod mock;
+pub mod models;
 mod openclaw;
 mod opencode;
 pub mod parse;
@@ -107,14 +108,19 @@ impl AdapterKind {
             .to_string())
     }
 
-    pub fn build_args(self, prompt: &str, session_id: Option<&str>) -> Vec<String> {
+    pub fn build_args(
+        self,
+        prompt: &str,
+        session_id: Option<&str>,
+        model: Option<&str>,
+    ) -> Vec<String> {
         match self {
             Self::Mock => Vec::new(),
-            Self::Codex => codex::build_args(prompt),
-            Self::ClaudeCode => claude::build_args(prompt),
-            Self::OpenCode => opencode::build_args(prompt),
-            Self::OpenClaw => openclaw::build_args(prompt, session_id),
-            Self::Cursor => cursor::build_args(prompt, session_id),
+            Self::Codex => codex::build_args(prompt, model),
+            Self::ClaudeCode => claude::build_args(prompt, model),
+            Self::OpenCode => opencode::build_args(prompt, model),
+            Self::OpenClaw => openclaw::build_args(prompt, session_id, model),
+            Self::Cursor => cursor::build_args(prompt, session_id, model),
         }
     }
 
@@ -216,6 +222,7 @@ pub async fn run_streaming<F, Fut>(
     workspace: &Path,
     prompt: &str,
     session_id: Option<&str>,
+    model: Option<&str>,
     timeout_secs: u64,
     token: &Arc<AtomicBool>,
     mut on_delta: F,
@@ -234,7 +241,7 @@ where
     let mut command = prepare_command(executable);
     command
         .current_dir(workspace)
-        .args(kind.build_args(prompt, session_id))
+        .args(kind.build_args(prompt, session_id, model))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -258,20 +265,61 @@ where
     let mut lines = BufReader::new(stdout).lines();
     let started = Instant::now();
     let mut captured_session: Option<String> = None;
+    // OpenClaw `--json` often emits one pretty-printed object across many lines.
+    // Buffer until a full JSON value parses; never echo raw fragments into chat.
+    let mut openclaw_buf = String::new();
     loop {
         tokio::select! {
             result = lines.next_line() => match result {
                 Ok(Some(line)) => {
-                    let event = kind.parse_event(&line);
-                    if let Some(id) = event.session_id {
-                        captured_session = Some(id);
-                    }
-                    if !event.text.is_empty() {
-                        let replace = event.mode == DeltaMode::Replace;
-                        on_delta(event.channel, event.text, replace).await?;
+                    if kind == AdapterKind::OpenClaw {
+                        if !openclaw_buf.is_empty() {
+                            openclaw_buf.push('\n');
+                        }
+                        openclaw_buf.push_str(&line);
+                        let trimmed = openclaw_buf.trim();
+                        if trimmed.is_empty() {
+                            continue;
+                        }
+                        if serde_json::from_str::<serde_json::Value>(trimmed).is_err() {
+                            continue;
+                        }
+                        let event = kind.parse_event(trimmed);
+                        openclaw_buf.clear();
+                        if let Some(id) = event.session_id {
+                            captured_session = Some(id);
+                        }
+                        if !event.text.is_empty() {
+                            let replace = event.mode == DeltaMode::Replace;
+                            on_delta(event.channel, event.text, replace).await?;
+                        }
+                    } else {
+                        let event = kind.parse_event(&line);
+                        if let Some(id) = event.session_id {
+                            captured_session = Some(id);
+                        }
+                        if !event.text.is_empty() {
+                            let replace = event.mode == DeltaMode::Replace;
+                            on_delta(event.channel, event.text, replace).await?;
+                        }
                     }
                 }
-                Ok(None) => break,
+                Ok(None) => {
+                    if kind == AdapterKind::OpenClaw {
+                        let trimmed = openclaw_buf.trim();
+                        if !trimmed.is_empty() {
+                            let event = kind.parse_event(trimmed);
+                            if let Some(id) = event.session_id {
+                                captured_session = Some(id);
+                            }
+                            if !event.text.is_empty() {
+                                let replace = event.mode == DeltaMode::Replace;
+                                on_delta(event.channel, event.text, replace).await?;
+                            }
+                        }
+                    }
+                    break;
+                }
                 Err(error) => return Err(format!("读取 Agent 输出失败：{error}")),
             },
             _ = sleep(Duration::from_millis(200)) => {
@@ -308,19 +356,23 @@ mod tests {
     #[test]
     fn build_args_match_cli_contracts() {
         assert_eq!(
-            AdapterKind::Codex.build_args("do work", None),
+            AdapterKind::Codex.build_args("do work", None, None),
             vec!["exec", "--json", "--skip-git-repo-check", "do work"]
         );
         assert_eq!(
-            AdapterKind::ClaudeCode.build_args("do work", None),
+            AdapterKind::Codex.build_args("do work", None, Some("o3")),
+            vec!["exec", "--json", "--skip-git-repo-check", "-m", "o3", "do work"]
+        );
+        assert_eq!(
+            AdapterKind::ClaudeCode.build_args("do work", None, None),
             vec!["-p", "--output-format", "stream-json", "--verbose", "do work"]
         );
         assert_eq!(
-            AdapterKind::OpenCode.build_args("do work", None),
+            AdapterKind::OpenCode.build_args("do work", None, None),
             vec!["run", "do work", "--format", "json"]
         );
         assert_eq!(
-            AdapterKind::Cursor.build_args("do work", None),
+            AdapterKind::Cursor.build_args("do work", None, None),
             vec![
                 "--trust",
                 "-p",
@@ -331,11 +383,13 @@ mod tests {
             ]
         );
         assert_eq!(
-            AdapterKind::Cursor.build_args("do work", Some("chat-abc")),
+            AdapterKind::Cursor.build_args("do work", Some("chat-abc"), Some("gpt-5")),
             vec![
                 "--trust",
                 "--resume",
                 "chat-abc",
+                "--model",
+                "gpt-5",
                 "-p",
                 "do work",
                 "--output-format",
@@ -344,7 +398,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            AdapterKind::OpenClaw.build_args("do work", None),
+            AdapterKind::OpenClaw.build_args("do work", None, None),
             vec![
                 "agent",
                 "--agent",
@@ -355,7 +409,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            AdapterKind::OpenClaw.build_args("do work", Some("sess-1")),
+            AdapterKind::OpenClaw.build_args("do work", Some("sess-1"), None),
             vec![
                 "agent",
                 "--session-id",

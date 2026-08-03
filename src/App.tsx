@@ -1,6 +1,6 @@
 ﻿import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { FormEvent, KeyboardEvent, memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { FormEvent, KeyboardEvent, memo, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { api, getAuthToken, onUnauthorized, requiresAuth, setAuthToken } from "./api";
 import {
   agentReplyDefaultOpen,
@@ -10,6 +10,20 @@ import {
 } from "./chatUi";
 import { currentMentionQuery, findMentionedMemberIds } from "./mentions";
 import { appendChannelDelta, hasRenderableContent, parseMessageContent } from "./messageContent";
+import { defaultModelForAdapter, modelsForAdapter } from "./agentModels";
+import { chatbotSlotTaken } from "./memberForm";
+import { markdownToHtml } from "./markdownLite";
+import { isIgnorableWsKind, shouldResyncAfterWsEvent } from "./realtimeWs";
+import {
+  INITIAL_VISIBLE_MESSAGES,
+  OLDER_PAGE_SIZE,
+  mergeHotWithOlder,
+  nextVisibleCount,
+  prependOlderMessages,
+  shouldLoadOlderOnScroll,
+  sliceVisibleMessages,
+} from "./messageHistory";
+import { loadSendKeyMode, saveSendKeyMode, sendKeyHint, shouldSendOnKey, type SendKeyMode } from "./sendKey";
 import type { ChatEvent, Group, GroupState, Member, PresetRole, RuntimeSettings, TaskRun } from "./types";
 import { ExperiencePanel } from "./ExperiencePanel";
 import { LogsPanel } from "./LogsPanel";
@@ -25,11 +39,12 @@ type NewMember = {
   executablePath: string;
   chatbotProvider: "opencode-go" | "deepseek";
   apiKey: string;
+  model: string;
 };
 type Session = "checking" | "login" | "ready";
 const emptyMember: NewMember = {
   kind: "agent", displayName: "", roleDescription: "", adapter: "mock", executablePath: "",
-  chatbotProvider: "opencode-go", apiKey: "",
+  chatbotProvider: "opencode-go", apiKey: "", model: "",
 };
 const PHASE_LABEL: Record<string, string> = {
   queued: "排队", starting: "启动", preparing: "准备", cli_spawn: "拉起 CLI",
@@ -61,6 +76,9 @@ export function App() {
   const [rightPanelTab, setRightPanelTab] = useState<"members" | "experiences" | "logs">("members");
   const [mainView, setMainView] = useState<"chat" | "project">("chat");
   const [workspacePath, setWorkspacePath] = useState("/AI/LinlisWorkPanel");
+  const [createGroupKind, setCreateGroupKind] = useState<"project" | "chat">("project");
+  const [showArchived, setShowArchived] = useState(false);
+  const [sendKeyMode, setSendKeyMode] = useState<SendKeyMode>(() => loadSendKeyMode());
   const [showAddMember, setShowAddMember] = useState(false);
   const [newMember, setNewMember] = useState<NewMember>(emptyMember);
   const [ocrRunning, setOcrRunning] = useState(false);
@@ -79,6 +97,10 @@ export function App() {
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const currentGroupIdRef = useRef<string | undefined>(undefined);
   const [showJumpBottom, setShowJumpBottom] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_MESSAGES);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasMoreOlder, setHasMoreOlder] = useState(false);
+  const loadingOlderRef = useRef(false);
   currentGroupIdRef.current = current?.group.id;
 
   const scrollMessagesToBottom = (force = false) => {
@@ -97,13 +119,67 @@ export function App() {
   const refresh = async (groupId = current?.group.id) => {
     if (!groupId) return;
     const state = await api.getGroupState(groupId);
-    setCurrent(state);
+    setCurrent((prev) => {
+      if (!prev || prev.group.id !== state.group.id) {
+        setVisibleCount(INITIAL_VISIBLE_MESSAGES);
+        setHasMoreOlder(Boolean(state.messagesHasMore));
+        return state;
+      }
+      const merged = mergeHotWithOlder(prev.messages, state.messages);
+      setHasMoreOlder(Boolean(state.messagesHasMore));
+      return { ...state, messages: merged };
+    });
     setGroups((previous) => {
       const next = previous.some((group) => group.id === state.group.id)
         ? previous.map((group) => group.id === state.group.id ? state.group : group)
         : [state.group, ...previous];
       return next;
     });
+  };
+
+  const loadOlderMessages = async () => {
+    if (!current || loadingOlderRef.current) return;
+    const oldest = current.messages[0];
+    if (!oldest) return;
+    // First expand local hot buffer before hitting archive API.
+    if (visibleCount < current.messages.length) {
+      loadingOlderRef.current = true;
+      setVisibleCount((c) => nextVisibleCount(c, current.messages.length));
+      requestAnimationFrame(() => {
+        loadingOlderRef.current = false;
+      });
+      return;
+    }
+    if (!hasMoreOlder) return;
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    const list = messageListRef.current;
+    const prevHeight = list?.scrollHeight ?? 0;
+    const prevTop = list?.scrollTop ?? 0;
+    try {
+      const page = await api.listMessagesBefore(
+        current.group.id,
+        oldest.createdAt,
+        oldest.id,
+        OLDER_PAGE_SIZE,
+      );
+      setCurrent((prev) => {
+        if (!prev || prev.group.id !== current.group.id) return prev;
+        return { ...prev, messages: prependOlderMessages(prev.messages, page.messages) };
+      });
+      setHasMoreOlder(page.hasMore);
+      setVisibleCount((c) => c + page.messages.length);
+      requestAnimationFrame(() => {
+        const node = messageListRef.current;
+        if (!node) return;
+        node.scrollTop = node.scrollHeight - prevHeight + prevTop;
+      });
+    } catch (reason) {
+      setError(readError(reason));
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+    }
   };
 
   const goLogin = (message?: string | null) => {
@@ -174,6 +250,25 @@ export function App() {
     const unlisten = listen<ChatEvent>("chat-event", (event) => {
       const payload = event.payload;
       const activeGroupId = currentGroupIdRef.current;
+      if (isIgnorableWsKind(payload.kind)) return;
+      if (payload.kind === "orchestration_status") {
+        if (activeGroupId) {
+          void refresh(activeGroupId).catch((reason) => {
+            if (isUnauthorizedError(reason)) goLogin("登录已失效，请重新登录");
+            else setError(readError(reason));
+          });
+        }
+        return;
+      }
+      if (shouldResyncAfterWsEvent(payload.kind)) {
+        if (activeGroupId) {
+          void refresh(activeGroupId).catch((reason) => {
+            if (isUnauthorizedError(reason)) goLogin("登录已失效，请重新登录");
+            else setError(readError(reason));
+          });
+        }
+        return;
+      }
       const inCurrent = (previous: GroupState | null) =>
         !!previous && (!payload.groupId || payload.groupId === previous.group.id
           || (!!payload.runId && previous.runs.some((r) => r.id === payload.runId)));
@@ -284,12 +379,17 @@ export function App() {
     const near = isNearBottom(node.scrollTop, node.scrollHeight, node.clientHeight, BOTTOM_THRESHOLD_PX);
     stickToBottom.current = near;
     setShowJumpBottom(!near);
+    if (shouldLoadOlderOnScroll(node.scrollTop) && !loadingOlderRef.current) {
+      void loadOlderMessages();
+    }
   };
 
   const selectGroup = (group: Group) => {
     forceScrollGroupId.current = group.id;
     stickToBottom.current = true;
     setShowJumpBottom(false);
+    setVisibleCount(INITIAL_VISIBLE_MESSAGES);
+    setHasMoreOlder(false);
     setComposer("");
     setShowSidebar(false);
     setMainView("chat");
@@ -309,12 +409,17 @@ export function App() {
   }
 
   const members = current?.members ?? [];
+  const chatbotTaken = chatbotSlotTaken(current?.group, members);
+  const isChatGroup = current?.group.groupKind === "chat";
   const owner = current && members.find((member) => member.id === current.group.ownerMemberId);
   const activeMembers = members.filter((member) => member.isActive);
+  const addMemberKind = chatbotTaken && newMember.kind === "chatbot" ? "agent" : newMember.kind;
+  const activeGroups = groups.filter((g) => !g.archived);
+  const archivedGroups = groups.filter((g) => g.archived);
   const mentionSuggestions = mentionQuery === null ? [] : activeMembers.filter((member) => member.displayName.toLowerCase().includes(mentionQuery.toLowerCase())).slice(0, 8);
-  const MESSAGE_WINDOW = 200;
   const allMessages = current?.messages ?? [];
-  const visibleMessages = allMessages.length > MESSAGE_WINDOW ? allMessages.slice(-MESSAGE_WINDOW) : allMessages;
+  const visibleMessages = sliceVisibleMessages(allMessages, visibleCount);
+  const totalHint = current?.messagesTotal ?? allMessages.length;
 
   const createGroup = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -322,11 +427,32 @@ export function App() {
     try {
       const created = await api.createGroup({
         name: String(data.get("name") ?? ""),
-        workspacePath: workspacePath.trim(),
+        workspacePath: createGroupKind === "chat" ? "" : workspacePath.trim(),
         ownerName: String(data.get("ownerName") ?? ""),
-        presetRoles: selectedRoles.length > 0 ? selectedRoles : undefined,
+        presetRoles: createGroupKind === "project" && selectedRoles.length > 0 ? selectedRoles : undefined,
+        groupKind: createGroupKind,
       });
       setCurrent(created); setGroups((previous) => [created.group, ...previous]); setShowCreate(false); setError(null); setMainView("chat");
+      setCreateGroupKind("project");
+    } catch (reason) { setError(readError(reason)); }
+  };
+  const archiveGroup = async (group: Group, archived: boolean, event?: MouseEvent) => {
+    event?.stopPropagation();
+    try {
+      const updated = await api.setGroupArchived(group.id, archived);
+      setGroups((prev) => prev.map((g) => (g.id === updated.id ? { ...g, ...updated } : g)));
+      if (current?.group.id === updated.id) {
+        setCurrent((prev) => prev && ({ ...prev, group: { ...prev.group, ...updated } }));
+      }
+    } catch (reason) { setError(readError(reason)); }
+  };
+  const changeMemberModel = async (member: Member, model: string) => {
+    try {
+      const updated = await api.updateMemberModel(member.id, model || null);
+      setCurrent((prev) => {
+        if (!prev) return prev;
+        return { ...prev, members: prev.members.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)) };
+      });
     } catch (reason) { setError(readError(reason)); }
   };
   const handleOcr = async () => {
@@ -397,7 +523,10 @@ export function App() {
       if (event.key === "Tab" || event.key === "Enter") { event.preventDefault(); selectMention(mentionSuggestions[Math.min(mentionIndex, mentionSuggestions.length - 1)]); return; }
       if (event.key === "Escape") { event.preventDefault(); setComposer((value) => value.replace(/@([^\s@]*)$/u, "")); return; }
     }
-    if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); }
+    if (shouldSendOnKey(sendKeyMode, event.key, event.shiftKey, event.ctrlKey, event.metaKey)) {
+      event.preventDefault();
+      void send();
+    }
   };
   const selectMention = (member: Member) => setComposer((value) => value.replace(/@([^\s@]*)$/u, `@${member.displayName} `));
   const addMember = async (event: FormEvent<HTMLFormElement>) => {
@@ -412,6 +541,13 @@ export function App() {
         executablePath: newMember.kind === "agent" ? newMember.executablePath : undefined,
         chatbotProvider: newMember.kind === "chatbot" ? newMember.chatbotProvider : undefined,
         apiKey: newMember.kind === "chatbot" ? newMember.apiKey : undefined,
+        model: newMember.kind === "agent" || newMember.kind === "chatbot"
+          ? (newMember.model || defaultModelForAdapter(
+              newMember.kind === "chatbot"
+                ? (newMember.chatbotProvider === "deepseek" ? "chatbot-deepseek" : "chatbot-opencode-go")
+                : newMember.adapter,
+            ) || undefined)
+          : undefined,
       });
       setNewMember(emptyMember); setShowAddMember(false); await refresh();
     } catch (reason) { setError(readError(reason)); }
@@ -456,9 +592,31 @@ export function App() {
       <Brand />
       <div className="sidebar-heading"><span>群聊</span><button className="icon-button" onClick={() => setShowCreate(true)} aria-label="新建群聊">＋</button></div>
       <nav className="group-list">
-        {groups.map((group) => <button key={group.id} className={`group-item ${group.id === current?.group.id ? "selected" : ""}`} onClick={() => selectGroup(group)}>
-          <span className="group-avatar">{group.name.slice(0, 1)}</span><span className="group-name">{group.name}</span>
-        </button>)}
+        {activeGroups.map((group) => (
+          <div key={group.id} className={`group-item-row ${group.id === current?.group.id ? "selected" : ""}`}>
+            <button type="button" className="group-item" onClick={() => selectGroup(group)}>
+              <span className="group-avatar">{group.name.slice(0, 1)}</span>
+              <span className="group-name">{group.name}{group.groupKind === "chat" ? " · 聊" : ""}</span>
+            </button>
+            <button type="button" className="group-archive-btn" title="归档群组" aria-label="归档群组" onClick={(e) => void archiveGroup(group, true, e)}>−</button>
+          </div>
+        ))}
+        {archivedGroups.length > 0 && (
+          <div className="archived-section">
+            <button type="button" className="archived-toggle" onClick={() => setShowArchived((v) => !v)}>
+              {showArchived ? "▾" : "▸"} 已归档（{archivedGroups.length}）
+            </button>
+            {showArchived && archivedGroups.map((group) => (
+              <div key={group.id} className={`group-item-row archived ${group.id === current?.group.id ? "selected" : ""}`}>
+                <button type="button" className="group-item" onClick={() => selectGroup(group)}>
+                  <span className="group-avatar">{group.name.slice(0, 1)}</span>
+                  <span className="group-name">{group.name}</span>
+                </button>
+                <button type="button" className="group-archive-btn" title="取消归档" aria-label="取消归档" onClick={(e) => void archiveGroup(group, false, e)}>+</button>
+              </div>
+            ))}
+          </div>
+        )}
       </nav>
       <div className="sidebar-footer">
         <ThemeSwitcher />
@@ -475,17 +633,19 @@ export function App() {
             <div>
               <div className="group-title-row">
                 <h1>{current.group.name}</h1>
-                <div className="view-toggle" role="group" aria-label="主视图">
-                  <button type="button" className={mainView === "chat" ? "active" : ""} onClick={() => setMainView("chat")}>聊天</button>
-                  <button type="button" className={mainView === "project" ? "active" : ""} onClick={() => setMainView("project")}>项目</button>
-                </div>
+                {!isChatGroup && (
+                  <div className="view-toggle" role="group" aria-label="主视图">
+                    <button type="button" className={mainView === "chat" ? "active" : ""} onClick={() => setMainView("chat")}>聊天</button>
+                    <button type="button" className={mainView === "project" ? "active" : ""} onClick={() => setMainView("project")}>项目</button>
+                  </div>
+                )}
               </div>
-              <p>{activeMembers.length} 名成员 · 服务器工作区</p>
+              <p>{activeMembers.length} 名成员 · {isChatGroup ? "聊天群" : "项目群 · 服务器工作区"}</p>
             </div>
           </div>
           <button className="icon-button mobile-members" onClick={toggleMembers} aria-label="成员面板">成员</button>
         </header>
-        {mainView === "project" ? (
+        {!isChatGroup && mainView === "project" ? (
           <ProjectWorkflowView
             group={current.group}
             members={members}
@@ -502,9 +662,15 @@ export function App() {
         ) : <>
         <div className="message-list-shell">
         <div className="message-list" ref={messageListRef} onScroll={handleMessageScroll}>
-          {current.messages.length === 0 && <div className="empty-chat"><strong>{current.group.name}</strong><span>添加 Agent 后，在消息中输入 <code>@名称</code> 开始协作。</span><span className="empty-chat-sub">Enter 发送 · Shift+Enter 换行 · @ 触发成员菜单</span></div>}
-          {current.messages.length > MESSAGE_WINDOW && (
-            <div className="day-divider"><span>仅显示最近 {MESSAGE_WINDOW} 条（共 {current.messages.length}）</span></div>
+          {current.messages.length === 0 && <div className="empty-chat"><strong>{current.group.name}</strong><span>{isChatGroup ? "添加聊天机器人后，输入 @名称 开始对话。" : "添加 Agent 后，在消息中输入 @名称 开始协作。"}</span><span className="empty-chat-sub">{sendKeyHint(sendKeyMode)} · @ 触发成员菜单</span></div>}
+          {(hasMoreOlder || visibleCount < allMessages.length || loadingOlder) && (
+            <div className="day-divider history-load-hint">
+              <span>
+                {loadingOlder
+                  ? "加载更早消息…"
+                  : `上滑加载更早 · 显示 ${visibleMessages.length}/${totalHint}`}
+              </span>
+            </div>
           )}
           {visibleMessages.map((message, index) => {
             const prev = index > 0 ? visibleMessages[index - 1] : null;
@@ -553,10 +719,22 @@ export function App() {
               ))}
             </div>
           )}
-          <textarea ref={composerRef} value={composer} onChange={(event) => setComposer(event.target.value)} onKeyDown={composerKeyDown} onPaste={handlePaste} placeholder="发送消息，输入 @ 选择 Agent。Enter 发送，Shift + Enter 换行。" />
+          <textarea ref={composerRef} value={composer} onChange={(event) => setComposer(event.target.value)} onKeyDown={composerKeyDown} onPaste={handlePaste} placeholder={`发送消息，输入 @ 选择成员。${sendKeyHint(sendKeyMode)}`} />
           <div className="composer-actions">
-            <span>{sending ? "发送中…" : "Agent 在服务器工作目录中运行"}</span>
-            <span>
+            <span>{sending ? "发送中…" : (isChatGroup ? "聊天模式" : "Agent 在服务器工作目录中运行")}</span>
+            <span className="composer-actions-right">
+              <button
+                type="button"
+                className="quiet-button send-key-toggle"
+                title="切换发送快捷键"
+                onClick={() => {
+                  const next: SendKeyMode = sendKeyMode === "enter" ? "ctrlEnter" : "enter";
+                  setSendKeyMode(next);
+                  saveSendKeyMode(next);
+                }}
+              >
+                {sendKeyMode === "enter" ? "↵ Enter" : "⌃↵ Ctrl"}
+              </button>
               <button className="ocr-button" disabled={ocrRunning || ocrPasting} title={ocrPasting ? "正在识别粘贴的图片…" : "从图片识别文字"} onClick={() => void handleOcr()}>{ocrPasting ? "…" : "📷"}</button>
               <button className="send-button" disabled={!composer.trim() || sending} onClick={() => void send()}>{sending ? "发送中" : "发送"}</button>
             </span>
@@ -570,7 +748,7 @@ export function App() {
       <header>
         <div className="pm-tab-bar">
           <button className={`pm-tab-btn ${rightPanelTab === "members" ? "active" : ""}`} onClick={() => setRightPanelTab("members")}>群成员</button>
-          <button className={`pm-tab-btn`} onClick={() => { setMainView("project"); }}>项目管理</button>
+          {!isChatGroup && <button className={`pm-tab-btn`} onClick={() => { setMainView("project"); }}>项目管理</button>}
           <button className={`pm-tab-btn ${rightPanelTab === "experiences" ? "active" : ""}`} onClick={() => setRightPanelTab("experiences")}>经验</button>
           <button className={`pm-tab-btn ${rightPanelTab === "logs" ? "active" : ""}`} onClick={() => setRightPanelTab("logs")}>日志</button>
         </div>
@@ -584,40 +762,90 @@ export function App() {
         )}
         <div className="member-list">{members.map((member) => {
           const responding = current.runs.some((run) => run.agentMemberId === member.id && (run.status === "queued" || run.status === "running"));
-          return <MemberRow key={member.id} member={member} group={current.group} responding={responding} detecting={detecting === member.id} onAdmin={setAdmin} onRemove={removeMember} onDetect={detect} />;
+          return <MemberRow key={member.id} member={member} group={current.group} responding={responding} detecting={detecting === member.id} onAdmin={setAdmin} onRemove={removeMember} onDetect={detect} onModel={(m, model) => void changeMemberModel(m, model)} />;
         })}</div>
         {showAddMember ? <form className="add-member-form" onSubmit={addMember}>
-          <select value={newMember.kind} onChange={(event) => setNewMember((value) => ({ ...value, kind: event.target.value as NewMember["kind"] }))}>
+          <select
+            value={addMemberKind}
+            onChange={(event) => {
+              const kind = event.target.value as NewMember["kind"];
+              if (kind === "chatbot" && chatbotTaken) return;
+              setNewMember((value) => ({ ...value, kind }));
+            }}
+          >
             <option value="agent">Agent</option>
             <option value="user">用户</option>
-            <option value="chatbot">聊天机器人</option>
+            <option value="chatbot" disabled={chatbotTaken}>
+              {chatbotTaken ? "聊天机器人（项目群已有）" : "聊天机器人"}
+            </option>
           </select>
+          {chatbotTaken && (
+            <p className="form-hint">项目群限 1 个聊天机器人；聊天群可添加多个。</p>
+          )}
           <input autoFocus value={newMember.displayName} onChange={(event) => setNewMember((value) => ({ ...value, displayName: event.target.value }))} placeholder="成员名称" required />
-          <input value={newMember.roleDescription} onChange={(event) => setNewMember((value) => ({ ...value, roleDescription: event.target.value }))} placeholder={newMember.kind === "agent" ? "职责，例如：代码审查" : newMember.kind === "chatbot" ? "机器人说明（可选）" : "成员说明（可选）"} />
-          {newMember.kind === "agent" && <><select value={newMember.adapter} onChange={(event) => setNewMember((value) => ({ ...value, adapter: event.target.value }))}><option value="mock">模拟 Agent（推荐体验）</option><option value="codex">Codex CLI</option><option value="openclaw">OpenClaw</option><option value="cursor">Cursor CLI（agent/cursor-agent）</option><option value="claude-code">Claude Code</option><option value="opencode">OpenCode</option></select><input value={newMember.executablePath} onChange={(event) => setNewMember((value) => ({ ...value, executablePath: event.target.value }))} placeholder="可执行文件路径（可选）" /></>}
-          {newMember.kind === "chatbot" && <>
-            <select value={newMember.chatbotProvider} onChange={(event) => setNewMember((value) => ({ ...value, chatbotProvider: event.target.value as NewMember["chatbotProvider"] }))}>
+          <input value={newMember.roleDescription} onChange={(event) => setNewMember((value) => ({ ...value, roleDescription: event.target.value }))} placeholder={addMemberKind === "agent" ? "职责，例如：代码审查" : addMemberKind === "chatbot" ? "机器人说明（可选）" : "成员说明（可选）"} />
+          {addMemberKind === "agent" && <>
+            <select value={newMember.adapter} onChange={(event) => {
+              const adapter = event.target.value;
+              setNewMember((value) => ({ ...value, adapter, model: defaultModelForAdapter(adapter) }));
+            }}>
+              <option value="mock">模拟 Agent（推荐体验）</option>
+              <option value="codex">Codex CLI</option>
+              <option value="openclaw">OpenClaw</option>
+              <option value="cursor">Cursor CLI（agent/cursor-agent）</option>
+              <option value="claude-code">Claude Code</option>
+              <option value="opencode">OpenCode</option>
+            </select>
+            {modelsForAdapter(newMember.adapter).length > 0 && (
+              <select value={newMember.model || defaultModelForAdapter(newMember.adapter)} onChange={(event) => setNewMember((value) => ({ ...value, model: event.target.value }))}>
+                {modelsForAdapter(newMember.adapter).map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            )}
+            <input value={newMember.executablePath} onChange={(event) => setNewMember((value) => ({ ...value, executablePath: event.target.value }))} placeholder="可执行文件路径（可选）" />
+          </>}
+          {addMemberKind === "chatbot" && <>
+            <select value={newMember.chatbotProvider} onChange={(event) => {
+              const chatbotProvider = event.target.value as NewMember["chatbotProvider"];
+              const adapter = chatbotProvider === "deepseek" ? "chatbot-deepseek" : "chatbot-opencode-go";
+              setNewMember((value) => ({ ...value, chatbotProvider, model: defaultModelForAdapter(adapter) }));
+            }}>
               <option value="opencode-go">OpenCode Go</option>
               <option value="deepseek">DeepSeek 官方</option>
             </select>
+            <select
+              value={newMember.model || defaultModelForAdapter(newMember.chatbotProvider === "deepseek" ? "chatbot-deepseek" : "chatbot-opencode-go")}
+              onChange={(event) => setNewMember((value) => ({ ...value, model: event.target.value }))}
+            >
+              {modelsForAdapter(newMember.chatbotProvider === "deepseek" ? "chatbot-deepseek" : "chatbot-opencode-go").map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
             <input type="password" autoComplete="off" value={newMember.apiKey} onChange={(event) => setNewMember((value) => ({ ...value, apiKey: event.target.value }))} placeholder="API Key（仅存服务器，不进 git）" required />
-            <p className="form-hint">模型固定 deepseek-v4-flash；每群仅可添加一个聊天机器人。</p>
+            <p className="form-hint">{isChatGroup ? "聊天群可添加多个机器人。" : "项目群仅可添加一个聊天机器人。"}</p>
           </>}
           <div><button type="button" className="quiet-button" onClick={() => setShowAddMember(false)}>取消</button><button type="submit">添加</button></div>
-        </form> : <button className="add-member-button" onClick={() => setShowAddMember(true)}>＋ 添加成员</button>}
+        </form> : <button className="add-member-button" onClick={() => { setNewMember(emptyMember); setShowAddMember(true); }}>＋ 添加成员</button>}
       </> : rightPanelTab === "experiences" ? <ExperiencePanel groupId={current.group.id} members={members} ownerId={current.group.ownerMemberId} onError={(msg) => setError(msg)} />
       : <LogsPanel onError={(msg) => setError(msg)} />}
     </aside>}
 
     {showCreate && (
-      <Modal title="新建协作群" onClose={() => groups.length > 0 && setShowCreate(false)}>
+      <Modal title="新建群组" onClose={() => groups.length > 0 && setShowCreate(false)}>
         <form className="modal-form" onSubmit={createGroup}>
-          <label>群名称<input name="name" required placeholder="例如：官网改版" /></label>
-          <label>群主名称<input name="ownerName" required defaultValue="我" /></label>
-          <label>服务器工作目录
-            <ServerPathPicker value={workspacePath} onChange={setWorkspacePath} onError={setError} />
+          <label>群类型
+            <select value={createGroupKind} onChange={(e) => setCreateGroupKind(e.target.value as "project" | "chat")}>
+              <option value="chat">聊天群（多机器人，无项目功能）</option>
+              <option value="project">项目群（工作区 + 路线图/编排）</option>
+            </select>
           </label>
-          {presetRoles.length > 0 && (
+          <label>群名称<input name="name" required placeholder={createGroupKind === "chat" ? "例如：日常闲聊" : "例如：官网改版"} /></label>
+          <label>群主名称<input name="ownerName" required defaultValue="我" /></label>
+          {createGroupKind === "project" && (
+            <label>服务器工作目录
+              <ServerPathPicker value={workspacePath} onChange={setWorkspacePath} onError={setError} />
+            </label>
+          )}
+          {createGroupKind === "project" && presetRoles.length > 0 && (
             <div className="preset-roles">
               <span className="preset-roles-label">预置 Agent 角色</span>
               <div className="preset-roles-grid">
@@ -637,8 +865,8 @@ export function App() {
               </div>
             </div>
           )}
-          <p className="form-hint">必须选择服务器上已存在的绝对路径；所有 Agent 任务均在该目录执行。</p>
-          <button className="primary-wide" type="submit">创建群聊</button>
+          <p className="form-hint">{createGroupKind === "chat" ? "聊天群无需工作区，创建后可添加多个聊天机器人。" : "必须选择服务器上已存在的绝对路径；所有 Agent 任务均在该目录执行。"}</p>
+          <button className="primary-wide" type="submit">创建{createGroupKind === "chat" ? "聊天群" : "项目群"}</button>
         </form>
       </Modal>
     )}
@@ -711,7 +939,7 @@ const MessageBubble = memo(function MessageBubble({ message, members, runs, owne
 function MessagePartsBody({ content, streaming }: { content: string; streaming: boolean }) {
   const doc = parseMessageContent(content);
   if (!doc) {
-    return <>{content}</>;
+    return <MarkdownBlock text={content} />;
   }
   const thinking = doc.parts.find((part) => part.channel === "thinking" && part.text.trim());
   const artifact = doc.parts.find((part) => part.channel === "artifact" && part.text.trim());
@@ -719,21 +947,30 @@ function MessagePartsBody({ content, streaming }: { content: string; streaming: 
   return (
     <div className="message-parts">
       {thinking && (
-        <details className="part-thinking">
+        <details className="part-thinking" open={streaming || undefined}>
           <summary>思考过程{streaming ? "（生成中）" : ""}</summary>
           <pre>{thinking.text}</pre>
         </details>
       )}
       {artifact && (
-        <details className="part-artifact">
+        <details className="part-artifact" open={streaming || undefined}>
           <summary>中间产物{streaming ? "（生成中）" : ""}</summary>
           <pre>{artifact.text}</pre>
         </details>
       )}
       {finals.map((part, index) => (
-        <div key={`final-${index}`} className="part-final">{part.text}</div>
+        <MarkdownBlock key={`final-${index}`} text={part.text} />
       ))}
     </div>
+  );
+}
+
+function MarkdownBlock({ text }: { text: string }) {
+  return (
+    <div
+      className="part-final md-body"
+      dangerouslySetInnerHTML={{ __html: markdownToHtml(text) }}
+    />
   );
 }
 
@@ -746,12 +983,17 @@ function TypingIndicator({ label }: { label: string }) {
   );
 }
 
-function MemberRow({ member, group, responding, detecting, onAdmin, onRemove, onDetect }: { member: Member; group: Group; responding?: boolean; detecting?: boolean; onAdmin: (id: string | null) => void; onRemove: (member: Member) => void; onDetect: (member: Member) => void }) {
+function MemberRow({ member, group, responding, detecting, onAdmin, onRemove, onDetect, onModel }: {
+  member: Member; group: Group; responding?: boolean; detecting?: boolean;
+  onAdmin: (id: string | null) => void; onRemove: (member: Member) => void; onDetect: (member: Member) => void;
+  onModel: (member: Member, model: string) => void;
+}) {
   const isAdmin = group.adminMemberId === member.id;
+  const modelOptions = modelsForAdapter(member.adapter);
   const statusText = member.kind === "agent"
     ? `${member.adapter} · ${detecting ? "检测中…" : responding ? "生成回复中" : member.runtimeStatus === "ready" ? "已就绪" : member.runtimeStatus === "unavailable" ? "不可用" : "待检测"}${member.keepAlive ? ` · 保活${member.warmStatus ? `(${member.warmStatus})` : ""}` : ""}`
     : member.kind === "chatbot"
-      ? `${member.adapter ?? "chatbot"} · deepseek-v4-flash · ${member.apiKeySet ? "已配置 Key" : "缺 Key"}`
+      ? `${member.adapter ?? "chatbot"} · ${member.model || "deepseek-v4-flash"} · ${member.apiKeySet ? "已配置 Key" : "缺 Key"}`
       : member.roleDescription || "本地成员";
   return (
     <div className={`member-row ${member.isActive ? "" : "inactive"} ${responding ? "is-responding" : ""}`}>
@@ -768,6 +1010,16 @@ function MemberRow({ member, group, responding, detecting, onAdmin, onRemove, on
           {statusText}
           {member.tags ? ` · 🏷 ${member.tags}` : ""}
         </span>
+        {modelOptions.length > 0 && (member.kind === "agent" || member.kind === "chatbot") && (
+          <select
+            className="member-model-select"
+            value={member.model || modelOptions[0]}
+            onChange={(e) => onModel(member, e.target.value)}
+            title="切换模型"
+          >
+            {modelOptions.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+        )}
       </div>
       <div className="member-actions">
         {member.kind === "agent" && (

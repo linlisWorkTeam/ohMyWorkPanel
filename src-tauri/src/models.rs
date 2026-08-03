@@ -23,6 +23,15 @@ pub struct Group {
     pub announcement: String,
     #[serde(default)]
     pub announcement_updated_at: Option<i64>,
+    /// `project` (default) or `chat`
+    #[serde(default = "default_group_kind")]
+    pub group_kind: String,
+    #[serde(default)]
+    pub archived: bool,
+}
+
+fn default_group_kind() -> String {
+    "project".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,6 +58,9 @@ pub struct Member {
     pub keep_alive: bool,
     #[serde(default)]
     pub warm_status: Option<String>,
+    /// Preferred model id for this agent/chatbot (empty = provider default).
+    #[serde(default)]
+    pub model: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -93,6 +105,19 @@ pub struct GroupState {
     pub members: Vec<Member>,
     pub messages: Vec<Message>,
     pub runs: Vec<TaskRun>,
+    /// True when older messages exist beyond the hot window (default 100).
+    #[serde(default)]
+    pub messages_has_more: bool,
+    /// Total message count in group (for UI hints).
+    #[serde(default)]
+    pub messages_total: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MessagePage {
+    pub messages: Vec<Message>,
+    pub has_more: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -108,6 +133,8 @@ pub struct CreateGroupInput {
     pub workspace_path: String,
     pub owner_name: String,
     pub preset_roles: Option<Vec<String>>,
+    /// `project` | `chat` (default project)
+    pub group_kind: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -123,6 +150,8 @@ pub struct AddMemberInput {
     /// chatbot provider: opencode-go | deepseek
     pub chatbot_provider: Option<String>,
     pub api_key: Option<String>,
+    /// Optional model override at create time
+    pub model: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -217,6 +246,21 @@ pub struct ExecutionContext {
      pub sort_order: i64,
      pub created_at: i64,
  }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoadmapOrchestration {
+    pub id: String,
+    pub group_id: String,
+    pub roadmap_item_id: String,
+    pub status: String,
+    pub cursor_feature_id: Option<String>,
+    pub cursor_task_id: Option<String>,
+    pub current_run_id: Option<String>,
+    pub error_message: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
  
  #[derive(Debug, Deserialize)]
  #[serde(rename_all = "camelCase")]

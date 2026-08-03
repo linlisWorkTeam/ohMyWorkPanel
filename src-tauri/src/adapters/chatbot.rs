@@ -39,14 +39,19 @@ pub async fn run_chatbot_completion(
     user: &str,
     max_tokens: u32,
     token: &Arc<AtomicBool>,
+    model: Option<&str>,
 ) -> AppResult<String> {
     if token.load(Ordering::SeqCst) {
         return Err("已取消".into());
     }
     let base = provider_base_url(provider)?;
     let url = format!("{base}/chat/completions");
+    let model_id = model
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(CHATBOT_MODEL);
     let body = json!({
-        "model": CHATBOT_MODEL,
+        "model": model_id,
         "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": user}

@@ -44,6 +44,11 @@ pub fn parse_agent_event(line: &str) -> ParsedEvent {
         .unwrap_or("")
         .to_ascii_lowercase();
 
+    // OpenClaw `agent --json` final envelope: { runId, status, result: { payloads:[{text}] } }
+    if let Some(event) = parse_openclaw_envelope(&value, session_id.clone()) {
+        return event;
+    }
+
     // Cursor stream-json: never echo system/user envelopes into the agent bubble.
     if type_hint == "system" || type_hint == "user" {
         return ParsedEvent {
@@ -52,6 +57,83 @@ pub fn parse_agent_event(line: &str) -> ParsedEvent {
             session_id,
             mode: DeltaMode::Append,
         };
+    }
+
+    // Codex CLI `exec --json` (JSONL): coarse events, not token deltas.
+    // See: thread/turn lifecycle + item.completed with nested item.text.
+    if type_hint == "thread.started"
+        || type_hint == "turn.completed"
+        || type_hint == "turn.failed"
+    {
+        return ParsedEvent {
+            channel: "final".into(),
+            text: String::new(),
+            session_id,
+            mode: DeltaMode::Append,
+        };
+    }
+    if type_hint == "turn.started" {
+        return ParsedEvent {
+            channel: "thinking".into(),
+            text: "Codex 回合已开始…\n".into(),
+            session_id,
+            mode: DeltaMode::Append,
+        };
+    }
+    if type_hint.starts_with("item.") {
+        if let Some(item) = value.get("item") {
+            let item_type = item
+                .get("type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            let text = item
+                .get("text")
+                .and_then(|v| v.as_str())
+                .map(str::to_string)
+                .or_else(|| extract_text(item))
+                .unwrap_or_default();
+            if text.is_empty() && !type_hint.ends_with("completed") {
+                return empty_event();
+            }
+            if item_type.contains("reason") || item_type == "thinking" {
+                return ParsedEvent {
+                    channel: "thinking".into(),
+                    text,
+                    session_id,
+                    mode: DeltaMode::Append,
+                };
+            }
+            if item_type.contains("tool")
+                || item_type.contains("command")
+                || item_type == "file_change"
+            {
+                return ParsedEvent {
+                    channel: "artifact".into(),
+                    text: if text.is_empty() {
+                        format!("[{item_type}]")
+                    } else {
+                        text
+                    },
+                    session_id,
+                    mode: DeltaMode::Append,
+                };
+            }
+            // agent_message / message / default → final answer
+            if type_hint.ends_with("completed") || !text.is_empty() {
+                return ParsedEvent {
+                    channel: "final".into(),
+                    text,
+                    session_id,
+                    mode: if type_hint.ends_with("completed") {
+                        DeltaMode::Replace
+                    } else {
+                        DeltaMode::Append
+                    },
+                };
+            }
+        }
+        return empty_event();
     }
 
     if type_hint == "result" {
@@ -136,6 +218,56 @@ fn empty_event() -> ParsedEvent {
         session_id: None,
         mode: DeltaMode::Append,
     }
+}
+
+/// OpenClaw CLI JSON result object (pretty or compact).
+fn parse_openclaw_envelope(value: &Value, session_id: Option<String>) -> Option<ParsedEvent> {
+    let has_run_id = value.get("runId").is_some() || value.get("run_id").is_some();
+    let result = value.get("result")?;
+    let payloads = result.get("payloads").and_then(|v| v.as_array());
+    if !has_run_id && payloads.is_none() {
+        return None;
+    }
+    // Prefer payloads[].text; ignore huge meta/systemPromptReport.
+    let mut texts = Vec::new();
+    if let Some(items) = payloads {
+        for item in items {
+            if let Some(t) = item.get("text").and_then(|v| v.as_str()) {
+                if !t.is_empty() {
+                    texts.push(t.to_string());
+                }
+            }
+        }
+    }
+    let text = if texts.is_empty() {
+        // Fallbacks without dumping the whole envelope.
+        result
+            .get("text")
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+            .or_else(|| {
+                value
+                    .get("summary")
+                    .and_then(|v| v.as_str())
+                    .filter(|s| *s != "completed" && *s != "ok")
+                    .map(str::to_string)
+            })
+            .unwrap_or_default()
+    } else {
+        texts.join("\n\n")
+    };
+    let sid = session_id.or_else(|| {
+        result
+            .pointer("/meta/agentMeta/sessionId")
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+    });
+    Some(ParsedEvent {
+        channel: "final".into(),
+        text,
+        session_id: sid,
+        mode: DeltaMode::Replace,
+    })
 }
 
 fn extract_assistant_text(value: &Value) -> Option<String> {
@@ -341,5 +473,47 @@ mod tests {
         );
         assert_eq!(result.text, "Hello");
         assert_eq!(result.mode, DeltaMode::Replace);
+    }
+
+    #[test]
+    fn parses_openclaw_run_envelope_payload_text() {
+        let raw = r#"{
+          "runId": "7a356d8f-6536-4c38-8ee5-8b3aa1e32a0b",
+          "status": "ok",
+          "summary": "completed",
+          "result": {
+            "payloads": [{ "text": "在的 ✅\n\n我是 OpenClaw", "mediaUrl": null }],
+            "meta": { "agentMeta": { "sessionId": "14603e9e-a615-428f-8cef-7189e5f4d9bc" } }
+          }
+        }"#;
+        let event = parse_agent_event(raw);
+        assert_eq!(event.channel, "final");
+        assert_eq!(event.mode, DeltaMode::Replace);
+        assert!(event.text.starts_with("在的 ✅"));
+        assert!(!event.text.contains("runId"));
+        assert!(!event.text.contains("systemPromptReport"));
+        assert_eq!(
+            event.session_id.as_deref(),
+            Some("14603e9e-a615-428f-8cef-7189e5f4d9bc")
+        );
+    }
+
+    #[test]
+    fn parses_codex_jsonl_item_completed() {
+        let started = parse_agent_event(r#"{"type":"turn.started"}"#);
+        assert_eq!(started.channel, "thinking");
+        assert!(!started.text.is_empty());
+
+        let msg = parse_agent_event(
+            r#"{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"hi"}}"#,
+        );
+        assert_eq!(msg.channel, "final");
+        assert_eq!(msg.text, "hi");
+        assert_eq!(msg.mode, DeltaMode::Replace);
+
+        let lifecycle = parse_agent_event(
+            r#"{"type":"thread.started","thread_id":"t1"}"#,
+        );
+        assert!(lifecycle.text.is_empty());
     }
 }

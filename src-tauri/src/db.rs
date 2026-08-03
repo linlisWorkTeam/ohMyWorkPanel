@@ -149,12 +149,33 @@ pub fn init_db(path: &Path) -> AppResult<()> {
         "ALTER TABLE agent_profiles ADD COLUMN keep_alive INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE agent_profiles ADD COLUMN last_heartbeat_at INTEGER",
         "ALTER TABLE agent_profiles ADD COLUMN warm_status TEXT NOT NULL DEFAULT 'cold'",
+        "ALTER TABLE agent_profiles ADD COLUMN model TEXT",
         "ALTER TABLE task_runs ADD COLUMN phase TEXT",
         "ALTER TABLE task_runs ADD COLUMN phase_updated_at INTEGER",
+        "ALTER TABLE groups ADD COLUMN group_kind TEXT NOT NULL DEFAULT 'project'",
+        "ALTER TABLE groups ADD COLUMN archived INTEGER NOT NULL DEFAULT 0",
     ] {
         let _ = connection.execute(col_sql, []);
     }
     migrate_members_allow_chatbot(&connection)?;
+    let _ = connection.execute_batch(
+        r#"
+        CREATE TABLE IF NOT EXISTS roadmap_orchestrations (
+          id TEXT PRIMARY KEY,
+          group_id TEXT NOT NULL,
+          roadmap_item_id TEXT NOT NULL,
+          status TEXT NOT NULL,
+          cursor_feature_id TEXT,
+          cursor_task_id TEXT,
+          current_run_id TEXT,
+          error_message TEXT,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_orch_group ON roadmap_orchestrations(group_id, updated_at);
+        CREATE INDEX IF NOT EXISTS idx_orch_item_status ON roadmap_orchestrations(roadmap_item_id, status);
+        "#,
+    );
     for (key, value) in [
         ("max_concurrent_runs", "3"),
         ("run_timeout_seconds", "900"),
@@ -328,6 +349,8 @@ ALTER TABLE members_new RENAME TO members;
     result
 }
 
+pub const GROUP_SELECT: &str = "SELECT id,name,workspace_path,owner_member_id,admin_member_id,created_at,COALESCE(announcement,''),announcement_updated_at,COALESCE(group_kind,'project'),COALESCE(archived,0) FROM groups";
+
 pub fn group_from_row(row: &Row<'_>) -> rusqlite::Result<Group> {
     Ok(Group {
         id: row.get(0)?,
@@ -338,6 +361,10 @@ pub fn group_from_row(row: &Row<'_>) -> rusqlite::Result<Group> {
         created_at: row.get(5)?,
         announcement: row.get::<_, Option<String>>(6)?.unwrap_or_default(),
         announcement_updated_at: row.get(7)?,
+        group_kind: row
+            .get::<_, Option<String>>(8)?
+            .unwrap_or_else(|| "project".into()),
+        archived: row.get::<_, i64>(9).unwrap_or(0) != 0,
     })
 }
 
@@ -360,10 +387,11 @@ pub fn member_from_row(row: &Row<'_>) -> rusqlite::Result<Member> {
         api_key_set: api_key.as_ref().map(|k| !k.is_empty()).unwrap_or(false),
         keep_alive: row.get::<_, i64>(14)? != 0,
         warm_status: row.get(15)?,
+        model: row.get(16).ok().flatten(),
     })
 }
 
-pub const MEMBER_SELECT: &str = "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status
+pub const MEMBER_SELECT: &str = "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model
          FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id";
 
 pub fn message_from_row(row: &Row<'_>) -> rusqlite::Result<Message> {
@@ -403,9 +431,7 @@ pub const RUN_SELECT: &str = "SELECT id,group_id,root_message_id,agent_member_id
 
 pub fn get_groups(connection: &Connection) -> AppResult<Vec<Group>> {
     let mut stmt = connection
-        .prepare(
-            "SELECT id,name,workspace_path,owner_member_id,admin_member_id,created_at,COALESCE(announcement,''),announcement_updated_at FROM groups ORDER BY created_at DESC",
-        )
+        .prepare(&format!("{GROUP_SELECT} ORDER BY archived ASC, created_at DESC"))
         .map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([], group_from_row)
@@ -418,13 +444,40 @@ pub fn get_groups(connection: &Connection) -> AppResult<Vec<Group>> {
 pub fn get_group(connection: &Connection, group_id: &str) -> AppResult<Group> {
     connection
         .query_row(
-            "SELECT id,name,workspace_path,owner_member_id,admin_member_id,created_at,COALESCE(announcement,''),announcement_updated_at FROM groups WHERE id=?1",
+            &format!("{GROUP_SELECT} WHERE id=?1"),
             params![group_id],
             group_from_row,
         )
         .optional()
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "找不到群聊。".to_string())
+}
+
+pub fn set_group_archived(connection: &Connection, group_id: &str, archived: bool) -> AppResult<Group> {
+    let n = connection
+        .execute(
+            "UPDATE groups SET archived=?1 WHERE id=?2",
+            params![if archived { 1 } else { 0 }, group_id],
+        )
+        .map_err(|e| e.to_string())?;
+    if n == 0 {
+        return Err("找不到群聊。".into());
+    }
+    get_group(connection, group_id)
+}
+
+pub fn set_member_model(connection: &Connection, member_id: &str, model: Option<&str>) -> AppResult<()> {
+    let value = model.map(str::trim).filter(|s| !s.is_empty());
+    let n = connection
+        .execute(
+            "UPDATE agent_profiles SET model=?1, updated_at=?2 WHERE member_id=?3",
+            params![value, now(), member_id],
+        )
+        .map_err(|e| e.to_string())?;
+    if n == 0 {
+        return Err("找不到 Agent 配置。".into());
+    }
+    Ok(())
 }
 
 pub fn set_group_announcement(
@@ -536,14 +589,70 @@ pub fn get_members(connection: &Connection, group_id: &str) -> AppResult<Vec<Mem
     Ok(rows)
 }
 
-pub fn get_messages(connection: &Connection, group_id: &str) -> AppResult<Vec<Message>> {
+/// Default hot window for group_state (older rows stay in DB, loaded via before-cursor).
+pub const HOT_MESSAGE_LIMIT: i64 = 100;
+pub const HOT_RUN_LIMIT: i64 = 100;
+
+pub fn count_messages(connection: &Connection, group_id: &str) -> AppResult<i64> {
+    connection
+        .query_row(
+            "SELECT COUNT(*) FROM messages WHERE group_id=?1",
+            params![group_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())
+}
+
+/// Newest `limit` messages, returned in ascending created_at order.
+pub fn get_messages_recent(
+    connection: &Connection,
+    group_id: &str,
+    limit: i64,
+) -> AppResult<Vec<Message>> {
+    let limit = limit.clamp(1, 5_000);
     let mut stmt = connection
         .prepare(
-            "SELECT id,group_id,sender_member_id,parent_run_id,content,status,created_at FROM messages WHERE group_id=?1 ORDER BY created_at",
+            "SELECT id,group_id,sender_member_id,parent_run_id,content,status,created_at FROM (
+               SELECT id,group_id,sender_member_id,parent_run_id,content,status,created_at
+               FROM messages WHERE group_id=?1
+               ORDER BY created_at DESC, id DESC LIMIT ?2
+             ) ORDER BY created_at ASC, id ASC",
         )
         .map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map(params![group_id], message_from_row)
+        .query_map(params![group_id, limit], message_from_row)
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(rows)
+}
+
+/// Messages strictly older than (before_created_at, before_id), ascending, up to limit.
+pub fn get_messages_before(
+    connection: &Connection,
+    group_id: &str,
+    before_created_at: i64,
+    before_id: &str,
+    limit: i64,
+) -> AppResult<Vec<Message>> {
+    let limit = limit.clamp(1, 200);
+    let mut stmt = connection
+        .prepare(
+            "SELECT id,group_id,sender_member_id,parent_run_id,content,status,created_at FROM (
+               SELECT id,group_id,sender_member_id,parent_run_id,content,status,created_at
+               FROM messages
+               WHERE group_id=?1
+                 AND (created_at < ?2 OR (created_at = ?2 AND id < ?3))
+               ORDER BY created_at DESC, id DESC
+               LIMIT ?4
+             ) ORDER BY created_at ASC, id ASC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(
+            params![group_id, before_created_at, before_id, limit],
+            message_from_row,
+        )
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
@@ -551,13 +660,26 @@ pub fn get_messages(connection: &Connection, group_id: &str) -> AppResult<Vec<Me
 }
 
 pub fn get_runs(connection: &Connection, group_id: &str) -> AppResult<Vec<TaskRun>> {
+    get_runs_recent(connection, group_id, HOT_RUN_LIMIT)
+}
+
+pub fn get_runs_recent(
+    connection: &Connection,
+    group_id: &str,
+    limit: i64,
+) -> AppResult<Vec<TaskRun>> {
+    let limit = limit.clamp(1, 500);
     let mut stmt = connection
         .prepare(
-            "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at,phase,phase_updated_at FROM task_runs WHERE group_id=?1 ORDER BY created_at",
+            "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at,phase,phase_updated_at FROM (
+               SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at,phase,phase_updated_at
+               FROM task_runs WHERE group_id=?1
+               ORDER BY created_at DESC, id DESC LIMIT ?2
+             ) ORDER BY created_at ASC, id ASC",
         )
         .map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map(params![group_id], run_from_row)
+        .query_map(params![group_id, limit], run_from_row)
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
@@ -565,11 +687,15 @@ pub fn get_runs(connection: &Connection, group_id: &str) -> AppResult<Vec<TaskRu
 }
 
 pub fn group_state(connection: &Connection, group_id: &str) -> AppResult<GroupState> {
+    let messages = get_messages_recent(connection, group_id, HOT_MESSAGE_LIMIT)?;
+    let total = count_messages(connection, group_id)?;
     Ok(GroupState {
         group: get_group(connection, group_id)?,
         members: get_members(connection, group_id)?,
-        messages: get_messages(connection, group_id)?,
-        runs: get_runs(connection, group_id)?,
+        messages_has_more: total > messages.len() as i64,
+        messages_total: total,
+        messages,
+        runs: get_runs_recent(connection, group_id, HOT_RUN_LIMIT)?,
     })
 }
 
@@ -1055,5 +1181,40 @@ mod tests {
             .query_row("SELECT status FROM task_runs WHERE id='r'", [], |r| r.get(0))
             .unwrap();
         assert_eq!(status, "interrupted");
+    }
+
+    #[test]
+    fn messages_hot_window_and_before_cursor() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        init_db(file.path()).unwrap();
+        let conn = open_db(file.path()).unwrap();
+        conn.execute(
+            "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at) VALUES('g','g','.','u',NULL,1)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,tags) VALUES('u','g','user','u','#000','',1,1,'')",
+            [],
+        )
+        .unwrap();
+        for i in 1..=15 {
+            conn.execute(
+                "INSERT INTO messages(id,group_id,sender_member_id,parent_run_id,content,status,created_at) VALUES(?1,'g','u',NULL,?2,'completed',?3)",
+                params![format!("m{i}"), format!("c{i}"), i * 10],
+            )
+            .unwrap();
+        }
+        let recent = get_messages_recent(&conn, "g", 5).unwrap();
+        assert_eq!(recent.len(), 5);
+        assert_eq!(recent.first().unwrap().id, "m11");
+        assert_eq!(recent.last().unwrap().id, "m15");
+        let older = get_messages_before(&conn, "g", recent[0].created_at, &recent[0].id, 3).unwrap();
+        assert_eq!(older.len(), 3);
+        assert_eq!(older.last().unwrap().id, "m10");
+        let state = group_state(&conn, "g").unwrap();
+        assert_eq!(state.messages_total, 15);
+        assert!(!state.messages_has_more); // 15 < HOT 100
+        assert_eq!(state.messages.len(), 15);
     }
 }

@@ -1,5 +1,5 @@
-/* LinlisWorkPanel web SW — light cache, versioned */
-const CACHE_VERSION = "linlis-web-v1";
+/* LinlisWorkPanel web SW — network-first for app shells/assets to avoid stale UI after canary deploys */
+const CACHE_VERSION = "linlis-web-v2";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const PAGE_CACHE = `${CACHE_VERSION}-pages`;
 
@@ -34,15 +34,21 @@ self.addEventListener("fetch", (event) => {
   // Never cache API / WS traffic
   if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/ws")) return;
 
+  // Hashed JS/CSS: network-first so canary/prod deploys are not stuck on old bundles.
   if (isStaticAsset(url)) {
     event.respondWith(
-      caches.open(STATIC_CACHE).then(async (cache) => {
-        const cached = await cache.match(request);
-        if (cached) return cached;
-        const response = await fetch(request);
-        if (response.ok) cache.put(request, response.clone());
-        return response;
-      }),
+      (async () => {
+        const cache = await caches.open(STATIC_CACHE);
+        try {
+          const response = await fetch(request);
+          if (response.ok) cache.put(request, response.clone());
+          return response;
+        } catch {
+          const cached = await cache.match(request);
+          if (cached) return cached;
+          throw new Error("offline asset");
+        }
+      })(),
     );
     return;
   }

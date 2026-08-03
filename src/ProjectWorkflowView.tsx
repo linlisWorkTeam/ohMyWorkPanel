@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "./api";
 import { PmPanel } from "./PmPanel";
 import { ServerPathPicker } from "./ServerPathPicker";
-import type { Group, Member, OpsJobState, ReleaseStatus, RoadmapItem, TaskRun } from "./types";
+import type { Group, Member, OpsJobState, ReleaseStatus, RoadmapItem, RoadmapOrchestration, TaskRun } from "./types";
 
 interface Props {
   group: Group;
@@ -29,6 +29,8 @@ const STATUS_LABEL: Record<string, string> = {
 
 export function ProjectWorkflowView({ group, members, runs, canManage, onGroupPatch, onMemberPatch, onError }: Props) {
   const [roadmap, setRoadmap] = useState<RoadmapItem[]>([]);
+  const [orchestrations, setOrchestrations] = useState<RoadmapOrchestration[]>([]);
+  const [orchBusy, setOrchBusy] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState(group.announcement ?? "");
   const [savingAnn, setSavingAnn] = useState(false);
   const [checklist, setChecklist] = useState(() => loadChecklist(group.id));
@@ -43,14 +45,40 @@ export function ProjectWorkflowView({ group, members, runs, canManage, onGroupPa
 
   const refreshRoadmap = useCallback(async () => {
     try {
-      const state = await api.getRoadmapState(group.id);
+      const [state, orch] = await Promise.all([
+        api.getRoadmapState(group.id),
+        api.listRoadmapOrchestrations(group.id).catch(() => [] as RoadmapOrchestration[]),
+      ]);
       setRoadmap(state.items);
+      setOrchestrations(orch);
     } catch (e: unknown) {
       onError(e instanceof Error ? e.message : String(e));
     }
   }, [group.id, onError]);
 
   useEffect(() => { void refreshRoadmap(); }, [refreshRoadmap]);
+
+  const orchByItem = useMemo(() => {
+    const map = new Map<string, RoadmapOrchestration>();
+    for (const o of orchestrations) {
+      if (!map.has(o.roadmapItemId) || (o.status === "running" || o.status === "paused" || o.status === "failed")) {
+        map.set(o.roadmapItemId, o);
+      }
+    }
+    return map;
+  }, [orchestrations]);
+
+  const runOrch = async (label: string, action: () => Promise<unknown>) => {
+    setOrchBusy(label);
+    try {
+      await action();
+      await refreshRoadmap();
+    } catch (e: unknown) {
+      onError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setOrchBusy(null);
+    }
+  };
   useEffect(() => { setAnnouncement(group.announcement ?? ""); }, [group.id, group.announcement]);
 
   useEffect(() => {
@@ -84,6 +112,14 @@ export function ProjectWorkflowView({ group, members, runs, canManage, onGroupPa
   const activeRuns = runs.filter((r) =>
     ["queued", "running", "awaiting_review", "changes_requested"].includes(r.status)
   );
+
+  // Keep orchestration badges fresh while agents are working.
+  useEffect(() => {
+    const active = orchestrations.some((o) => o.status === "running" || o.status === "paused");
+    if (!active && activeRuns.length === 0) return;
+    const id = window.setInterval(() => { void refreshRoadmap(); }, 4000);
+    return () => window.clearInterval(id);
+  }, [orchestrations, activeRuns.length, refreshRoadmap]);
 
   const saveGroupWorkspace = async () => {
     setSavingWs(true);
@@ -173,11 +209,73 @@ export function ProjectWorkflowView({ group, members, runs, canManage, onGroupPa
           <div className="roadmap-strip">
             {[...roadmap].sort((a, b) => a.sortOrder - b.sortOrder).map((item) => {
               const current = currentStep?.id === item.id;
+              const orch = orchByItem.get(item.id);
+              const busy = orchBusy === item.id;
               return (
                 <div key={item.id} className={`roadmap-step ${item.status} ${current ? "current" : ""}`}>
                   <span className="step-status">{STATUS_LABEL[item.status] ?? item.status}</span>
                   <strong>{item.title}</strong>
                   {current && <em>当前</em>}
+                  {orch && (orch.status === "running" || orch.status === "paused" || orch.status === "failed") && (
+                    <small className="orch-hint">
+                      编排 {orch.status}
+                      {orch.errorMessage ? ` · ${orch.errorMessage}` : ""}
+                    </small>
+                  )}
+                  {canManage && item.status !== "done" && (
+                    <div className="orch-actions">
+                      {(!orch || orch.status === "completed" || orch.status === "cancelled") && (
+                        <button
+                          type="button"
+                          className="pm-btn primary sm"
+                          disabled={!!orchBusy}
+                          onClick={() => void runOrch(item.id, () => api.startRoadmapItem(item.id))}
+                        >
+                          {busy ? "…" : "启动"}
+                        </button>
+                      )}
+                      {orch?.status === "running" && (
+                        <button
+                          type="button"
+                          className="pm-btn sm"
+                          disabled={!!orchBusy}
+                          onClick={() => void runOrch(item.id, () => api.pauseRoadmapOrchestration(orch.id))}
+                        >
+                          暂停
+                        </button>
+                      )}
+                      {(orch?.status === "paused" || orch?.status === "failed") && (
+                        <>
+                          <button
+                            type="button"
+                            className="pm-btn primary sm"
+                            disabled={!!orchBusy}
+                            onClick={() => void runOrch(item.id, () => api.resumeRoadmapOrchestration(orch.id))}
+                          >
+                            继续
+                          </button>
+                          <button
+                            type="button"
+                            className="pm-btn sm"
+                            disabled={!!orchBusy}
+                            onClick={() => void runOrch(item.id, () => api.cancelRoadmapOrchestration(orch.id))}
+                          >
+                            取消
+                          </button>
+                        </>
+                      )}
+                      {orch?.status === "running" && (
+                        <button
+                          type="button"
+                          className="pm-btn sm"
+                          disabled={!!orchBusy}
+                          onClick={() => void runOrch(item.id, () => api.cancelRoadmapOrchestration(orch.id))}
+                        >
+                          取消
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}

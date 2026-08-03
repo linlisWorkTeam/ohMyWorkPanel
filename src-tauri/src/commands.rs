@@ -52,6 +52,22 @@ pub fn get_group_state(group_id: String, state: State<'_, AppState>) -> AppResul
 }
 
 #[tauri::command]
+pub fn list_messages_before(
+    group_id: String,
+    before_created_at: i64,
+    before_id: String,
+    limit: Option<i64>,
+    state: State<'_, AppState>,
+) -> AppResult<crate::models::MessagePage> {
+    let conn = open_db(&state.db_path)?;
+    let limit = limit.unwrap_or(50).clamp(1, 200);
+    let messages =
+        crate::db::get_messages_before(&conn, &group_id, before_created_at, &before_id, limit)?;
+    let has_more = messages.len() as i64 >= limit;
+    Ok(crate::models::MessagePage { messages, has_more })
+}
+
+#[tauri::command]
 pub fn get_runtime_settings(state: State<'_, AppState>) -> AppResult<RuntimeSettings> {
     get_settings_from(&open_db(&state.db_path)?)
 }
@@ -91,14 +107,21 @@ pub fn create_group(input: CreateGroupInput, state: State<'_, AppState>) -> AppR
     if name.is_empty() || owner_name.is_empty() {
         return Err("群名称和群主名称不能为空。".into());
     }
-    let workspace = crate::fs_browse::resolve_server_dir(&input.workspace_path)?;
+    let group_kind = normalize_group_kind(input.group_kind.as_deref());
+    let workspace_path = if group_kind == "chat" {
+        String::new()
+    } else {
+        crate::fs_browse::resolve_server_dir(&input.workspace_path)?
+            .to_string_lossy()
+            .into_owned()
+    };
     let group_id = id();
     let owner_id = id();
     let created_at = now();
     let conn = open_db(&state.db_path)?;
     conn.execute(
-        "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at) VALUES(?1,?2,?3,?4,NULL,?5)",
-        params![group_id, name, workspace.to_string_lossy(), owner_id, created_at],
+        "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at,group_kind,archived) VALUES(?1,?2,?3,?4,NULL,?5,?6,0)",
+        params![group_id, name, workspace_path, owner_id, created_at, group_kind],
     )
     .map_err(|e| e.to_string())?;
     conn.execute(
@@ -132,7 +155,7 @@ pub fn add_member(input: AddMemberInput, state: State<'_, AppState>) -> AppResul
     }
     let conn = open_db(&state.db_path)?;
     let group = get_group(&conn, &input.group_id)?;
-    if input.kind == "chatbot" {
+    if input.kind == "chatbot" && group.group_kind != "chat" {
         let exists: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM members WHERE group_id=?1 AND kind='chatbot' AND is_active=1",
@@ -141,7 +164,7 @@ pub fn add_member(input: AddMemberInput, state: State<'_, AppState>) -> AppResul
             )
             .map_err(|e| e.to_string())?;
         if exists > 0 {
-            return Err("每个群只能添加一个聊天机器人".into());
+            return Err("项目群只能添加一个聊天机器人；聊天群可添加多个。".into());
         }
     }
     let member_id = id();
@@ -167,22 +190,36 @@ pub fn add_member(input: AddMemberInput, state: State<'_, AppState>) -> AppResul
     if input.kind == "agent" {
         let adapter = input.adapter.unwrap_or_else(|| "mock".into());
         AdapterKind::parse(&adapter)?;
-        let default_ws = crate::memory::default_agent_workspace(
-            std::path::Path::new(&group.workspace_path),
-            &member_id,
-        );
-        let _ = crate::memory::ensure_linlis_layout(
-            std::path::Path::new(&group.workspace_path),
-            Some(&member_id),
-        );
+        let default_ws = if group.workspace_path.trim().is_empty() {
+            None
+        } else {
+            let _ = crate::memory::ensure_linlis_layout(
+                std::path::Path::new(&group.workspace_path),
+                Some(&member_id),
+            );
+            Some(
+                crate::memory::default_agent_workspace(
+                    std::path::Path::new(&group.workspace_path),
+                    &member_id,
+                )
+                .to_string_lossy()
+                .into_owned(),
+            )
+        };
+        let model = input
+            .model
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
         conn.execute(
-            "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at,workspace_path,warm_status) VALUES(?1,?2,?3,'unknown',?4,?5,'cold')",
+            "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at,workspace_path,warm_status,model) VALUES(?1,?2,?3,'unknown',?4,?5,'cold',?6)",
             params![
                 member_id,
                 adapter,
                 input.executable_path.filter(|p| !p.trim().is_empty()),
                 created_at,
-                default_ws.to_string_lossy().as_ref()
+                default_ws,
+                model
             ],
         )
         .map_err(|e| e.to_string())?;
@@ -195,14 +232,20 @@ pub fn add_member(input: AddMemberInput, state: State<'_, AppState>) -> AppResul
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .ok_or_else(|| "聊天机器人必须填写 API Key".to_string())?;
+        let model = input
+            .model
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("deepseek-v4-flash");
         conn.execute(
-            "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at,api_key,warm_status) VALUES(?1,?2,NULL,'ready',?3,?4,'cold')",
-            params![member_id, adapter, created_at, api_key],
+            "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at,api_key,warm_status,model) VALUES(?1,?2,NULL,'ready',?3,?4,'cold',?5)",
+            params![member_id, adapter, created_at, api_key, model],
         )
         .map_err(|e| e.to_string())?;
     }
     conn.query_row(
-        "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
+        "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
         params![member_id],
         member_from_row,
     )
@@ -224,7 +267,7 @@ pub async fn remove_member(
     }
     let member: Member = conn
         .query_row(
-            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1 AND m.group_id=?2",
+            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1 AND m.group_id=?2",
             params![member_id, group_id],
             member_from_row,
         )
@@ -798,4 +841,37 @@ pub fn ops_run_test_gate() -> AppResult<()> {
 #[tauri::command]
 pub fn ops_deploy_canary() -> AppResult<()> {
     crate::ops::kickoff_deploy_canary()
+}
+
+fn normalize_group_kind(raw: Option<&str>) -> String {
+    match raw.map(str::trim).unwrap_or("project") {
+        "chat" => "chat".into(),
+        _ => "project".into(),
+    }
+}
+
+#[tauri::command]
+pub fn set_group_archived_cmd(
+    group_id: String,
+    archived: bool,
+    state: State<'_, AppState>,
+) -> AppResult<crate::models::Group> {
+    let conn = open_db(&state.db_path)?;
+    crate::db::set_group_archived(&conn, &group_id, archived)
+}
+
+#[tauri::command]
+pub fn update_member_model_cmd(
+    member_id: String,
+    model: Option<String>,
+    state: State<'_, AppState>,
+) -> AppResult<Member> {
+    let conn = open_db(&state.db_path)?;
+    crate::db::set_member_model(&conn, &member_id, model.as_deref())?;
+    conn.query_row(
+        &format!("{} WHERE m.id=?1", crate::db::MEMBER_SELECT),
+        params![member_id],
+        member_from_row,
+    )
+    .map_err(|e| e.to_string())
 }

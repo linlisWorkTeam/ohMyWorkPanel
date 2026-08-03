@@ -9,6 +9,7 @@ use crate::logger;
 use crate::memory;
 use crate::message_content::{apply_channel_delta, parts_to_plain_text};
 use crate::models::{ChatEvent, ExecutionContext, Experience, TaskRun};
+use crate::orchestrator;
 #[cfg(feature = "gui")]
 use tauri::Emitter;
 use rusqlite::{params, OptionalExtension};
@@ -233,7 +234,7 @@ fn get_execution_context(state: &SchedulerState, run_id: &str) -> AppResult<Exec
     let group = get_group(&conn, &run.group_id)?;
     let agent = conn
         .query_row(
-            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
+            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
             params![run.agent_member_id],
             member_from_row,
         )
@@ -446,9 +447,17 @@ async fn run_agent(
             }
         );
         let user = format!("{root}\n{mem}");
-        let text =
-            chatbot::run_chatbot_completion(adapter_name, &api_key, &system, &user, 512, token)
-                .await?;
+        let model = context.agent.model.as_deref();
+        let text = chatbot::run_chatbot_completion(
+            adapter_name,
+            &api_key,
+            &system,
+            &user,
+            512,
+            token,
+            model,
+        )
+        .await?;
         emit_phase(state, &context.group.id, &context.run.id, "streaming");
         append_delta(state, &context.run, "final", &text, false)?;
         return Ok(());
@@ -512,6 +521,7 @@ async fn run_agent(
     )?;
     let _ = memory::ensure_linlis_layout(std::path::Path::new(&context.group.workspace_path), Some(&context.agent.id));
 
+    let model = context.agent.model.as_deref();
     emit_phase(state, &context.group.id, &context.run.id, "awaiting_first_token");
     let result = adapters::run_streaming(
         kind,
@@ -519,6 +529,7 @@ async fn run_agent(
         &cwd,
         &prompt,
         session_id.as_deref(),
+        model,
         context.settings.run_timeout_seconds as u64,
         token,
         make_on_delta(),
@@ -542,6 +553,7 @@ async fn run_agent(
                 &cwd,
                 &context.prompt,
                 None,
+                model,
                 context.settings.run_timeout_seconds as u64,
                 token,
                 make_on_delta(),
@@ -723,6 +735,16 @@ async fn finish_failed(state: &SchedulerState, run_id: &str, error: &str) {
                         total_ms: None,
             },
         );
+        if let EventSender::Web(tx) = &state.event_sender {
+            orchestrator::on_run_terminal(
+                &state.db_path,
+                run_id,
+                false,
+                Some(error),
+                tx,
+                state.clone(),
+            );
+        }
     }
 }
 
@@ -846,6 +868,18 @@ async fn finish_completed(state: &SchedulerState, context: &ExecutionContext) {
                         total_ms: None,
             },
         );
+        if !is_review {
+            if let EventSender::Web(tx) = &state.event_sender {
+                orchestrator::on_run_terminal(
+                    &state.db_path,
+                    &context.run.id,
+                    true,
+                    None,
+                    tx,
+                    state.clone(),
+                );
+            }
+        }
         delegate_from_admin(state, context, &message_id).await;
     }
 }

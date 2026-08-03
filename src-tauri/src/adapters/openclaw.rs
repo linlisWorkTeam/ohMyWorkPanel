@@ -4,7 +4,7 @@ pub fn candidate_executables() -> &'static [&'static str] {
 
 /// OpenClaw CLI 2026.3+: `agent --message` (legacy `run` removed).
 /// Requires `--agent`, `--session-id`, or `--to` to select a session.
-pub fn build_args(prompt: &str, session_id: Option<&str>) -> Vec<String> {
+pub fn build_args(prompt: &str, session_id: Option<&str>, model: Option<&str>) -> Vec<String> {
     let mut args = vec!["agent".into()];
     match session_id.map(str::trim).filter(|s| !s.is_empty()) {
         Some(sid) => {
@@ -15,6 +15,10 @@ pub fn build_args(prompt: &str, session_id: Option<&str>) -> Vec<String> {
             args.push("--agent".into());
             args.push("main".into());
         }
+    }
+    if let Some(m) = model.map(str::trim).filter(|s| !s.is_empty() && *s != "default") {
+        args.push("--model".into());
+        args.push(m.to_string());
     }
     args.push("--message".into());
     args.push(prompt.into());
@@ -29,7 +33,7 @@ mod tests {
     #[test]
     fn build_args_defaults_to_main_agent() {
         assert_eq!(
-            build_args("do work", None),
+            build_args("do work", None, None),
             vec![
                 "agent",
                 "--agent",
@@ -44,7 +48,7 @@ mod tests {
     #[test]
     fn build_args_uses_session_id_when_present() {
         assert_eq!(
-            build_args("do work", Some("sess-1")),
+            build_args("do work", Some("sess-1"), None),
             vec![
                 "agent",
                 "--session-id",
