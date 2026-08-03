@@ -33,7 +33,9 @@ export function App() {
   const [composer, setComposer] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [showMembers, setShowMembers] = useState(true);
+  const [showMembers, setShowMembers] = useState(() =>
+    typeof window === "undefined" || window.matchMedia("(min-width: 1081px)").matches,
+  );
   const [rightPanelTab, setRightPanelTab] = useState<"members" | "experiences" | "logs">("members");
   const [mainView, setMainView] = useState<"chat" | "project">("chat");
   const [workspacePath, setWorkspacePath] = useState("/AI/LinlisWorkPanel");
@@ -353,8 +355,18 @@ export function App() {
 
   const toggleRole = (name: string) => setSelectedRoles((prev) => prev.includes(name) ? prev.filter((r) => r !== name) : [...prev, name]);
 
+  const openSidebar = () => { setShowMembers(false); setShowSidebar(true); };
+  const toggleMembers = () => {
+    setShowMembers((open) => {
+      const next = !open;
+      if (next) setShowSidebar(false);
+      return next;
+    });
+  };
+
   return <main className="app-shell">
     {showSidebar && <div className="sidebar-backdrop" onClick={() => setShowSidebar(false)} />}
+    {showMembers && <div className="members-backdrop" onClick={() => setShowMembers(false)} />}
     <aside className={`group-sidebar ${showSidebar ? "open" : ""}`}>
       <Brand />
       <div className="sidebar-heading"><span>群聊</span><button className="icon-button" onClick={() => setShowCreate(true)} aria-label="新建群聊">＋</button></div>
@@ -374,7 +386,7 @@ export function App() {
       {current ? <>
         <header className="chat-header">
           <div className="chat-header-main">
-            <button className="icon-button mobile-nav" onClick={() => setShowSidebar(true)} aria-label="群列表">☰</button>
+            <button className="icon-button mobile-nav" onClick={openSidebar} aria-label="群列表">☰</button>
             <div>
               <div className="group-title-row">
                 <h1>{current.group.name}</h1>
@@ -386,7 +398,7 @@ export function App() {
               <p>{activeMembers.length} 名成员 · 服务器工作区</p>
             </div>
           </div>
-          <button className="icon-button mobile-members" onClick={() => setShowMembers(!showMembers)}>成员</button>
+          <button className="icon-button mobile-members" onClick={toggleMembers} aria-label="成员面板">成员</button>
         </header>
         {mainView === "project" ? (
           <ProjectWorkflowView
