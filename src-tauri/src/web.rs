@@ -387,7 +387,9 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                     Ok(text) => {
                         if socket.send(WsMessage::Text(text.into())).await.is_err() { break; }
                     }
-                    Err(_) => break,
+                    // Client fell behind: drop lagged messages but keep the socket alive.
+                    Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(broadcast::error::RecvError::Closed) => break,
                 }
             }
             ws_msg = socket.recv() => {

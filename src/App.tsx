@@ -55,6 +55,8 @@ export function App() {
   const stickToBottom = useRef(true);
   const firstGroupLoad = useRef(true);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const currentGroupIdRef = useRef<string | undefined>(undefined);
+  currentGroupIdRef.current = current?.group.id;
 
   const refresh = async (groupId = current?.group.id) => {
     if (!groupId) return;
@@ -130,17 +132,24 @@ export function App() {
       }
     })();
     const unlisten = listen<ChatEvent>("chat-event", (event) => {
-      if (event.payload.groupId !== current?.group.id) return;
       const payload = event.payload;
+      const activeGroupId = currentGroupIdRef.current;
+      const inCurrent = (previous: GroupState | null) =>
+        !!previous && (!payload.groupId || payload.groupId === previous.group.id
+          || (!!payload.runId && previous.runs.some((r) => r.id === payload.runId)));
       if (payload.kind === "message_delta" && payload.messageId && payload.delta) {
+        if (payload.groupId && payload.groupId !== activeGroupId) return;
         const messageId = payload.messageId;
         const delta = payload.delta;
         const channel = payload.channel ?? "final";
         const replace = Boolean(payload.replace);
         setCurrent((previous) => {
-          if (!previous) return previous;
+          if (!previous || !inCurrent(previous)) return previous;
           const idx = previous.messages.findIndex((m) => m.id === messageId);
-          if (idx < 0) return previous;
+          if (idx < 0) {
+            void refresh(previous.group.id).catch(() => {});
+            return previous;
+          }
           const messages = previous.messages.slice();
           const message = messages[idx];
           messages[idx] = {
@@ -153,11 +162,12 @@ export function App() {
         return;
       }
       if (payload.kind === "run_status" && payload.runId) {
+        const terminal = ["completed", "failed", "cancelled", "interrupted"].includes(String(payload.status ?? ""));
         setCurrent((previous) => {
-          if (!previous) return previous;
+          if (!previous || !inCurrent(previous)) return previous;
           const idx = previous.runs.findIndex((r) => r.id === payload.runId);
           if (idx < 0) {
-            void refresh(payload.groupId).catch((reason) => {
+            void refresh(payload.groupId || previous.group.id).catch((reason) => {
               if (isUnauthorizedError(reason)) goLogin("登录已失效，请重新登录");
               else setError(readError(reason));
             });
@@ -169,18 +179,40 @@ export function App() {
             status: (payload.status as TaskRun["status"]) ?? runs[idx].status,
             outputMessageId: payload.messageId ?? runs[idx].outputMessageId,
             errorMessage: payload.error ?? runs[idx].errorMessage,
+            phase: payload.phase ?? runs[idx].phase,
+            phaseUpdatedAt: Date.now(),
           };
-          return { ...previous, runs };
+          let messages = previous.messages;
+          const outputId = runs[idx].outputMessageId;
+          if (terminal && outputId) {
+            const mi = messages.findIndex((m) => m.id === outputId);
+            if (mi >= 0 && messages[mi].status === "streaming") {
+              messages = messages.slice();
+              messages[mi] = {
+                ...messages[mi],
+                status: payload.status === "completed" ? "completed" : (payload.status ?? messages[mi].status),
+              };
+            }
+          }
+          return { ...previous, runs, messages };
         });
+        // Terminal status: resync so missed deltas still appear without a full reload.
+        if (terminal) {
+          void refresh(payload.groupId || activeGroupId).catch((reason) => {
+            if (isUnauthorizedError(reason)) goLogin("登录已失效，请重新登录");
+            else setError(readError(reason));
+          });
+        }
         return;
       }
-      void refresh(payload.groupId).catch((reason) => {
+      if (payload.groupId && payload.groupId !== activeGroupId) return;
+      void refresh(payload.groupId || activeGroupId).catch((reason) => {
         if (isUnauthorizedError(reason)) goLogin("登录已失效，请重新登录");
         else setError(readError(reason));
       });
     });
     return () => { disposed = true; void unlisten.then((unsubscribe) => unsubscribe()); };
-  }, [session, current?.group.id]);
+  }, [session]);
 
   // Must stay above any conditional return — hooks order cannot change across login/ready.
   useEffect(() => {

@@ -11,7 +11,7 @@ import type {
 } from "./types";
 
 const API_BASE = "";
-const WS_BASE = `ws://${location.host}`;
+const WS_BASE = `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}`;
 const TOKEN_KEY = "linlis_auth_token";
 
 export const requiresAuth = true;

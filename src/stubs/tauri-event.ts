@@ -7,9 +7,22 @@ let sharedWs: WebSocket | null = null;
 let authToken: string | null = null;
 const TOKEN_KEY = "linlis_auth_token";
 
+function wsUrl(token: string | null): string {
+  // Must match page protocol: https pages require wss (ws:// is blocked as mixed content).
+  const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+  const q = token ? `?token=${encodeURIComponent(token)}` : "";
+  return `${protocol}//${location.host}/ws${q}`;
+}
+
 /** Store the auth token so the WS connection can pass it as a query param. */
 export function _setWebAuthToken(token: string | null) {
   authToken = token;
+  // Reconnect with the new token (login/logout), otherwise a pre-auth socket stays dead.
+  if (sharedWs) {
+    try { sharedWs.close(); } catch { /* ignore */ }
+    sharedWs = null;
+  }
+  if (token && listeners.size > 0) ensureWs();
 }
 
 function resolveToken(): string | null {
@@ -33,6 +46,9 @@ function normalizePayload(data: Record<string, unknown>) {
     error: data.error ?? null,
     channel: data.channel ?? null,
     replace: data.replace ?? null,
+    phase: data.phase ?? null,
+    elapsedMs: data.elapsedMs ?? data.elapsed_ms ?? null,
+    totalMs: data.totalMs ?? data.total_ms ?? null,
   };
 }
 
@@ -58,7 +74,7 @@ function scheduleReconnect() {
 
 function ensureWs() {
   const token = resolveToken();
-  const url = `ws://${location.host}/ws${token ? `?token=${encodeURIComponent(token)}` : ""}`;
+  const url = wsUrl(token);
   if (sharedWs && sharedWs.url === url && (sharedWs.readyState === WebSocket.OPEN || sharedWs.readyState === WebSocket.CONNECTING)) {
     return;
   }
