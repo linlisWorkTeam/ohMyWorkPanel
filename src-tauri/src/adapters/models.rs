@@ -2,7 +2,11 @@
 
 pub fn models_for_adapter(adapter: &str) -> &'static [&'static str] {
     match adapter {
-        "codex" => &["gpt-5", "o3", "o4-mini", "gpt-4.1"],
+        "codex" => &[
+            "deepseek-v4-flash",
+            "deepseek-chat",
+            "deepseek-reasoner",
+        ],
         // Keep in sync with `cursor-agent --list-models` / src/agentModels.ts
         "cursor" => &[
             "auto",
@@ -46,7 +50,8 @@ mod tests {
     #[test]
     fn chatbot_has_flash_default() {
         assert_eq!(default_model("chatbot-deepseek"), Some("deepseek-v4-flash"));
-        assert!(!models_for_adapter("codex").is_empty());
+        assert_eq!(default_model("codex"), Some("deepseek-v4-flash"));
+        assert!(models_for_adapter("codex").contains(&"deepseek-reasoner"));
     }
 
     #[test]

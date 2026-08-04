@@ -16,16 +16,16 @@ use tokio::sync::broadcast;
 use crate::auth::Claims;
 use crate::logger::{self, LogEntry, LogQuery};
 use crate::scheduler::{self, SchedulerState};
-use crate::db::{
-    active_agent_ids, create_feature_db, create_feature_task_db,
+    use crate::db::{
+    create_feature_db, create_feature_task_db,
     create_roadmap_item_db, create_task_run, delete_feature_db,
     delete_feature_task_db, delete_roadmap_item_db, get_features,
-    get_feature_tasks, get_groups,
+    get_feature_tasks, get_groups_for_user,
     get_group as db_get_group,
     get_preset_roles, get_roadmap_items, get_roadmap_state_db, get_runs,
-    get_messages_before, get_settings_from, group_state, id, member_from_row, now, open_db,
-    set_group_announcement, update_feature_db, update_feature_task_db,
-    update_group_workspace, update_roadmap_item_db,
+    get_messages_before, get_settings_from, group_state, id, is_admin_user, member_from_row, now,
+    open_db, require_admin, require_group_access, resolve_target_agent_ids, set_group_announcement, update_feature_db,
+    update_feature_task_db, update_group_workspace, update_roadmap_item_db,
 };
 use crate::fs_browse::{self, DirListing};
 use crate::ops;
@@ -129,6 +129,16 @@ struct AuthResponse {
     token: String,
     user_id: String,
     username: String,
+    #[serde(rename = "isAdmin")]
+    is_admin: bool,
+}
+
+fn map_acl_err(e: String) -> (StatusCode, String) {
+    if e.contains("无权") || e.contains("管理员") {
+        (StatusCode::FORBIDDEN, e)
+    } else {
+        (StatusCode::INTERNAL_SERVER_ERROR, e)
+    }
 }
 
 async fn register(
@@ -150,16 +160,21 @@ async fn register(
     let password_hash =
         crate::auth::hash_password(&input.password).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     conn.execute(
-        "INSERT INTO users(id,username,password_hash,created_at) VALUES(?1,?2,?3,?4)",
-        params![user_id, input.username, password_hash, now()],
+        "INSERT INTO users(id,username,password_hash,created_at,is_admin) VALUES(?1,?2,?3,?4,0)",
+        params![user_id, input.username.trim(), password_hash, now()],
     )
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let token = crate::auth::create_jwt(&user_id, &input.username)
+    let token = crate::auth::create_jwt(&user_id, input.username.trim())
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
     logger::info(&conn, "auth", &format!("user registered: {}", input.username), None);
-    Ok(Json(AuthResponse { token, user_id, username: input.username }))
+    Ok(Json(AuthResponse {
+        token,
+        user_id,
+        username: input.username.trim().to_string(),
+        is_admin: false,
+    }))
 }
 
 async fn login(
@@ -187,28 +202,56 @@ async fn login(
 
     let token = crate::auth::create_jwt(&uid, &input.username)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let is_admin = is_admin_user(&conn, &uid).unwrap_or(false);
     logger::info(&conn, "auth", &format!("user logged in: {}", input.username), None);
-    Ok(Json(AuthResponse { token, user_id: uid, username: input.username }))
+    Ok(Json(AuthResponse {
+        token,
+        user_id: uid,
+        username: input.username,
+        is_admin,
+    }))
 }
 
-async fn verify(ClaimsExtractor(claims): ClaimsExtractor) -> Json<Claims> {
-    Json(claims)
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VerifyResponse {
+    sub: String,
+    username: String,
+    is_admin: bool,
+}
+
+async fn verify(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+) -> Result<Json<VerifyResponse>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let is_admin = is_admin_user(&conn, &claims.sub).map_err(map_acl_err)?;
+    Ok(Json(VerifyResponse {
+        sub: claims.sub,
+        username: claims.username,
+        is_admin,
+    }))
 }
 
 // === Group Routes ===
 
 async fn list_groups(
     State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
 ) -> Result<Json<Vec<Group>>, (StatusCode, String)> {
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-    get_groups(&conn).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+    get_groups_for_user(&conn, &claims.sub)
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
 }
 
 async fn get_group(
     State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
     Path(group_id): Path<String>,
 ) -> Result<Json<GroupState>, (StatusCode, String)> {
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
     group_state(&conn, &group_id).map(Json).map_err(|e| (StatusCode::NOT_FOUND, e))
 }
 
@@ -231,8 +274,11 @@ fn normalize_group_kind(raw: Option<&str>) -> String {
 
 async fn create_group_web(
     State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
     Json(input): Json<CreateGroupInputWeb>,
 ) -> Result<Json<GroupState>, (StatusCode, String)> {
+    let conn_acl = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_admin(&conn_acl, &claims.sub).map_err(map_acl_err)?;
     let group_kind = normalize_group_kind(input.group_kind.as_deref());
     let workspace_path = if group_kind == "chat" {
         String::new()
@@ -304,12 +350,14 @@ struct SendMessageInput {
 
 async fn send_message_web(
     State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
     Json(input): Json<SendMessageInput>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     if input.content.trim().is_empty() {
         return Err((StatusCode::BAD_REQUEST, "empty message".into()));
     }
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_group_access(&conn, &claims.sub, &input.group_id).map_err(map_acl_err)?;
 
      // Validate sender is active member in this group
      let sender_count = conn
@@ -321,6 +369,19 @@ async fn send_message_web(
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
      if sender_count != 1 {
          return Err((StatusCode::FORBIDDEN, "sender not in group".into()));
+     }
+     // Scoped users may only send as their linked member.
+     if !is_admin_user(&conn, &claims.sub).unwrap_or(false) {
+         let owned: i64 = conn
+             .query_row(
+                 "SELECT COUNT(*) FROM members WHERE id=?1 AND group_id=?2 AND auth_user_id=?3 AND is_active=1",
+                 params![input.sender_member_id, input.group_id, claims.sub],
+                 |r| r.get(0),
+             )
+             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+         if owned != 1 {
+             return Err((StatusCode::FORBIDDEN, "只能以本人成员身份发言".into()));
+         }
      }
 
      // Validate group exists
@@ -350,14 +411,16 @@ async fn send_message_web(
          );
      }
 
-     // Find target agents
-     let mut target_agents = active_agent_ids(&conn, &input.group_id, &input.mention_member_ids)
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     if target_agents.is_empty() {
-         if let Some(admin) = group.admin_member_id {
-             target_agents.push(admin);
-         }
-     }
+     // Find target agents: only @agent/@chatbot run.
+     // If the message @mentioned someone but no agent was tagged (e.g. only @user),
+     // do NOT fall back to the group admin agent.
+     let target_agents = resolve_target_agent_ids(
+         &conn,
+         &input.group_id,
+         group.admin_member_id.as_deref(),
+         &input.mention_member_ids,
+     )
+     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
      // Create task runs for target agents
      let mut run_ids: Vec<String> = Vec::new();
@@ -480,16 +543,20 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
      chatbot_provider: Option<String>,
      api_key: Option<String>,
      model: Option<String>,
+     login_username: Option<String>,
+     login_password: Option<String>,
  }
 
  async fn add_member_web(
      State(state): State<Arc<AppState>>,
+     ClaimsExtractor(claims): ClaimsExtractor,
      Json(input): Json<AddMemberInputWeb>,
  ) -> Result<Json<Member>, (StatusCode, String)> {
      if !matches!(input.kind.as_str(), "user" | "agent" | "chatbot") || input.display_name.trim().is_empty() {
          return Err((StatusCode::BAD_REQUEST, "invalid member kind or name".into()));
      }
      let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
      let group = db_get_group(&conn, &input.group_id)
          .map_err(|e| (StatusCode::NOT_FOUND, e))?;
      if input.kind == "chatbot" && group.group_kind != "chat" {
@@ -511,9 +578,54 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
          "chatbot" => "#0ea5a0".into(),
          _ => "#5167f6".into(),
      });
+     let mut auth_user_id: Option<String> = None;
+     if input.kind == "user" {
+         let login_user = input
+             .login_username
+             .as_deref()
+             .map(str::trim)
+             .filter(|s| !s.is_empty())
+             .ok_or_else(|| (StatusCode::BAD_REQUEST, "添加用户需填写登录用户名".into()))?;
+         let login_pass = input
+             .login_password
+             .as_deref()
+             .filter(|s| !s.is_empty())
+             .ok_or_else(|| (StatusCode::BAD_REQUEST, "添加用户需填写登录密码".into()))?;
+         if login_user.eq_ignore_ascii_case("root") {
+             return Err((StatusCode::BAD_REQUEST, "不能使用保留用户名 root".into()));
+         }
+         if conn
+             .query_row(
+                 "SELECT id FROM users WHERE username=?1",
+                 params![login_user],
+                 |_| Ok(()),
+             )
+             .is_ok()
+         {
+             return Err((StatusCode::CONFLICT, "登录用户名已被占用".into()));
+         }
+         let uid = id();
+         let password_hash = crate::auth::hash_password(login_pass)
+             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+         conn.execute(
+             "INSERT INTO users(id,username,password_hash,created_at,is_admin) VALUES(?1,?2,?3,?4,0)",
+             params![uid, login_user, password_hash, created_at],
+         )
+         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+         auth_user_id = Some(uid);
+     }
      conn.execute(
-         "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at) VALUES(?1,?2,?3,?4,?5,?6,1,?7)",
-         params![member_id, input.group_id, input.kind, input.display_name.trim(), color, input.role_description.trim(), created_at],
+         "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,auth_user_id) VALUES(?1,?2,?3,?4,?5,?6,1,?7,?8)",
+         params![
+             member_id,
+             input.group_id,
+             input.kind,
+             input.display_name.trim(),
+             color,
+             input.role_description.trim(),
+             created_at,
+             auth_user_id
+         ],
      )
      .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
      if input.kind == "agent" {
@@ -578,7 +690,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
      }
      let member = conn
          .query_row(
-             "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
+             "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model,m.auth_user_id FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
              params![member_id],
              member_from_row,
          )
@@ -589,9 +701,11 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
 
  async fn remove_member_web(
      State(state): State<Arc<AppState>>,
+     ClaimsExtractor(claims): ClaimsExtractor,
      Path((group_id, member_id)): Path<(String, String)>,
  ) -> Result<Json<()>, (StatusCode, String)> {
      let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
      let group = db_get_group(&conn, &group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
      if group.owner_member_id == member_id {
          return Err((StatusCode::FORBIDDEN, "cannot remove owner".into()));
@@ -605,6 +719,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
 
  async fn set_admin_web(
      State(state): State<Arc<AppState>>,
+     ClaimsExtractor(claims): ClaimsExtractor,
      Path(group_id): Path<String>,
      Json(body): Json<serde_json::Value>,
  ) -> Result<Json<GroupState>, (StatusCode, String)> {
@@ -613,6 +728,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
          .or_else(|| body.get("member_id"))
          .and_then(|v| v.as_str());
      let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
      let _ = db_get_group(&conn, &group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
      if let Some(id) = member_id {
          let valid = conn
@@ -648,10 +764,12 @@ struct ArchiveBody {
 
 async fn put_group_archive_web(
     State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
     Path(group_id): Path<String>,
     Json(body): Json<ArchiveBody>,
 ) -> Result<Json<crate::models::Group>, (StatusCode, String)> {
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
     crate::db::set_group_archived(&conn, &group_id, body.archived)
         .map(Json)
         .map_err(|e| (StatusCode::NOT_FOUND, e))
@@ -694,7 +812,7 @@ async fn put_member_workspace_web(
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     let member = conn
         .query_row(
-            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
+            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model,m.auth_user_id FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
             params![member_id],
             member_from_row,
         )
@@ -713,7 +831,7 @@ async fn put_member_workspace_web(
         .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
     let member = conn
         .query_row(
-            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
+            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model,m.auth_user_id FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
             params![member_id],
             member_from_row,
         )
@@ -733,10 +851,12 @@ struct ListMessagesQuery {
 
 async fn list_messages_web(
     State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
     Path(group_id): Path<String>,
     axum::extract::Query(q): axum::extract::Query<ListMessagesQuery>,
 ) -> Result<Json<crate::models::MessagePage>, (StatusCode, String)> {
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
     let _ = db_get_group(&conn, &group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     let limit = q.limit.unwrap_or(50).clamp(1, 200);
     let (before_created_at, before_id) = match (q.before_created_at, q.before_id.as_deref()) {
@@ -1192,20 +1312,40 @@ async fn put_workspace_web(
     Ok(Json(g))
 }
 
-async fn ops_release_status_web() -> Json<ops::ReleaseStatus> {
-    Json(ops::release_status().await)
+async fn ops_release_status_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+) -> Result<Json<ops::ReleaseStatus>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
+    Ok(Json(ops::release_status().await))
 }
 
-async fn ops_job_web() -> Json<ops::OpsJobState> {
-    Json(ops::ops_job_snapshot())
+async fn ops_job_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+) -> Result<Json<ops::OpsJobState>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
+    Ok(Json(ops::ops_job_snapshot()))
 }
 
-async fn ops_test_gate_web() -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+async fn ops_test_gate_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
     ops::kickoff_test_gate().map_err(|e| (StatusCode::CONFLICT, e))?;
     Ok(Json(json!({ "ok": true, "job": ops::ops_job_snapshot() })))
 }
 
-async fn ops_deploy_canary_web() -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+async fn ops_deploy_canary_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
     ops::kickoff_deploy_canary().map_err(|e| (StatusCode::CONFLICT, e))?;
     Ok(Json(json!({ "ok": true, "job": ops::ops_job_snapshot() })))
 }

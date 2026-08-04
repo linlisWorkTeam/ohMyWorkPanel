@@ -1,10 +1,10 @@
 ﻿import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
+import { boundWorkForItem, pickDefaultAssigneeId, seedChecklistTitles } from "./roadmapUi";
 import type {
   Member, Feature, FeatureTask, RoadmapItem, RoadmapState,
   CreateRoadmapItemInput, UpdateRoadmapItemInput,
   CreateFeatureInput, UpdateFeatureInput,
-  CreateFeatureTaskInput, UpdateFeatureTaskInput,
 } from "./types";
 
 // ── helpers ──
@@ -37,10 +37,11 @@ function id() { return crypto.randomUUID(); }
 interface PmPanelProps {
   groupId: string;
   members: Member[];
+  adminMemberId?: string | null;
   onError: (msg: string) => void;
 }
 
-export function PmPanel({ groupId, members, onError }: PmPanelProps) {
+export function PmPanel({ groupId, members, adminMemberId, onError }: PmPanelProps) {
   const [tab, setTab] = useState<"roadmap" | "features">("roadmap");
   const [state, setState] = useState<RoadmapState | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,7 +77,7 @@ export function PmPanel({ groupId, members, onError }: PmPanelProps) {
       </nav>
       <div className="pm-body">
         {tab === "roadmap" ? (
-          <RoadmapView groupId={groupId} items={state.items} onUpdate={refreshSoft} onError={onError} />
+          <RoadmapView groupId={groupId} items={state.items} features={state.features} tasks={state.tasks} members={members} adminMemberId={adminMemberId} onUpdate={refreshSoft} onError={onError} />
         ) : (
           <FeatureKanban groupId={groupId} features={state.features} tasks={state.tasks} members={members} roadmapItems={state.items} onUpdate={refreshSoft} onError={onError} />
         )}
@@ -87,11 +88,14 @@ export function PmPanel({ groupId, members, onError }: PmPanelProps) {
 
 // ── Roadmap View ──
 
-function RoadmapView({ groupId, items, onUpdate, onError }: {
-  groupId: string; items: RoadmapItem[]; onUpdate: () => void; onError: (m: string) => void;
+function RoadmapView({ groupId, items, features, tasks, members, adminMemberId, onUpdate, onError }: {
+  groupId: string; items: RoadmapItem[]; features: Feature[]; tasks: FeatureTask[]; members: Member[];
+  adminMemberId?: string | null;
+  onUpdate: () => void; onError: (m: string) => void;
 }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<RoadmapItem | null>(null);
+  const [seedingId, setSeedingId] = useState<string | null>(null);
 
   const statusOrder = ["backlog", "in_progress", "review", "done"];
   const grouped = statusOrder.map((s) => ({ status: s, items: items.filter((i) => i.status === s) }));
@@ -107,8 +111,52 @@ function RoadmapView({ groupId, items, onUpdate, onError }: {
     try { await api.deleteRoadmapItem(id); onUpdate(); } catch (e: unknown) { onError(e instanceof Error ? e.message : String(e)); }
   };
 
+  const seedChecklist = async (item: RoadmapItem) => {
+    const work = boundWorkForItem(item.id, features, tasks);
+    if (work.totalTasks > 0) {
+      onError("该项已有 checklist，无需生成。");
+      return;
+    }
+    setSeedingId(item.id);
+    try {
+      const seed = seedChecklistTitles(item.title);
+      const assignee = pickDefaultAssigneeId(members, adminMemberId);
+      let featureId: string;
+      if (work.features.length > 0) {
+        featureId = work.features[0].id;
+        if (assignee && !work.features[0].assigneeMemberId) {
+          await api.updateFeature(featureId, { assigneeMemberId: assignee });
+        }
+      } else {
+        const feature = await api.createFeature({
+          groupId,
+          title: seed.featureTitle,
+          status: "backlog",
+          priority: item.priority || "medium",
+          assigneeMemberId: assignee,
+          targetRoadmapItemId: item.id,
+        });
+        featureId = feature.id;
+      }
+      for (const title of seed.tasks) {
+        await api.createFeatureTask({ featureId, title });
+      }
+      onUpdate();
+    } catch (e: unknown) {
+      onError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSeedingId(null);
+    }
+  };
+
   if (items.length === 0 && !showForm) {
-    return <div className="pm-empty"><p>还没有路线图项</p><button className="pm-btn primary" onClick={() => setShowForm(true)}>＋ 创建路线图项</button></div>;
+    return (
+      <div className="pm-empty">
+        <p>还没有路线图项</p>
+        <p className="pm-empty-hint">创建后到「功能看板」把功能绑定到该项并添加 checklist，即可在上方 Roadmap 条一键启动 Agent。</p>
+        <button className="pm-btn primary" onClick={() => setShowForm(true)}>＋ 创建路线图项</button>
+      </div>
+    );
   }
 
   return (
@@ -121,8 +169,9 @@ function RoadmapView({ groupId, items, onUpdate, onError }: {
       {grouped.map((g) => g.items.length > 0 && (
         <div key={g.status} className="roadmap-group">
           <h4 className="roadmap-group-title">{STATUS_LABEL[g.status] || g.status}</h4>
-          {g.items.map((item) => (
-            editing?.id === item.id ? (
+          {g.items.map((item) => {
+            const work = boundWorkForItem(item.id, features, tasks);
+            return editing?.id === item.id ? (
               <RoadmapForm key={item.id} groupId={groupId} initial={item} onSubmit={(input) => handleUpdate(item.id, input)} onCancel={() => setEditing(null)} />
             ) : (
               <div key={item.id} className="roadmap-card">
@@ -134,16 +183,33 @@ function RoadmapView({ groupId, items, onUpdate, onError }: {
                 </div>
                 {item.description && <p className="roadmap-card-desc">{item.description}</p>}
                 <div className="roadmap-card-meta">
+                  <span className={work.totalTasks === 0 ? "pm-bind warn" : "pm-bind ok"}>
+                    {work.features.length === 0
+                      ? "未绑定功能"
+                      : work.totalTasks === 0
+                        ? `${work.features.length} 功能 · 无 checklist`
+                        : `${work.features.length} 功能 · checklist ${work.doneTasks}/${work.totalTasks}`}
+                  </span>
                   {item.targetDate && <span>📅 {item.targetDate}</span>}
                   <span className="pm-muted">{timeAgo(item.createdAt)}</span>
                 </div>
                 <div className="roadmap-card-actions">
+                  {work.totalTasks === 0 && (
+                    <button
+                      className="pm-btn primary sm"
+                      disabled={seedingId === item.id}
+                      onClick={() => void seedChecklist(item)}
+                      title="创建绑定功能 + 3 条 checklist，并尽量指派 Agent"
+                    >
+                      {seedingId === item.id ? "生成中…" : "一键 checklist"}
+                    </button>
+                  )}
                   <button className="pm-link" onClick={() => setEditing(item)}>编辑</button>
                   <button className="pm-link danger" onClick={() => handleDelete(item.id)}>删除</button>
                 </div>
               </div>
-            )
-          ))}
+            );
+          })}
         </div>
       ))}
     </div>
@@ -203,6 +269,7 @@ function FeatureKanban({ groupId, features, tasks, members, roadmapItems, onUpda
         <span className="pm-count">共 {features.length} 个功能</span>
         <button className="pm-btn primary sm" onClick={() => setShowForm(true)}>＋ 新建功能</button>
       </div>
+      <p className="pm-flow-hint">编排路径：绑定路线图 → 指派 Agent（或设群管理员 Agent）→ 添加 checklist → 在上方 Roadmap 条点「启动」。</p>
       {showForm && <FeatureForm groupId={groupId} members={members} roadmapItems={roadmapItems} onSubmit={handleCreate} onCancel={() => setShowForm(false)} />}
       <div className="kanban-board">
         {STATUSES.map((status) => (
@@ -227,6 +294,7 @@ function FeatureKanban({ groupId, features, tasks, members, roadmapItems, onUpda
                   feature={feature}
                   featureTasks={tasks.filter((t) => t.featureId === feature.id)}
                   members={members}
+                  roadmapItems={roadmapItems}
                   onUpdate={onUpdate}
                   onError={onError}
                   onDelete={() => handleDeleteFeature(feature.id)}
@@ -241,15 +309,18 @@ function FeatureKanban({ groupId, features, tasks, members, roadmapItems, onUpda
   );
 }
 
-function FeatureCard({ feature, featureTasks, members, onUpdate, onError, onDelete, onStatusChange }: {
-  feature: Feature; featureTasks: FeatureTask[]; members: Member[]; onUpdate: () => void; onError: (m: string) => void; onDelete: () => void; onStatusChange: (s: string) => void;
+function FeatureCard({ feature, featureTasks, members, roadmapItems, onUpdate, onError, onDelete, onStatusChange }: {
+  feature: Feature; featureTasks: FeatureTask[]; members: Member[]; roadmapItems: RoadmapItem[];
+  onUpdate: () => void; onError: (m: string) => void; onDelete: () => void; onStatusChange: (s: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
 
   const assignee = members.find((m) => m.id === feature.assigneeMemberId);
+  const roadmap = roadmapItems.find((r) => r.id === feature.targetRoadmapItemId);
   const doneCount = featureTasks.filter((t) => t.done).length;
+  const bindOk = Boolean(roadmap) && featureTasks.length > 0 && Boolean(assignee);
 
   const handleAddTask = async () => {
     if (!newTaskTitle.trim()) return;
@@ -268,7 +339,7 @@ function FeatureCard({ feature, featureTasks, members, onUpdate, onError, onDele
 
   return (
     <div
-      className="feature-card"
+      className={`feature-card ${bindOk ? "ready" : "needs-bind"}`}
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData("text/feature-id", feature.id);
@@ -284,14 +355,18 @@ function FeatureCard({ feature, featureTasks, members, onUpdate, onError, onDele
           </span>
         </div>
         <div className="feature-card-meta">
+          <span className={roadmap ? "pm-bind ok" : "pm-bind warn"}>{roadmap ? `↪ ${roadmap.title}` : "未绑定路线图"}</span>
           {feature.area && <span className="pm-tag">{feature.area}</span>}
-          {assignee && <span className="pm-assignee">👤 {assignee.displayName}</span>}
-          {featureTasks.length > 0 && <span className="pm-tasks-count">{doneCount}/{featureTasks.length}</span>}
+          {assignee
+            ? <span className="pm-assignee">{assignee.displayName}</span>
+            : <span className="pm-bind warn">未指派</span>}
+          {featureTasks.length > 0
+            ? <span className="pm-tasks-count">{doneCount}/{featureTasks.length}</span>
+            : <span className="pm-bind warn">无 checklist</span>}
         </div>
       </div>
       {feature.description && <p className="feature-card-desc">{feature.description}</p>}
 
-      {/* Status quick-jump */}
       <div className="feature-status-jump">
         {STATUSES.filter((s) => s !== feature.status).map((s) => (
           <button key={s} className="pm-link sm" onClick={() => onStatusChange(s)}>→ {STATUS_LABEL[s]}</button>
@@ -326,7 +401,7 @@ function FeatureCard({ feature, featureTasks, members, onUpdate, onError, onDele
         <button className="pm-link sm" onClick={() => setEditing(true)}>编辑</button>
         <button className="pm-link danger sm" onClick={onDelete}>删除</button>
       </div>
-      {editing && <FeatureForm groupId={feature.groupId} members={members} roadmapItems={[]} initial={feature} onSubmit={async (input) => {
+      {editing && <FeatureForm groupId={feature.groupId} members={members} roadmapItems={roadmapItems} initial={feature} onSubmit={async (input) => {
         try { await api.updateFeature(feature.id, input); setEditing(false); onUpdate(); } catch (e: unknown) { onError(e instanceof Error ? e.message : String(e)); }
       }} onCancel={() => setEditing(false)} />}
     </div>
@@ -343,6 +418,7 @@ function FeatureForm({ groupId, members, roadmapItems, initial, onSubmit, onCanc
   const [area, setArea] = useState(initial?.area ?? "");
   const [assigneeId, setAssigneeId] = useState(initial?.assigneeMemberId ?? "");
   const [roadmapItemId, setRoadmapItemId] = useState(initial?.targetRoadmapItemId ?? "");
+  const agents = members.filter((m) => m.isActive && (m.kind === "agent" || m.kind === "chatbot"));
   return (
     <div className="pm-inline-form">
       <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="功能标题" required className="pm-input" />
@@ -353,19 +429,17 @@ function FeatureForm({ groupId, members, roadmapItems, initial, onSubmit, onCanc
       </div>
       <div className="pm-inline-row">
         <input value={area} onChange={(e) => setArea(e.target.value)} placeholder="分类（如 UI/后端）" className="pm-input sm" />
-        <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} className="pm-select">
-          <option value="">未分配</option>
-          {members.filter((m) => m.isActive).map((m) => <option key={m.id} value={m.id}>{m.displayName}</option>)}
+        <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} className="pm-select" title="编排优先使用此 Agent；空则回落群管理员 Agent">
+          <option value="">指派 Agent（可空→管理员）</option>
+          {agents.map((m) => <option key={m.id} value={m.id}>{m.displayName}</option>)}
         </select>
       </div>
-      {roadmapItems.length > 0 && (
-        <div className="pm-inline-row">
-          <select value={roadmapItemId} onChange={(e) => setRoadmapItemId(e.target.value)} className="pm-select">
-            <option value="">不关联路线图</option>
-            {roadmapItems.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
-          </select>
-        </div>
-      )}
+      <div className="pm-inline-row">
+        <select value={roadmapItemId} onChange={(e) => setRoadmapItemId(e.target.value)} className="pm-select" disabled={roadmapItems.length === 0}>
+          <option value="">{roadmapItems.length === 0 ? "先创建路线图项再绑定" : "绑定到路线图项"}</option>
+          {roadmapItems.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
+        </select>
+      </div>
       <div className="pm-inline-actions">
         <button className="pm-btn quiet sm" onClick={onCancel}>取消</button>
         <button className="pm-btn primary sm" disabled={!title.trim()} onClick={() => onSubmit({ groupId, title: title.trim(), description: desc || undefined, status, priority, area: area || undefined, assigneeMemberId: assigneeId || undefined, targetRoadmapItemId: roadmapItemId || undefined })}>

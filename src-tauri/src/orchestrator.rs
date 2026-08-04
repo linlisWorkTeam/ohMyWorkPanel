@@ -116,7 +116,7 @@ pub fn list_orchestrations(conn: &Connection, group_id: &str) -> AppResult<Vec<R
 
 fn active_orch_for_item(conn: &Connection, roadmap_item_id: &str) -> AppResult<Option<RoadmapOrchestration>> {
     conn.query_row(
-        &format!("{ORCH_SELECT} WHERE roadmap_item_id=?1 AND status IN ('running','paused') ORDER BY updated_at DESC LIMIT 1"),
+        &format!("{ORCH_SELECT} WHERE roadmap_item_id=?1 AND status IN ('running','paused','failed') ORDER BY updated_at DESC LIMIT 1"),
         params![roadmap_item_id],
         orch_from_row,
     )
@@ -421,8 +421,8 @@ pub fn on_run_terminal(
             None => return Ok(()),
         };
         if !succeeded {
-            orch.status = "paused".into();
-            orch.error_message = Some(error.unwrap_or("任务失败，编排已暂停。").into());
+            orch.status = "failed".into();
+            orch.error_message = Some(error.unwrap_or("任务失败，编排已暂停，可点「继续」重试。").into());
             orch.updated_at = now();
             conn.execute(
                 "UPDATE roadmap_orchestrations SET status=?1,error_message=?2,updated_at=?3 WHERE id=?4",

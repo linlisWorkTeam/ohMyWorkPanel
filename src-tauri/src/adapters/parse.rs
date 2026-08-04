@@ -61,13 +61,24 @@ pub fn parse_agent_event(line: &str) -> ParsedEvent {
 
     // Codex CLI `exec --json` (JSONL): coarse events, not token deltas.
     // See: thread/turn lifecycle + item.completed with nested item.text.
-    if type_hint == "thread.started"
-        || type_hint == "turn.completed"
-        || type_hint == "turn.failed"
-    {
+    if type_hint == "thread.started" || type_hint == "turn.completed" {
         return ParsedEvent {
             channel: "final".into(),
             text: String::new(),
+            session_id,
+            mode: DeltaMode::Append,
+        };
+    }
+    if type_hint == "error" || type_hint == "turn.failed" {
+        let msg = value
+            .pointer("/error/message")
+            .and_then(|v| v.as_str())
+            .or_else(|| value.get("message").and_then(|v| v.as_str()))
+            .unwrap_or("Codex 回合失败")
+            .to_string();
+        return ParsedEvent {
+            channel: "thinking".into(),
+            text: format!("{msg}\n"),
             session_id,
             mode: DeltaMode::Append,
         };
@@ -515,5 +526,11 @@ mod tests {
             r#"{"type":"thread.started","thread_id":"t1"}"#,
         );
         assert!(lifecycle.text.is_empty());
+
+        let failed = parse_agent_event(
+            r#"{"type":"turn.failed","error":{"message":"unexpected status 401"}}"#,
+        );
+        assert_eq!(failed.channel, "thinking");
+        assert!(failed.text.contains("401"));
     }
 }

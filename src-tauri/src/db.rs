@@ -154,9 +154,15 @@ pub fn init_db(path: &Path) -> AppResult<()> {
         "ALTER TABLE task_runs ADD COLUMN phase_updated_at INTEGER",
         "ALTER TABLE groups ADD COLUMN group_kind TEXT NOT NULL DEFAULT 'project'",
         "ALTER TABLE groups ADD COLUMN archived INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE members ADD COLUMN auth_user_id TEXT",
+        "ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0",
     ] {
         let _ = connection.execute(col_sql, []);
     }
+    let _ = connection.execute(
+        "UPDATE users SET is_admin=1 WHERE username='root' OR id='seed-user-root'",
+        [],
+    );
     migrate_members_allow_chatbot(&connection)?;
     let _ = connection.execute_batch(
         r#"
@@ -231,8 +237,8 @@ pub fn ensure_default_seed(connection: &Connection) -> AppResult<()> {
 
     connection
         .execute(
-            "INSERT INTO users(id, username, password_hash, created_at) VALUES(?1, 'root', ?2, ?3)
-             ON CONFLICT(username) DO UPDATE SET password_hash=excluded.password_hash",
+            "INSERT INTO users(id, username, password_hash, created_at, is_admin) VALUES(?1, 'root', ?2, ?3, 1)
+             ON CONFLICT(username) DO UPDATE SET password_hash=excluded.password_hash, is_admin=1",
             params![ROOT_USER_ID, password_hash, created_at],
         )
         .map_err(|e| e.to_string())?;
@@ -388,10 +394,11 @@ pub fn member_from_row(row: &Row<'_>) -> rusqlite::Result<Member> {
         keep_alive: row.get::<_, i64>(14)? != 0,
         warm_status: row.get(15)?,
         model: row.get(16).ok().flatten(),
+        auth_user_id: row.get(17).ok().flatten(),
     })
 }
 
-pub const MEMBER_SELECT: &str = "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model
+pub const MEMBER_SELECT: &str = "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model,m.auth_user_id
          FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id";
 
 pub fn message_from_row(row: &Row<'_>) -> rusqlite::Result<Message> {
@@ -439,6 +446,70 @@ pub fn get_groups(connection: &Connection) -> AppResult<Vec<Group>> {
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
     Ok(rows)
+}
+
+pub fn is_admin_user(connection: &Connection, user_id: &str) -> AppResult<bool> {
+    let flag: i64 = connection
+        .query_row(
+            "SELECT COALESCE(is_admin,0) FROM users WHERE id=?1",
+            params![user_id],
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?
+        .unwrap_or(0);
+    Ok(flag != 0 || user_id == "seed-user-root")
+}
+
+/// Groups visible to a login user. Admins see all; others only groups linked via members.auth_user_id.
+pub fn get_groups_for_user(connection: &Connection, user_id: &str) -> AppResult<Vec<Group>> {
+    if is_admin_user(connection, user_id)? {
+        return get_groups(connection);
+    }
+    let mut stmt = connection
+        .prepare(&format!(
+            "{GROUP_SELECT} WHERE id IN (
+               SELECT DISTINCT group_id FROM members
+               WHERE auth_user_id=?1 AND is_active=1 AND kind='user'
+             ) ORDER BY archived ASC, created_at DESC"
+        ))
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![user_id], group_from_row)
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(rows)
+}
+
+pub fn user_can_access_group(connection: &Connection, user_id: &str, group_id: &str) -> AppResult<bool> {
+    if is_admin_user(connection, user_id)? {
+        return Ok(true);
+    }
+    let n: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM members WHERE group_id=?1 AND auth_user_id=?2 AND is_active=1 AND kind='user'",
+            params![group_id, user_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(n > 0)
+}
+
+pub fn require_group_access(connection: &Connection, user_id: &str, group_id: &str) -> AppResult<()> {
+    if user_can_access_group(connection, user_id, group_id)? {
+        Ok(())
+    } else {
+        Err("无权访问该群组。".into())
+    }
+}
+
+pub fn require_admin(connection: &Connection, user_id: &str) -> AppResult<()> {
+    if is_admin_user(connection, user_id)? {
+        Ok(())
+    } else {
+        Err("需要管理员权限。".into())
+    }
 }
 
 pub fn get_group(connection: &Connection, group_id: &str) -> AppResult<Group> {
@@ -832,6 +903,25 @@ pub fn active_agent_ids(
     }
     Ok(agents)
 }
+
+/// Who should run for a new message.
+/// - No @mentions → fall back to group admin agent (if set).
+/// - @ only users (or inactive) → no agents (admin must not speak).
+/// - @ agent/chatbot → those agents only.
+pub fn resolve_target_agent_ids(
+    conn: &Connection,
+    group_id: &str,
+    admin_member_id: Option<&str>,
+    mentions: &[String],
+) -> AppResult<Vec<String>> {
+    let mut agents = active_agent_ids(conn, group_id, mentions)?;
+    if agents.is_empty() && mentions.is_empty() {
+        if let Some(admin) = admin_member_id {
+            agents.push(admin.to_string());
+        }
+    }
+    Ok(agents)
+}
  
  // === PM: Roadmap Items ===
  
@@ -1184,6 +1274,40 @@ mod tests {
     }
 
     #[test]
+    fn scoped_user_only_sees_linked_group() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        init_db(file.path()).unwrap();
+        let conn = open_db(file.path()).unwrap();
+        let ts = now();
+        conn.execute(
+            "INSERT INTO users(id,username,password_hash,created_at,is_admin) VALUES('u1','alice','x',?1,0)",
+            params![ts],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at) VALUES('g1','G1','.','m-owner',NULL,?1)",
+            params![ts],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at) VALUES('g2','G2','.','m-owner2',NULL,?1)",
+            params![ts],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,auth_user_id) VALUES('m1','g1','user','Alice','#000','',1,?1,'u1')",
+            params![ts],
+        )
+        .unwrap();
+        assert!(user_can_access_group(&conn, "u1", "g1").unwrap());
+        assert!(!user_can_access_group(&conn, "u1", "g2").unwrap());
+        let visible = get_groups_for_user(&conn, "u1").unwrap();
+        assert_eq!(visible.len(), 1);
+        assert_eq!(visible[0].id, "g1");
+        assert!(is_admin_user(&conn, "seed-user-root").unwrap());
+    }
+
+    #[test]
     fn messages_hot_window_and_before_cursor() {
         let file = tempfile::NamedTempFile::new().unwrap();
         init_db(file.path()).unwrap();
@@ -1216,5 +1340,44 @@ mod tests {
         assert_eq!(state.messages_total, 15);
         assert!(!state.messages_has_more); // 15 < HOT 100
         assert_eq!(state.messages.len(), 15);
+    }
+
+    #[test]
+    fn resolve_target_agents_skips_admin_when_only_user_mentioned() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        init_db(file.path()).unwrap();
+        let conn = open_db(file.path()).unwrap();
+        let ts = now();
+        conn.execute(
+            "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at) VALUES('g','g','.','u','admin',?1)",
+            params![ts],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at) VALUES('u','g','user','Owner','#000','',1,?1)",
+            params![ts],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at) VALUES('guest','g','user','Guest','#000','',1,?1)",
+            params![ts],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at) VALUES('admin','g','agent','Admin','#000','',1,?1)",
+            params![ts],
+        )
+        .unwrap();
+        // No mentions → admin fallback
+        let no_mention = resolve_target_agent_ids(&conn, "g", Some("admin"), &[]).unwrap();
+        assert_eq!(no_mention, vec!["admin".to_string()]);
+        // @user only → no agent
+        let user_only =
+            resolve_target_agent_ids(&conn, "g", Some("admin"), &["guest".into()]).unwrap();
+        assert!(user_only.is_empty());
+        // @agent → that agent
+        let agent_hit =
+            resolve_target_agent_ids(&conn, "g", Some("admin"), &["admin".into()]).unwrap();
+        assert_eq!(agent_hit, vec!["admin".to_string()]);
     }
 }

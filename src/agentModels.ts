@@ -1,7 +1,7 @@
 /** Keep in sync with src-tauri/src/adapters/models.rs */
 
 const CATALOG: Record<string, string[]> = {
-  codex: ["gpt-5", "o3", "o4-mini", "gpt-4.1"],
+  codex: ["deepseek-v4-flash", "deepseek-chat", "deepseek-reasoner"],
   // IDs from `cursor-agent --list-models` (account-dependent; keep in sync)
   cursor: [
     "auto",

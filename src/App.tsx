@@ -23,6 +23,7 @@ import {
   shouldLoadOlderOnScroll,
   sliceVisibleMessages,
 } from "./messageHistory";
+import { loadAuthUser, resolveSenderMemberId, saveAuthUser, type AuthUser } from "./authSession";
 import { loadSendKeyMode, saveSendKeyMode, sendKeyHint, shouldSendOnKey, type SendKeyMode } from "./sendKey";
 import type { ChatEvent, Group, GroupState, Member, PresetRole, RuntimeSettings, TaskRun } from "./types";
 import { ExperiencePanel } from "./ExperiencePanel";
@@ -40,11 +41,14 @@ type NewMember = {
   chatbotProvider: "opencode-go" | "deepseek";
   apiKey: string;
   model: string;
+  loginUsername: string;
+  loginPassword: string;
 };
 type Session = "checking" | "login" | "ready";
 const emptyMember: NewMember = {
   kind: "agent", displayName: "", roleDescription: "", adapter: "mock", executablePath: "",
   chatbotProvider: "opencode-go", apiKey: "", model: "",
+  loginUsername: "", loginPassword: "",
 };
 const PHASE_LABEL: Record<string, string> = {
   queued: "排队", starting: "启动", preparing: "准备", cli_spawn: "拉起 CLI",
@@ -79,6 +83,7 @@ export function App() {
   const [createGroupKind, setCreateGroupKind] = useState<"project" | "chat">("project");
   const [showArchived, setShowArchived] = useState(false);
   const [sendKeyMode, setSendKeyMode] = useState<SendKeyMode>(() => loadSendKeyMode());
+  const [authUser, setAuthUser] = useState<AuthUser | null>(() => loadAuthUser());
   const [showAddMember, setShowAddMember] = useState(false);
   const [newMember, setNewMember] = useState<NewMember>(emptyMember);
   const [ocrRunning, setOcrRunning] = useState(false);
@@ -184,6 +189,8 @@ export function App() {
 
   const goLogin = (message?: string | null) => {
     setAuthToken(null);
+    saveAuthUser(null);
+    setAuthUser(null);
     setCurrent(null);
     setGroups([]);
     setSession("login");
@@ -207,14 +214,30 @@ export function App() {
         return;
       }
       try {
+        try {
+          const me = await api.verify();
+          if (!disposed) {
+            const next: AuthUser = {
+              userId: me.sub,
+              username: me.username,
+              isAdmin: Boolean(me.isAdmin ?? me.is_admin),
+            };
+            saveAuthUser(next);
+            setAuthUser(next);
+          }
+        } catch { /* keep cached */ }
         const boot = await api.bootstrap();
         if (disposed) return;
         setGroups(boot.groups);
         if (boot.groups[0]) {
           forceScrollGroupId.current = boot.groups[0].id;
           await refresh(boot.groups[0].id);
-        } else setShowCreate(true);
-        setSettings(await api.getSettings());
+        } else {
+          setCurrent(null);
+          // Only admins may create groups when empty.
+          if ((loadAuthUser()?.isAdmin ?? false)) setShowCreate(true);
+        }
+        try { setSettings(await api.getSettings()); } catch { /* scoped users may lack settings */ }
         try { setPresetRoles(await api.getPresetRoles()); } catch { /* optional */ }
         if (!disposed) {
           setError(null);
@@ -404,14 +427,22 @@ export function App() {
     return <AuthScreen
       error={error}
       onError={setError}
-      onAuthed={() => { setError(null); setSession("checking"); }}
+      onAuthed={(user) => {
+        setAuthUser(user);
+        setError(null);
+        setSession("checking");
+      }}
     />;
   }
 
   const members = current?.members ?? [];
   const chatbotTaken = chatbotSlotTaken(current?.group, members);
   const isChatGroup = current?.group.groupKind === "chat";
+  const isAdmin = authUser?.isAdmin ?? !requiresAuth;
   const owner = current && members.find((member) => member.id === current.group.ownerMemberId);
+  const senderMemberId = current
+    ? resolveSenderMemberId(members, current.group.ownerMemberId, authUser?.userId, isAdmin)
+    : null;
   const activeMembers = members.filter((member) => member.isActive);
   const addMemberKind = chatbotTaken && newMember.kind === "chatbot" ? "agent" : newMember.kind;
   const activeGroups = groups.filter((g) => !g.archived);
@@ -503,13 +534,16 @@ export function App() {
   };
 
   const send = async () => {
-    if (!current || !owner || !composer.trim() || sending) return;
-    if (!owner) { setError("当前群缺少群主成员，无法发送"); return; }
+    if (!current || !composer.trim() || sending) return;
+    if (!senderMemberId) {
+      setError(isAdmin ? "当前群缺少群主成员，无法发送" : "未找到你在本群的成员身份，无法发言");
+      return;
+    }
     const body = composer;
     setComposer("");
     setSending(true);
     try {
-      await api.sendMessage(current.group.id, owner.id, body, findMentionedMemberIds(body, activeMembers));
+      await api.sendMessage(current.group.id, senderMemberId, body, findMentionedMemberIds(body, activeMembers));
       await refresh(current.group.id);
     } catch (reason) { setComposer(body); setError(readError(reason)); }
     finally { setSending(false); composerRef.current?.focus(); }
@@ -548,6 +582,8 @@ export function App() {
                 : newMember.adapter,
             ) || undefined)
           : undefined,
+        loginUsername: newMember.kind === "user" ? newMember.loginUsername.trim() : undefined,
+        loginPassword: newMember.kind === "user" ? newMember.loginPassword : undefined,
       });
       setNewMember(emptyMember); setShowAddMember(false); await refresh();
     } catch (reason) { setError(readError(reason)); }
@@ -590,7 +626,7 @@ export function App() {
     {showMembers && <div className="members-backdrop" onClick={() => setShowMembers(false)} />}
     <aside className={`group-sidebar ${showSidebar ? "open" : ""}`}>
       <Brand />
-      <div className="sidebar-heading"><span>群聊</span><button className="icon-button" onClick={() => setShowCreate(true)} aria-label="新建群聊">＋</button></div>
+      <div className="sidebar-heading"><span>群聊</span>{isAdmin && <button className="icon-button" onClick={() => setShowCreate(true)} aria-label="新建群聊">＋</button>}</div>
       <nav className="group-list">
         {activeGroups.map((group) => (
           <div key={group.id} className={`group-item-row ${group.id === current?.group.id ? "selected" : ""}`}>
@@ -598,7 +634,7 @@ export function App() {
               <span className="group-avatar">{group.name.slice(0, 1)}</span>
               <span className="group-name">{group.name}{group.groupKind === "chat" ? " · 聊" : ""}</span>
             </button>
-            <button type="button" className="group-archive-btn" title="归档群组" aria-label="归档群组" onClick={(e) => void archiveGroup(group, true, e)}>−</button>
+            {isAdmin && <button type="button" className="group-archive-btn" title="归档群组" aria-label="归档群组" onClick={(e) => void archiveGroup(group, true, e)}>−</button>}
           </div>
         ))}
         {archivedGroups.length > 0 && (
@@ -620,8 +656,8 @@ export function App() {
       </nav>
       <div className="sidebar-footer">
         <ThemeSwitcher />
-        <button onClick={() => setShowSettings(true)}>运行设置</button>
-        {requiresAuth && <button onClick={() => goLogin(null)}>退出登录</button>}
+        {isAdmin && <button onClick={() => setShowSettings(true)}>运行设置</button>}
+        {requiresAuth && <button onClick={() => goLogin(null)}>退出登录{authUser ? `（${authUser.username}）` : ""}</button>}
       </div>
     </aside>
 
@@ -633,7 +669,7 @@ export function App() {
             <div>
               <div className="group-title-row">
                 <h1>{current.group.name}</h1>
-                {!isChatGroup && (
+                {!isChatGroup && isAdmin && (
                   <div className="view-toggle" role="group" aria-label="主视图">
                     <button type="button" className={mainView === "chat" ? "active" : ""} onClick={() => setMainView("chat")}>聊天</button>
                     <button type="button" className={mainView === "project" ? "active" : ""} onClick={() => setMainView("project")}>项目</button>
@@ -678,7 +714,7 @@ export function App() {
             return (
               <div key={message.id} className="day-block">
                 {showDay && <div className="day-divider"><span>{dayLabel(message.createdAt)}</span></div>}
-                <MessageBubble message={message} members={members} runs={current.runs} ownerId={current.group.ownerMemberId} onRun={changeRun} />
+                <MessageBubble message={message} members={members} runs={current.runs} viewerMemberId={senderMemberId} onRun={changeRun} />
               </div>
             );
           })}
@@ -748,9 +784,9 @@ export function App() {
       <header>
         <div className="pm-tab-bar">
           <button className={`pm-tab-btn ${rightPanelTab === "members" ? "active" : ""}`} onClick={() => setRightPanelTab("members")}>群成员</button>
-          {!isChatGroup && <button className={`pm-tab-btn`} onClick={() => { setMainView("project"); }}>项目管理</button>}
-          <button className={`pm-tab-btn ${rightPanelTab === "experiences" ? "active" : ""}`} onClick={() => setRightPanelTab("experiences")}>经验</button>
-          <button className={`pm-tab-btn ${rightPanelTab === "logs" ? "active" : ""}`} onClick={() => setRightPanelTab("logs")}>日志</button>
+          {!isChatGroup && isAdmin && <button className={`pm-tab-btn`} onClick={() => { setMainView("project"); }}>项目管理</button>}
+          {isAdmin && <button className={`pm-tab-btn ${rightPanelTab === "experiences" ? "active" : ""}`} onClick={() => setRightPanelTab("experiences")}>经验</button>}
+          {isAdmin && <button className={`pm-tab-btn ${rightPanelTab === "logs" ? "active" : ""}`} onClick={() => setRightPanelTab("logs")}>日志</button>}
         </div>
         <button className="icon-button" onClick={() => setShowMembers(false)}>×</button>
       </header>
@@ -782,8 +818,13 @@ export function App() {
           {chatbotTaken && (
             <p className="form-hint">项目群限 1 个聊天机器人；聊天群可添加多个。</p>
           )}
-          <input autoFocus value={newMember.displayName} onChange={(event) => setNewMember((value) => ({ ...value, displayName: event.target.value }))} placeholder="成员名称" required />
+          <input autoFocus value={newMember.displayName} onChange={(event) => setNewMember((value) => ({ ...value, displayName: event.target.value }))} placeholder="成员显示名称" required />
           <input value={newMember.roleDescription} onChange={(event) => setNewMember((value) => ({ ...value, roleDescription: event.target.value }))} placeholder={addMemberKind === "agent" ? "职责，例如：代码审查" : addMemberKind === "chatbot" ? "机器人说明（可选）" : "成员说明（可选）"} />
+          {addMemberKind === "user" && <>
+            <input value={newMember.loginUsername} onChange={(event) => setNewMember((value) => ({ ...value, loginUsername: event.target.value }))} placeholder="登录用户名" required autoComplete="off" />
+            <input type="password" value={newMember.loginPassword} onChange={(event) => setNewMember((value) => ({ ...value, loginPassword: event.target.value }))} placeholder="登录密码" required autoComplete="new-password" />
+            <p className="form-hint">对方用该用户名/密码登录后，只能看到并进入本群对话。</p>
+          </>}
           {addMemberKind === "agent" && <>
             <select value={newMember.adapter} onChange={(event) => {
               const adapter = event.target.value;
@@ -824,7 +865,7 @@ export function App() {
             <p className="form-hint">{isChatGroup ? "聊天群可添加多个机器人。" : "项目群仅可添加一个聊天机器人。"}</p>
           </>}
           <div><button type="button" className="quiet-button" onClick={() => setShowAddMember(false)}>取消</button><button type="submit">添加</button></div>
-        </form> : <button className="add-member-button" onClick={() => { setNewMember(emptyMember); setShowAddMember(true); }}>＋ 添加成员</button>}
+        </form> : isAdmin ? <button className="add-member-button" onClick={() => { setNewMember(emptyMember); setShowAddMember(true); }}>＋ 添加成员</button> : null}
       </> : rightPanelTab === "experiences" ? <ExperiencePanel groupId={current.group.id} members={members} ownerId={current.group.ownerMemberId} onError={(msg) => setError(msg)} />
       : <LogsPanel onError={(msg) => setError(msg)} />}
     </aside>}
@@ -875,10 +916,10 @@ export function App() {
   </main>;
 }
 
-const MessageBubble = memo(function MessageBubble({ message, members, runs, ownerId, onRun }: { message: GroupState["messages"][number]; members: Member[]; runs: TaskRun[]; ownerId: string; onRun: (run: TaskRun, operation: "cancel" | "retry") => void }) {
+const MessageBubble = memo(function MessageBubble({ message, members, runs, viewerMemberId, onRun }: { message: GroupState["messages"][number]; members: Member[]; runs: TaskRun[]; viewerMemberId: string | null; onRun: (run: TaskRun, operation: "cancel" | "retry") => void }) {
   const sender = members.find((member) => member.id === message.senderMemberId);
   const run = runs.find((candidate) => candidate.outputMessageId === message.id);
-  const own = message.senderMemberId === ownerId;
+  const own = Boolean(viewerMemberId) && message.senderMemberId === viewerMemberId;
   const responding = message.status === "streaming" || run?.status === "queued" || run?.status === "running";
   const hasContent = hasRenderableContent(message.content);
   const foldAgent = !own && hasContent;
@@ -1042,7 +1083,7 @@ function Avatar({ member, responding }: { member?: Member; responding?: boolean 
 }
 function Status({ status }: { status: string }) { return <span className={`status ${status}`}>{({ queued: "排队中", running: "运行中", awaiting_review: "待审阅", changes_requested: "待修改", completed: "完成", failed: "失败", cancelled: "已停止", interrupted: "已中断" } as Record<string, string>)[status] ?? status}</span>; }
 function ReviewBadge({ reviewStatus }: { reviewStatus: string }) { return <span className={`review-badge ${reviewStatus}`}>{({ pending: "审阅中", approved: "已通过", rejected: "被退回" } as Record<string, string>)[reviewStatus] ?? reviewStatus}</span>; }
-function AuthScreen({ error, onError, onAuthed }: { error: string | null; onError: (msg: string | null) => void; onAuthed: () => void }) {
+function AuthScreen({ error, onError, onAuthed }: { error: string | null; onError: (msg: string | null) => void; onAuthed: (user: AuthUser) => void }) {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -1057,7 +1098,13 @@ function AuthScreen({ error, onError, onAuthed }: { error: string | null; onErro
         ? await api.login(username.trim(), password)
         : await api.register(username.trim(), password);
       setAuthToken(result.token);
-      onAuthed();
+      const user: AuthUser = {
+        userId: result.user_id,
+        username: result.username,
+        isAdmin: Boolean(result.isAdmin ?? result.is_admin),
+      };
+      saveAuthUser(user);
+      onAuthed(user);
     } catch (reason) {
       onError(readError(reason));
     } finally {
@@ -1070,7 +1117,7 @@ function AuthScreen({ error, onError, onAuthed }: { error: string | null; onErro
       <section className="auth-card">
         <Brand />
         <h1>{mode === "login" ? "登录" : "注册"}</h1>
-        <p className="auth-hint">多 Agent 协作工作台。登录后进入你的项目群聊。</p>
+        <p className="auth-hint">多 Agent 协作工作台。使用管理员分配的账号登录后进入所属群聊。</p>
         <form className="modal-form" onSubmit={(e) => void submit(e)}>
           <label>用户名<input autoFocus value={username} onChange={(e) => setUsername(e.target.value)} required autoComplete="username" /></label>
           <label>密码<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete={mode === "login" ? "current-password" : "new-password"} /></label>

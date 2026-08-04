@@ -216,6 +216,7 @@ where
 }
 
 /// Run adapter process. `on_delta(channel, text, replace)`. Returns captured CLI session id if any.
+/// `api_key`: when set for Codex, exported as `OPENAI_API_KEY` (DeepSeek OpenAI-compatible auth).
 pub async fn run_streaming<F, Fut>(
     kind: AdapterKind,
     executable: &str,
@@ -225,6 +226,7 @@ pub async fn run_streaming<F, Fut>(
     model: Option<&str>,
     timeout_secs: u64,
     token: &Arc<AtomicBool>,
+    api_key: Option<&str>,
     mut on_delta: F,
 ) -> AppResult<Option<String>>
 where
@@ -245,6 +247,11 @@ where
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    if kind == AdapterKind::Codex {
+        if let Some(key) = api_key.map(str::trim).filter(|s| !s.is_empty()) {
+            command.env("OPENAI_API_KEY", key);
+        }
+    }
 
     let mut child = command
         .spawn()
@@ -268,6 +275,7 @@ where
     // OpenClaw `--json` often emits one pretty-printed object across many lines.
     // Buffer until a full JSON value parses; never echo raw fragments into chat.
     let mut openclaw_buf = String::new();
+    let mut last_failure_hint: Option<String> = None;
     loop {
         tokio::select! {
             result = lines.next_line() => match result {
@@ -294,6 +302,11 @@ where
                             on_delta(event.channel, event.text, replace).await?;
                         }
                     } else {
+                        if kind == AdapterKind::Codex {
+                            if let Some(hint) = codex_failure_hint(&line) {
+                                last_failure_hint = Some(hint);
+                            }
+                        }
                         let event = kind.parse_event(&line);
                         if let Some(id) = event.session_id {
                             captured_session = Some(id);
@@ -340,13 +353,49 @@ where
         .map_err(|e| format!("等待 Agent 结束失败：{e}"))?;
     let stderr = stderr_task.await.unwrap_or_default();
     if !status.success() {
-        return Err(if stderr.trim().is_empty() {
-            format!("{adapter} 异常退出（{status}）。")
-        } else {
-            format!("{adapter} 异常退出：{}", stderr.trim())
-        });
+        return Err(format_cli_failure(adapter, &status.to_string(), &stderr, last_failure_hint.as_deref()));
     }
     Ok(captured_session)
+}
+
+fn codex_failure_hint(line: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(line.trim()).ok()?;
+    let ty = value.get("type")?.as_str()?.to_ascii_lowercase();
+    if ty != "error" && ty != "turn.failed" {
+        return None;
+    }
+    value
+        .pointer("/error/message")
+        .and_then(|v| v.as_str())
+        .or_else(|| value.get("message").and_then(|v| v.as_str()))
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+fn format_cli_failure(adapter: &str, status: &str, stderr: &str, hint: Option<&str>) -> String {
+    let cleaned = stderr
+        .lines()
+        .map(str::trim)
+        .filter(|line| {
+            !line.is_empty()
+                && !line.eq_ignore_ascii_case("Reading additional input from stdin...")
+                && !line.starts_with("thread 'main'")
+                && !line.starts_with("note: run with")
+                && !line.starts_with("failed printing to stdout")
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    if let Some(h) = hint.filter(|s| !s.is_empty()) {
+        if cleaned.is_empty() {
+            return format!("{adapter} 异常退出：{h}");
+        }
+        return format!("{adapter} 异常退出：{h}\n{cleaned}");
+    }
+    if cleaned.is_empty() {
+        format!("{adapter} 异常退出（{status}）。")
+    } else {
+        format!("{adapter} 异常退出：{cleaned}")
+    }
 }
 
 #[cfg(test)]
@@ -357,11 +406,30 @@ mod tests {
     fn build_args_match_cli_contracts() {
         assert_eq!(
             AdapterKind::Codex.build_args("do work", None, None),
-            vec!["exec", "--json", "--skip-git-repo-check", "do work"]
+            vec![
+                "exec",
+                "--json",
+                "--skip-git-repo-check",
+                "-c",
+                "model_provider=\"deepseek\"",
+                "-c",
+                "model_providers.deepseek.base_url=\"http://127.0.0.1:18888/v1\"",
+                "-c",
+                "model_providers.deepseek.env_key=\"OPENAI_API_KEY\"",
+                "-c",
+                "model_providers.deepseek.name=\"deepseek\"",
+                "-m",
+                "deepseek-v4-flash",
+                "do work"
+            ]
         );
         assert_eq!(
-            AdapterKind::Codex.build_args("do work", None, Some("o3")),
-            vec!["exec", "--json", "--skip-git-repo-check", "-m", "o3", "do work"]
+            AdapterKind::Codex.build_args("do work", None, Some("o3"))
+                .into_iter()
+                .skip_while(|a| a != "-m")
+                .take(2)
+                .collect::<Vec<_>>(),
+            vec!["-m", "deepseek-v4-flash"]
         );
         assert_eq!(
             AdapterKind::ClaudeCode.build_args("do work", None, None),
@@ -462,5 +530,17 @@ mod tests {
     #[test]
     fn parse_rejects_unknown_adapter() {
         assert!(AdapterKind::parse("unknown").is_err());
+    }
+
+    #[test]
+    fn format_cli_failure_prefers_json_hint_over_stdin_noise() {
+        let msg = format_cli_failure(
+            "codex",
+            "exit status: 1",
+            "Reading additional input from stdin...\n",
+            Some("unexpected status 401 Unauthorized"),
+        );
+        assert!(msg.contains("401"));
+        assert!(!msg.contains("Reading additional input"));
     }
 }

@@ -61,6 +61,9 @@ pub struct Member {
     /// Preferred model id for this agent/chatbot (empty = provider default).
     #[serde(default)]
     pub model: Option<String>,
+    /// Linked login account (`users.id`) for kind=user members.
+    #[serde(default)]
+    pub auth_user_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -152,6 +155,10 @@ pub struct AddMemberInput {
     pub api_key: Option<String>,
     /// Optional model override at create time
     pub model: Option<String>,
+    /// Login username for kind=user (creates `users` row)
+    pub login_username: Option<String>,
+    /// Login password for kind=user
+    pub login_password: Option<String>,
 }
 
 #[derive(Debug, Serialize)]

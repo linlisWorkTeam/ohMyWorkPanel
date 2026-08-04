@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { api } from "./api";
 import { PmPanel } from "./PmPanel";
 import { ServerPathPicker } from "./ServerPathPicker";
-import type { Group, Member, OpsJobState, ReleaseStatus, RoadmapItem, RoadmapOrchestration, TaskRun } from "./types";
+import { boundWorkForItem, orchCursorLabel, orchDisplayLabel, orchStartBlockers, activeOrchAlerts, roadmapProgress, agentOrchLane, checklistPct } from "./roadmapUi";
+import type {
+  ChatEvent, Feature, FeatureTask, Group, Member, OpsJobState, ReleaseStatus,
+  RoadmapItem, RoadmapOrchestration, TaskRun,
+} from "./types";
 
 interface Props {
   group: Group;
@@ -29,6 +34,8 @@ const STATUS_LABEL: Record<string, string> = {
 
 export function ProjectWorkflowView({ group, members, runs, canManage, onGroupPatch, onMemberPatch, onError }: Props) {
   const [roadmap, setRoadmap] = useState<RoadmapItem[]>([]);
+  const [features, setFeatures] = useState<Feature[]>([]);
+  const [tasks, setTasks] = useState<FeatureTask[]>([]);
   const [orchestrations, setOrchestrations] = useState<RoadmapOrchestration[]>([]);
   const [orchBusy, setOrchBusy] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState(group.announcement ?? "");
@@ -50,6 +57,8 @@ export function ProjectWorkflowView({ group, members, runs, canManage, onGroupPa
         api.listRoadmapOrchestrations(group.id).catch(() => [] as RoadmapOrchestration[]),
       ]);
       setRoadmap(state.items);
+      setFeatures(state.features);
+      setTasks(state.tasks);
       setOrchestrations(orch);
     } catch (e: unknown) {
       onError(e instanceof Error ? e.message : String(e));
@@ -57,6 +66,20 @@ export function ProjectWorkflowView({ group, members, runs, canManage, onGroupPa
   }, [group.id, onError]);
 
   useEffect(() => { void refreshRoadmap(); }, [refreshRoadmap]);
+
+  // Instant refresh when orchestrator advances (WS), not only the 4s poll.
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void listen<ChatEvent>("chat-event", (event) => {
+      if (disposed) return;
+      const payload = event.payload;
+      if (payload.kind !== "orchestration_status") return;
+      if (payload.groupId && payload.groupId !== group.id) return;
+      void refreshRoadmap();
+    }).then((fn) => { unlisten = fn; });
+    return () => { disposed = true; unlisten?.(); };
+  }, [group.id, refreshRoadmap]);
 
   const orchByItem = useMemo(() => {
     const map = new Map<string, RoadmapOrchestration>();
@@ -108,6 +131,9 @@ export function ProjectWorkflowView({ group, members, runs, canManage, onGroupPa
       ?? null;
   }, [roadmap]);
 
+  const progress = useMemo(() => roadmapProgress(roadmap), [roadmap]);
+  const orchAlerts = useMemo(() => activeOrchAlerts(roadmap, orchByItem), [roadmap, orchByItem]);
+
   const agents = members.filter((m) => (m.kind === "agent" || m.kind === "chatbot") && m.isActive);
   const activeRuns = runs.filter((r) =>
     ["queued", "running", "awaiting_review", "changes_requested"].includes(r.status)
@@ -115,7 +141,7 @@ export function ProjectWorkflowView({ group, members, runs, canManage, onGroupPa
 
   // Keep orchestration badges fresh while agents are working.
   useEffect(() => {
-    const active = orchestrations.some((o) => o.status === "running" || o.status === "paused");
+    const active = orchestrations.some((o) => o.status === "running" || o.status === "paused" || o.status === "failed");
     if (!active && activeRuns.length === 0) return;
     const id = window.setInterval(() => { void refreshRoadmap(); }, 4000);
     return () => window.clearInterval(id);
@@ -201,81 +227,132 @@ export function ProjectWorkflowView({ group, members, runs, canManage, onGroupPa
         )}
       </section>
 
-      <section className="wf-section">
-        <h2>Roadmap 进度</h2>
+      <section className="wf-section wf-roadmap">
+        <div className="wf-section-head">
+          <h2>Roadmap 进度</h2>
+          {roadmap.length > 0 && (
+            <div className="roadmap-meter" aria-label={`完成 ${progress.done}/${progress.total}`}>
+              <div className="roadmap-meter-track">
+                <div className="roadmap-meter-fill" style={{ width: `${progress.pct}%` }} />
+              </div>
+              <span className="roadmap-meter-label">{progress.done}/{progress.total} · {progress.pct}%</span>
+            </div>
+          )}
+        </div>
+        {orchAlerts.length > 0 && (
+          <div className="orch-alert-stack" role="status">
+            {orchAlerts.map((a) => (
+              <div key={a.itemTitle + a.message} className="orch-alert">
+                <strong>{a.itemTitle}</strong>
+                <span>{a.message}</span>
+              </div>
+            ))}
+          </div>
+        )}
         {roadmap.length === 0 ? (
-          <p className="wf-hint">尚未创建路线图项 — 在下方看板管理中添加。</p>
+          <div className="wf-empty">
+            <strong>还没有路线图</strong>
+            <p>在下方「工作流看板」添加路线图项，并把功能/checklist 绑定到该项，即可一键让 Agent 串行执行。</p>
+          </div>
         ) : (
-          <div className="roadmap-strip">
-            {[...roadmap].sort((a, b) => a.sortOrder - b.sortOrder).map((item) => {
+          <div className="roadmap-strip" role="list">
+            {[...roadmap].sort((a, b) => a.sortOrder - b.sortOrder).map((item, index, arr) => {
               const current = currentStep?.id === item.id;
               const orch = orchByItem.get(item.id);
               const busy = orchBusy === item.id;
+              const work = boundWorkForItem(item.id, features, tasks);
+              const cursor = orchCursorLabel(orch, features, tasks);
+              const blockers = orchStartBlockers(item.id, features, tasks, Boolean(group.adminMemberId));
+              const canStart = blockers.length === 0;
+              const display = orch ? orchDisplayLabel(orch) : null;
+              const orchLive = orch && (orch.status === "running" || orch.status === "paused" || orch.status === "failed");
               return (
-                <div key={item.id} className={`roadmap-step ${item.status} ${current ? "current" : ""}`}>
-                  <span className="step-status">{STATUS_LABEL[item.status] ?? item.status}</span>
-                  <strong>{item.title}</strong>
-                  {current && <em>当前</em>}
-                  {orch && (orch.status === "running" || orch.status === "paused" || orch.status === "failed") && (
-                    <small className="orch-hint">
-                      编排 {orch.status}
-                      {orch.errorMessage ? ` · ${orch.errorMessage}` : ""}
+                <div key={item.id} className="roadmap-step-wrap" role="listitem">
+                  <div className={`roadmap-step ${item.status} ${current ? "current" : ""} ${orch?.status === "running" ? "orch-running" : ""} ${display?.tone === "failed" ? "orch-failed" : ""}`}>
+                    <span className="step-status">{STATUS_LABEL[item.status] ?? item.status}</span>
+                    <strong>{item.title}</strong>
+                    {current && <em className="step-now">当前</em>}
+                    <small className="step-bound">
+                      {work.totalTasks === 0
+                        ? "未绑定 checklist"
+                        : `checklist ${work.doneTasks}/${work.totalTasks} · ${checklistPct(work.doneTasks, work.totalTasks)}%`}
                     </small>
-                  )}
-                  {canManage && item.status !== "done" && (
-                    <div className="orch-actions">
-                      {(!orch || orch.status === "completed" || orch.status === "cancelled") && (
-                        <button
-                          type="button"
-                          className="pm-btn primary sm"
-                          disabled={!!orchBusy}
-                          onClick={() => void runOrch(item.id, () => api.startRoadmapItem(item.id))}
-                        >
-                          {busy ? "…" : "启动"}
-                        </button>
-                      )}
-                      {orch?.status === "running" && (
-                        <button
-                          type="button"
-                          className="pm-btn sm"
-                          disabled={!!orchBusy}
-                          onClick={() => void runOrch(item.id, () => api.pauseRoadmapOrchestration(orch.id))}
-                        >
-                          暂停
-                        </button>
-                      )}
-                      {(orch?.status === "paused" || orch?.status === "failed") && (
-                        <>
+                    {work.totalTasks > 0 && (
+                      <div className="step-mini-meter" aria-hidden>
+                        <div
+                          className={`step-mini-fill ${item.status === "done" ? "done" : ""}`}
+                          style={{ width: `${checklistPct(work.doneTasks, work.totalTasks)}%` }}
+                        />
+                      </div>
+                    )}
+                    {!canStart && item.status !== "done" && (!orch || orch.status === "completed" || orch.status === "cancelled") && (
+                      <small className="orch-hint orch-failed">{blockers[0]}</small>
+                    )}
+                    {orchLive && display && (
+                      <small className={`orch-hint orch-${display.tone}`}>
+                        {display.label}
+                        {cursor ? ` · ${cursor}` : ""}
+                        {orch.errorMessage && display.tone === "failed" ? ` · ${orch.errorMessage}` : ""}
+                        {orch.errorMessage && display.tone === "paused" && orch.errorMessage !== "已手动暂停。" ? ` · ${orch.errorMessage}` : ""}
+                      </small>
+                    )}
+                    {canManage && item.status !== "done" && (
+                      <div className="orch-actions">
+                        {(!orch || orch.status === "completed" || orch.status === "cancelled") && (
                           <button
                             type="button"
                             className="pm-btn primary sm"
-                            disabled={!!orchBusy}
-                            onClick={() => void runOrch(item.id, () => api.resumeRoadmapOrchestration(orch.id))}
+                            disabled={!!orchBusy || !canStart}
+                            title={canStart ? "启动 Agent 编排" : blockers.join("；")}
+                            onClick={() => void runOrch(item.id, () => api.startRoadmapItem(item.id))}
                           >
-                            继续
+                            {busy ? "…" : "启动"}
                           </button>
-                          <button
-                            type="button"
-                            className="pm-btn sm"
-                            disabled={!!orchBusy}
-                            onClick={() => void runOrch(item.id, () => api.cancelRoadmapOrchestration(orch.id))}
-                          >
-                            取消
-                          </button>
-                        </>
-                      )}
-                      {orch?.status === "running" && (
-                        <button
-                          type="button"
-                          className="pm-btn sm"
-                          disabled={!!orchBusy}
-                          onClick={() => void runOrch(item.id, () => api.cancelRoadmapOrchestration(orch.id))}
-                        >
-                          取消
-                        </button>
-                      )}
-                    </div>
-                  )}
+                        )}
+                        {orch?.status === "running" && (
+                          <>
+                            <button
+                              type="button"
+                              className="pm-btn sm"
+                              disabled={!!orchBusy}
+                              onClick={() => void runOrch(item.id, () => api.pauseRoadmapOrchestration(orch.id))}
+                            >
+                              暂停
+                            </button>
+                            <button
+                              type="button"
+                              className="pm-btn sm"
+                              disabled={!!orchBusy}
+                              onClick={() => void runOrch(item.id, () => api.cancelRoadmapOrchestration(orch.id))}
+                            >
+                              取消
+                            </button>
+                          </>
+                        )}
+                        {(orch?.status === "paused" || orch?.status === "failed") && (
+                          <>
+                            <button
+                              type="button"
+                              className="pm-btn primary sm"
+                              disabled={!!orchBusy}
+                              onClick={() => void runOrch(item.id, () => api.resumeRoadmapOrchestration(orch.id))}
+                            >
+                              继续
+                            </button>
+                            <button
+                              type="button"
+                              className="pm-btn sm"
+                              disabled={!!orchBusy}
+                              onClick={() => void runOrch(item.id, () => api.cancelRoadmapOrchestration(orch.id))}
+                            >
+                              取消
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {index < arr.length - 1 && <div className={`roadmap-connector ${item.status === "done" ? "done" : ""}`} aria-hidden />}
                 </div>
               );
             })}
@@ -299,8 +376,9 @@ export function ProjectWorkflowView({ group, members, runs, canManage, onGroupPa
         <div className="agent-lanes">
           {agents.map((agent) => {
             const mine = activeRuns.filter((r) => r.agentMemberId === agent.id);
+            const orchLane = agentOrchLane(agent.id, orchestrations, roadmap, features, tasks, runs);
             return (
-              <div key={agent.id} className="agent-lane">
+              <div key={agent.id} className={`agent-lane ${orchLane ? `tone-${orchLane.tone}` : ""}`}>
                 <div className="lane-head">
                   <span className="lane-dot" style={{ background: agent.avatarColor }} />
                   <strong>{agent.displayName}</strong>
@@ -322,7 +400,14 @@ export function ProjectWorkflowView({ group, members, runs, canManage, onGroupPa
                     )}
                   </div>
                 )}
-                {mine.length === 0 ? (
+                {orchLane && (
+                  <div className={`lane-orch orch-${orchLane.tone}`}>
+                    <span className="lane-orch-status">{orchLane.statusLabel}</span>
+                    <strong>{orchLane.roadmapTitle}</strong>
+                    {orchLane.cursor && <small>{orchLane.cursor}</small>}
+                  </div>
+                )}
+                {mine.length === 0 && !orchLane ? (
                   <div className="lane-idle">空闲</div>
                 ) : (
                   mine.map((run) => (
@@ -380,7 +465,7 @@ export function ProjectWorkflowView({ group, members, runs, canManage, onGroupPa
 
       <section className="wf-section wf-board">
         <h2>工作流看板</h2>
-        <PmPanel groupId={group.id} members={members} onError={onError} />
+        <PmPanel groupId={group.id} members={members} adminMemberId={group.adminMemberId} onError={onError} />
       </section>
     </div>
   );

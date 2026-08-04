@@ -102,7 +102,7 @@ async function apiFetch<T>(
 export const api = {
   // Auth
   register: (username: string, password: string) =>
-    apiFetch<{ token: string; user_id: string; username: string }>(
+    apiFetch<{ token: string; user_id: string; username: string; isAdmin?: boolean; is_admin?: boolean }>(
       "/api/auth/register",
       {
         method: "POST",
@@ -110,13 +110,15 @@ export const api = {
       },
     ),
   login: (username: string, password: string) =>
-    apiFetch<{ token: string; user_id: string; username: string }>(
+    apiFetch<{ token: string; user_id: string; username: string; isAdmin?: boolean; is_admin?: boolean }>(
       "/api/auth/login",
       {
         method: "POST",
         body: JSON.stringify({ username, password }),
       },
     ),
+  verify: () =>
+    apiFetch<{ sub: string; username: string; isAdmin?: boolean; is_admin?: boolean }>("/api/auth/verify"),
 
   // Bootstrap - shape matches Tauri invoke({ groups })
   bootstrap: async () => {
@@ -160,6 +162,8 @@ export const api = {
     chatbotProvider?: "opencode-go" | "deepseek";
     apiKey?: string;
     model?: string;
+    loginUsername?: string;
+    loginPassword?: string;
   }) =>
     apiFetch<Member>(`/api/groups/${input.groupId}/members`, {
       method: "POST",

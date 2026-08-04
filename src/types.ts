@@ -80,6 +80,8 @@ export interface Member {
   warmStatus?: string | null;
   /** Preferred model; empty/null = provider default */
   model?: string | null;
+  /** Linked login users.id for kind=user */
+  authUserId?: string | null;
 }
 
 export interface Message {

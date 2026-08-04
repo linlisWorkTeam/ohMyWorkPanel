@@ -1,7 +1,7 @@
 use crate::adapters::AdapterKind;
 use crate::db::{
-    active_agent_ids, create_task_run, get_group, get_groups, get_preset_roles, get_settings_from,
-    group_state, id, insert_run_event, member_from_row, now, open_db, run_from_row, AppResult,
+    create_task_run, get_group, get_groups, get_preset_roles, get_settings_from,
+    group_state, id, insert_run_event, member_from_row, now, open_db, resolve_target_agent_ids, run_from_row, AppResult,
     create_roadmap_item_db, get_roadmap_items, update_roadmap_item_db, delete_roadmap_item_db,
     create_feature_db, get_features, update_feature_db, delete_feature_db,
     create_feature_task_db, get_feature_tasks, update_feature_task_db, delete_feature_task_db,
@@ -174,8 +174,43 @@ pub fn add_member(input: AddMemberInput, state: State<'_, AppState>) -> AppResul
         "chatbot" => "#0ea5a0".into(),
         _ => "#5167f6".into(),
     });
+    let mut auth_user_id: Option<String> = None;
+    if input.kind == "user" {
+        let login_user = input
+            .login_username
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| "添加用户需填写登录用户名".to_string())?;
+        let login_pass = input
+            .login_password
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| "添加用户需填写登录密码".to_string())?;
+        if login_user.eq_ignore_ascii_case("root") {
+            return Err("不能使用保留用户名 root".into());
+        }
+        if conn
+            .query_row(
+                "SELECT id FROM users WHERE username=?1",
+                params![login_user],
+                |_| Ok(()),
+            )
+            .is_ok()
+        {
+            return Err("登录用户名已被占用".into());
+        }
+        let uid = id();
+        let password_hash = crate::auth::hash_password(login_pass)?;
+        conn.execute(
+            "INSERT INTO users(id,username,password_hash,created_at,is_admin) VALUES(?1,?2,?3,?4,0)",
+            params![uid, login_user, password_hash, created_at],
+        )
+        .map_err(|e| e.to_string())?;
+        auth_user_id = Some(uid);
+    }
     conn.execute(
-        "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at) VALUES(?1,?2,?3,?4,?5,?6,1,?7)",
+        "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,auth_user_id) VALUES(?1,?2,?3,?4,?5,?6,1,?7,?8)",
         params![
             member_id,
             input.group_id,
@@ -183,7 +218,8 @@ pub fn add_member(input: AddMemberInput, state: State<'_, AppState>) -> AppResul
             input.display_name.trim(),
             color,
             input.role_description.trim(),
-            created_at
+            created_at,
+            auth_user_id
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -245,7 +281,7 @@ pub fn add_member(input: AddMemberInput, state: State<'_, AppState>) -> AppResul
         .map_err(|e| e.to_string())?;
     }
     conn.query_row(
-        "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
+        "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model,m.auth_user_id FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
         params![member_id],
         member_from_row,
     )
@@ -267,7 +303,7 @@ pub async fn remove_member(
     }
     let member: Member = conn
         .query_row(
-            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1 AND m.group_id=?2",
+            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model,m.auth_user_id FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1 AND m.group_id=?2",
             params![member_id, group_id],
             member_from_row,
         )
@@ -421,12 +457,12 @@ pub async fn send_message(
             params![message.id, mentioned, group_id],
         );
     }
-    let mut target_agents = active_agent_ids(&conn, &group_id, &mention_member_ids)?;
-    if target_agents.is_empty() {
-        if let Some(admin) = group.admin_member_id {
-            target_agents.push(admin);
-        }
-    }
+    let target_agents = resolve_target_agent_ids(
+        &conn,
+        &group_id,
+        group.admin_member_id.as_deref(),
+        &mention_member_ids,
+    )?;
     let mut run_ids = Vec::new();
     for agent_id in target_agents {
         run_ids.push(create_task_run(

@@ -234,7 +234,7 @@ fn get_execution_context(state: &SchedulerState, run_id: &str) -> AppResult<Exec
     let group = get_group(&conn, &run.group_id)?;
     let agent = conn
         .query_row(
-            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
+            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model,m.auth_user_id FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
             params![run.agent_member_id],
             member_from_row,
         )
@@ -522,6 +522,12 @@ async fn run_agent(
     let _ = memory::ensure_linlis_layout(std::path::Path::new(&context.group.workspace_path), Some(&context.agent.id));
 
     let model = context.agent.model.as_deref();
+    let codex_key = if kind == AdapterKind::Codex {
+        let conn = open_db(&state.db_path)?;
+        get_agent_api_key(&conn, &context.agent.id)?.filter(|k| !k.trim().is_empty())
+    } else {
+        None
+    };
     emit_phase(state, &context.group.id, &context.run.id, "awaiting_first_token");
     let result = adapters::run_streaming(
         kind,
@@ -532,6 +538,7 @@ async fn run_agent(
         model,
         context.settings.run_timeout_seconds as u64,
         token,
+        codex_key.as_deref(),
         make_on_delta(),
     )
     .await;
@@ -556,6 +563,7 @@ async fn run_agent(
                 model,
                 context.settings.run_timeout_seconds as u64,
                 token,
+                None,
                 make_on_delta(),
             )
             .await?
