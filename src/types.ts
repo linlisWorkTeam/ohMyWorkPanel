@@ -92,6 +92,16 @@ export interface Message {
   content: string;
   status: string;
   createdAt: number;
+  /** Full thinking text is lazy-loaded on expand */
+  hasThinking?: boolean;
+  /** Full artifact text is lazy-loaded on expand */
+  hasArtifact?: boolean;
+}
+
+export interface MessageChannelPart {
+  messageId: string;
+  channel: string;
+  text: string;
 }
 
 export interface TaskRun {

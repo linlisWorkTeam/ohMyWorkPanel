@@ -72,3 +72,29 @@ export function hasRenderableContent(content: string): boolean {
   if (!doc) return content.trim().length > 0;
   return doc.parts.some((part) => part.text.trim().length > 0);
 }
+
+export function isLazyMessageChannel(channel: string | null | undefined): boolean {
+  const value = (channel ?? "").trim().toLowerCase();
+  return value === "thinking" || value === "reasoning" || value === "thought"
+    || value === "artifact" || value === "tool" || value === "tool_result" || value === "command";
+}
+
+/** Strip thinking/artifact bodies for local display state (mirrors server list projection). */
+export function projectContentForList(content: string): {
+  content: string;
+  hasThinking: boolean;
+  hasArtifact: boolean;
+} {
+  const doc = parseMessageContent(content);
+  if (!doc) {
+    return { content, hasThinking: false, hasArtifact: false };
+  }
+  const hasThinking = doc.parts.some((p) => p.channel === "thinking" && p.text.trim());
+  const hasArtifact = doc.parts.some((p) => p.channel === "artifact" && p.text.trim());
+  const finals = doc.parts.filter((p) => p.channel === "final");
+  return {
+    content: JSON.stringify({ v: 1, parts: finals }),
+    hasThinking,
+    hasArtifact,
+  };
+}

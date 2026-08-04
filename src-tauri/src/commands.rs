@@ -64,7 +64,26 @@ pub fn list_messages_before(
     let messages =
         crate::db::get_messages_before(&conn, &group_id, before_created_at, &before_id, limit)?;
     let has_more = messages.len() as i64 >= limit;
-    Ok(crate::models::MessagePage { messages, has_more })
+    Ok(crate::models::MessagePage {
+        messages: crate::db::project_messages_for_client(messages),
+        has_more,
+    })
+}
+
+#[tauri::command]
+pub fn get_message_channel_part(
+    group_id: String,
+    message_id: String,
+    channel: String,
+    state: State<'_, AppState>,
+) -> AppResult<crate::models::MessageChannelPart> {
+    let conn = open_db(&state.db_path)?;
+    let text = crate::db::get_message_channel_text(&conn, &group_id, &message_id, &channel)?;
+    Ok(crate::models::MessageChannelPart {
+        message_id,
+        channel: crate::message_content::normalize_channel(&channel),
+        text,
+    })
 }
 
 #[tauri::command]
@@ -438,6 +457,8 @@ pub async fn send_message(
         content,
         status: "completed".into(),
         created_at: now(),
+        has_thinking: false,
+        has_artifact: false,
     };
     conn.execute(
         "INSERT INTO messages(id,group_id,sender_member_id,parent_run_id,content,status,created_at) VALUES(?1,?2,?3,NULL,?4,?5,?6)",

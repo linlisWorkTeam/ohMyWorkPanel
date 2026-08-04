@@ -91,6 +91,81 @@ pub fn normalize_channel(channel: &str) -> String {
     }
 }
 
+/// List/hot-window payload: keep final text only; flag heavy channels for lazy fetch.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListContentProjection {
+    pub content: String,
+    pub has_thinking: bool,
+    pub has_artifact: bool,
+}
+
+pub fn project_content_for_list(content: &str) -> ListContentProjection {
+    match parse_content_doc(content) {
+        Some(doc) => {
+            let has_thinking = doc
+                .parts
+                .iter()
+                .any(|p| p.channel == "thinking" && !p.text.trim().is_empty());
+            let has_artifact = doc
+                .parts
+                .iter()
+                .any(|p| p.channel == "artifact" && !p.text.trim().is_empty());
+            let finals: Vec<ContentPart> = doc
+                .parts
+                .into_iter()
+                .filter(|p| p.channel == "final")
+                .collect();
+            let projected = if finals.is_empty() && !has_thinking && !has_artifact {
+                content.to_string()
+            } else if finals.len() == 1 && !has_thinking && !has_artifact {
+                // Preserve single-final JSON shape for clients that parse parts.
+                serde_json::to_string(&ContentDoc {
+                    v: 1,
+                    parts: finals,
+                })
+                .unwrap_or_else(|_| content.to_string())
+            } else {
+                serde_json::to_string(&ContentDoc {
+                    v: 1,
+                    parts: finals,
+                })
+                .unwrap_or_else(|_| {
+                    // Fallback: plain final text if any.
+                    parts_to_plain_text(content)
+                })
+            };
+            ListContentProjection {
+                content: projected,
+                has_thinking,
+                has_artifact,
+            }
+        }
+        None => ListContentProjection {
+            content: content.to_string(),
+            has_thinking: false,
+            has_artifact: false,
+        },
+    }
+}
+
+pub fn extract_channel_text(content: &str, channel: &str) -> String {
+    let channel = normalize_channel(channel);
+    match parse_content_doc(content) {
+        Some(doc) => doc
+            .parts
+            .into_iter()
+            .find(|p| p.channel == channel)
+            .map(|p| p.text)
+            .unwrap_or_default(),
+        None if channel == "final" => content.to_string(),
+        None => String::new(),
+    }
+}
+
+pub fn is_lazy_channel(channel: &str) -> bool {
+    matches!(normalize_channel(channel).as_str(), "thinking" | "artifact")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -112,5 +187,21 @@ mod tests {
         assert_eq!(doc.parts[0].channel, "final");
         assert_eq!(doc.parts[0].text, "legacy text");
         assert_eq!(doc.parts[1].channel, "artifact");
+    }
+
+    #[test]
+    fn project_list_strips_thinking_and_artifact() {
+        let mut content = String::new();
+        content = append_channel_delta(&content, "thinking", "secret think");
+        content = append_channel_delta(&content, "artifact", "tool out");
+        content = append_channel_delta(&content, "final", "answer");
+        let proj = project_content_for_list(&content);
+        assert!(proj.has_thinking);
+        assert!(proj.has_artifact);
+        assert!(!proj.content.contains("secret think"));
+        assert!(!proj.content.contains("tool out"));
+        assert!(proj.content.contains("answer"));
+        assert_eq!(extract_channel_text(&content, "thinking"), "secret think");
+        assert_eq!(extract_channel_text(&content, "artifact"), "tool out");
     }
 }

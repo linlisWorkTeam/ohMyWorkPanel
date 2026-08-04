@@ -677,6 +677,8 @@ fn append_delta(
     .map_err(|e| e.to_string())?;
     let payload = serde_json::json!({ "channel": channel, "delta": delta, "replace": replace }).to_string();
     insert_run_event(&conn, &run.id, "delta", &payload)?;
+    // Lazy channels stay in DB only; UI fetches on expand (keeps WS/list payloads small).
+    let lazy = crate::message_content::is_lazy_channel(channel);
     emit(
         state,
         ChatEvent {
@@ -684,12 +686,12 @@ fn append_delta(
             group_id: run.group_id.clone(),
             run_id: Some(run.id.clone()),
             message_id: Some(output_id.clone()),
-            delta: Some(delta.into()),
+            delta: if lazy { None } else { Some(delta.into()) },
             status: Some("streaming".into()),
             error: None,
-            channel: Some(channel.into()),
-            replace: Some(replace),
-                    phase: None,
+            channel: Some(crate::message_content::normalize_channel(channel)),
+            replace: if lazy { None } else { Some(replace) },
+            phase: None,
             elapsed_ms: None,
             total_ms: None,
         },

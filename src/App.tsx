@@ -9,7 +9,12 @@ import {
   isNearBottom,
 } from "./chatUi";
 import { currentMentionQuery, findMentionedMemberIds } from "./mentions";
-import { appendChannelDelta, hasRenderableContent, parseMessageContent } from "./messageContent";
+import {
+  appendChannelDelta,
+  hasRenderableContent,
+  isLazyMessageChannel,
+  parseMessageContent,
+} from "./messageContent";
 import { defaultModelForAdapter, modelsForAdapter } from "./agentModels";
 import { chatbotSlotTaken } from "./memberForm";
 import { markdownToHtml } from "./markdownLite";
@@ -295,11 +300,13 @@ export function App() {
       const inCurrent = (previous: GroupState | null) =>
         !!previous && (!payload.groupId || payload.groupId === previous.group.id
           || (!!payload.runId && previous.runs.some((r) => r.id === payload.runId)));
-      if (payload.kind === "message_delta" && payload.messageId && payload.delta) {
+      if (payload.kind === "message_delta" && payload.messageId) {
         if (payload.groupId && payload.groupId !== activeGroupId) return;
         const messageId = payload.messageId;
-        const delta = payload.delta;
         const channel = payload.channel ?? "final";
+        const lazy = isLazyMessageChannel(channel);
+        if (!lazy && !payload.delta) return;
+        const delta = payload.delta ?? "";
         const replace = Boolean(payload.replace);
         setCurrent((previous) => {
           if (!previous || !inCurrent(previous)) return previous;
@@ -310,11 +317,25 @@ export function App() {
           }
           const messages = previous.messages.slice();
           const message = messages[idx];
-          messages[idx] = {
-            ...message,
-            content: appendChannelDelta(message.content, channel, delta, replace),
-            status: "streaming",
-          };
+          if (lazy) {
+            messages[idx] = {
+              ...message,
+              hasThinking: channel === "thinking" || channel === "reasoning" || channel === "thought"
+                ? true
+                : message.hasThinking,
+              hasArtifact: channel === "artifact" || channel === "tool" || channel === "tool_result"
+                || channel === "command"
+                ? true
+                : message.hasArtifact,
+              status: "streaming",
+            };
+          } else {
+            messages[idx] = {
+              ...message,
+              content: appendChannelDelta(message.content, channel, delta, replace),
+              status: "streaming",
+            };
+          }
           return { ...previous, messages };
         });
         return;
@@ -927,9 +948,17 @@ const MessageBubble = memo(function MessageBubble({ message, members, runs, view
   useEffect(() => {
     if (responding) setExpanded(true);
   }, [responding]);
-  const body = hasContent ? (
+  const showParts = hasContent || message.hasThinking || message.hasArtifact;
+  const body = showParts ? (
     <>
-      <MessagePartsBody content={message.content} streaming={responding} />
+      <MessagePartsBody
+        groupId={message.groupId}
+        messageId={message.id}
+        content={message.content}
+        hasThinking={Boolean(message.hasThinking)}
+        hasArtifact={Boolean(message.hasArtifact)}
+        streaming={responding}
+      />
       {responding && <span className="stream-caret" aria-hidden />}
     </>
   ) : (
@@ -977,32 +1006,139 @@ const MessageBubble = memo(function MessageBubble({ message, members, runs, view
   );
 });
 
-function MessagePartsBody({ content, streaming }: { content: string; streaming: boolean }) {
+function MessagePartsBody({
+  groupId,
+  messageId,
+  content,
+  hasThinking,
+  hasArtifact,
+  streaming,
+}: {
+  groupId: string;
+  messageId: string;
+  content: string;
+  hasThinking: boolean;
+  hasArtifact: boolean;
+  streaming: boolean;
+}) {
   const doc = parseMessageContent(content);
   if (!doc) {
-    return <MarkdownBlock text={content} />;
+    return (
+      <div className="message-parts">
+        {(hasThinking || hasArtifact) && (
+          <>
+            {hasThinking && (
+              <LazyChannelPart
+                groupId={groupId}
+                messageId={messageId}
+                channel="thinking"
+                label="思考过程"
+                streaming={streaming}
+              />
+            )}
+            {hasArtifact && (
+              <LazyChannelPart
+                groupId={groupId}
+                messageId={messageId}
+                channel="artifact"
+                label="中间产物"
+                streaming={streaming}
+              />
+            )}
+          </>
+        )}
+        <MarkdownBlock text={content} />
+      </div>
+    );
   }
-  const thinking = doc.parts.find((part) => part.channel === "thinking" && part.text.trim());
-  const artifact = doc.parts.find((part) => part.channel === "artifact" && part.text.trim());
   const finals = doc.parts.filter((part) => part.channel === "final" && part.text.trim());
   return (
     <div className="message-parts">
-      {thinking && (
-        <details className="part-thinking" open={streaming || undefined}>
-          <summary>思考过程{streaming ? "（生成中）" : ""}</summary>
-          <pre>{thinking.text}</pre>
-        </details>
+      {hasThinking && (
+        <LazyChannelPart
+          groupId={groupId}
+          messageId={messageId}
+          channel="thinking"
+          label="思考过程"
+          streaming={streaming}
+        />
       )}
-      {artifact && (
-        <details className="part-artifact" open={streaming || undefined}>
-          <summary>中间产物{streaming ? "（生成中）" : ""}</summary>
-          <pre>{artifact.text}</pre>
-        </details>
+      {hasArtifact && (
+        <LazyChannelPart
+          groupId={groupId}
+          messageId={messageId}
+          channel="artifact"
+          label="中间产物"
+          streaming={streaming}
+        />
       )}
       {finals.map((part, index) => (
         <MarkdownBlock key={`final-${index}`} text={part.text} />
       ))}
     </div>
+  );
+}
+
+function LazyChannelPart({
+  groupId,
+  messageId,
+  channel,
+  label,
+  streaming,
+}: {
+  groupId: string;
+  messageId: string;
+  channel: "thinking" | "artifact";
+  label: string;
+  streaming: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const load = () => {
+      setLoading(true);
+      setError(null);
+      void api
+        .getMessageChannelPart(groupId, messageId, channel)
+        .then((part) => {
+          if (!cancelled) setText(part.text);
+        })
+        .catch((reason) => {
+          if (!cancelled) setError(readError(reason));
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    };
+    load();
+    if (!streaming) return () => { cancelled = true; };
+    const timer = window.setInterval(load, 1500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [open, groupId, messageId, channel, streaming]);
+
+  return (
+    <details
+      className={`part-${channel}`}
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary>
+        {label}
+        {streaming ? "（生成中）" : ""}
+        {!open ? " · 点击加载" : ""}
+      </summary>
+      {loading && text == null && <pre className="part-loading">加载中…</pre>}
+      {error && <pre className="part-error">{error}</pre>}
+      {text != null && <pre>{text || "（空）"}</pre>}
+    </details>
   );
 }
 

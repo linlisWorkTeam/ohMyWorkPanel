@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
-  GroupState, Member, MessagePage, PresetRole, RuntimeSettings,
+  GroupState, Member, MessageChannelPart, MessagePage, PresetRole, RuntimeSettings,
   RoadmapItem, Feature, FeatureTask, RoadmapState,
   CreateRoadmapItemInput, UpdateRoadmapItemInput,
   CreateFeatureInput, UpdateFeatureInput,
@@ -14,6 +14,8 @@ export const api = {
   getGroupState: (groupId: string) => invoke<GroupState>("get_group_state", { groupId }),
   listMessagesBefore: (groupId: string, beforeCreatedAt: number, beforeId: string, limit?: number) =>
     invoke<MessagePage>("list_messages_before", { groupId, beforeCreatedAt, beforeId, limit }),
+  getMessageChannelPart: (groupId: string, messageId: string, channel: "thinking" | "artifact") =>
+    invoke<MessageChannelPart>("get_message_channel_part", { groupId, messageId, channel }),
   createGroup: (input: {
     name: string; workspacePath: string; ownerName: string; presetRoles?: string[];
     groupKind?: "project" | "chat";

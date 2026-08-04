@@ -76,6 +76,12 @@ pub struct Message {
     pub content: String,
     pub status: String,
     pub created_at: i64,
+    /// True when full DB content has a non-empty thinking channel (lazy-loaded in UI).
+    #[serde(default)]
+    pub has_thinking: bool,
+    /// True when full DB content has a non-empty artifact channel (lazy-loaded in UI).
+    #[serde(default)]
+    pub has_artifact: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -121,6 +127,14 @@ pub struct GroupState {
 pub struct MessagePage {
     pub messages: Vec<Message>,
     pub has_more: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MessageChannelPart {
+    pub message_id: String,
+    pub channel: String,
+    pub text: String,
 }
 
 #[derive(Debug, Clone, Serialize)]

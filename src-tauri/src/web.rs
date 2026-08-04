@@ -396,6 +396,8 @@ async fn send_message_web(
         content: input.content.clone(),
         status: "completed".into(),
         created_at: now(),
+        has_thinking: false,
+        has_artifact: false,
     };
     conn.execute(
         "INSERT INTO messages(id,group_id,sender_member_id,parent_run_id,content,status,created_at) VALUES(?1,?2,?3,NULL,?4,?5,?6)",
@@ -871,7 +873,26 @@ async fn list_messages_web(
     let messages = get_messages_before(&conn, &group_id, before_created_at, &before_id, limit)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     let has_more = messages.len() as i64 >= limit;
-    Ok(Json(crate::models::MessagePage { messages, has_more }))
+    Ok(Json(crate::models::MessagePage {
+        messages: crate::db::project_messages_for_client(messages),
+        has_more,
+    }))
+}
+
+async fn get_message_channel_part_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path((group_id, message_id, channel)): Path<(String, String, String)>,
+) -> Result<Json<crate::models::MessageChannelPart>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
+    let text = crate::db::get_message_channel_text(&conn, &group_id, &message_id, &channel)
+        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    Ok(Json(crate::models::MessageChannelPart {
+        message_id,
+        channel: crate::message_content::normalize_channel(&channel),
+        text,
+    }))
 }
 
  // === Runs ===
@@ -1428,6 +1449,10 @@ pub fn build_router(state: Arc<AppState>) -> Router {
          // Messages
         .route("/api/messages", post(send_message_web))
         .route("/api/groups/{group_id}/messages", get(list_messages_web))
+        .route(
+            "/api/groups/{group_id}/messages/{message_id}/parts/{channel}",
+            get(get_message_channel_part_web),
+        )
          // Runs
          .route("/api/groups/{group_id}/runs", get(list_runs_web))
          .route("/api/runs/{run_id}/cancel", post(cancel_run_web))

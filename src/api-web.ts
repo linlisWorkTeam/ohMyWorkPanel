@@ -1,7 +1,7 @@
 ﻿// Web API layer - replaces api.ts when running in browser (non-Tauri mode).
 // Uses fetch() + WebSocket instead of Tauri invoke().
 import type {
-  GroupState, Member, MessagePage, PresetRole, RuntimeSettings, Message,
+  GroupState, Member, MessageChannelPart, MessagePage, PresetRole, RuntimeSettings, Message,
   RoadmapItem, Feature, FeatureTask, RoadmapState, RoadmapOrchestration,
   CreateRoadmapItemInput, UpdateRoadmapItemInput,
   CreateFeatureInput, UpdateFeatureInput,
@@ -138,6 +138,11 @@ export const api = {
     });
     return apiFetch<MessagePage>(`/api/groups/${groupId}/messages?${q}`);
   },
+
+  getMessageChannelPart: (groupId: string, messageId: string, channel: "thinking" | "artifact") =>
+    apiFetch<MessageChannelPart>(
+      `/api/groups/${groupId}/messages/${encodeURIComponent(messageId)}/parts/${encodeURIComponent(channel)}`,
+    ),
 
   createGroup: (input: {
     name: string;

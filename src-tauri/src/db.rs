@@ -410,7 +410,38 @@ pub fn message_from_row(row: &Row<'_>) -> rusqlite::Result<Message> {
         content: row.get(4)?,
         status: row.get(5)?,
         created_at: row.get(6)?,
+        has_thinking: false,
+        has_artifact: false,
     })
+}
+
+/// Strip thinking/artifact bodies for chat list payloads; keep flags for lazy UI fetch.
+pub fn project_message_for_client(mut message: Message) -> Message {
+    let projected = crate::message_content::project_content_for_list(&message.content);
+    message.content = projected.content;
+    message.has_thinking = projected.has_thinking;
+    message.has_artifact = projected.has_artifact;
+    message
+}
+
+pub fn project_messages_for_client(messages: Vec<Message>) -> Vec<Message> {
+    messages.into_iter().map(project_message_for_client).collect()
+}
+
+pub fn get_message_channel_text(
+    connection: &Connection,
+    group_id: &str,
+    message_id: &str,
+    channel: &str,
+) -> AppResult<String> {
+    let content: String = connection
+        .query_row(
+            "SELECT content FROM messages WHERE id=?1 AND group_id=?2",
+            params![message_id, group_id],
+            |row| row.get(0),
+        )
+        .map_err(|_| "消息不存在。".to_string())?;
+    Ok(crate::message_content::extract_channel_text(&content, channel))
 }
 
 pub fn run_from_row(row: &Row<'_>) -> rusqlite::Result<TaskRun> {
@@ -765,7 +796,7 @@ pub fn group_state(connection: &Connection, group_id: &str) -> AppResult<GroupSt
         members: get_members(connection, group_id)?,
         messages_has_more: total > messages.len() as i64,
         messages_total: total,
-        messages,
+        messages: project_messages_for_client(messages),
         runs: get_runs_recent(connection, group_id, HOT_RUN_LIMIT)?,
     })
 }

@@ -58,6 +58,7 @@ pub fn run() {
             commands::bootstrap,
             commands::get_group_state,
             commands::list_messages_before,
+            commands::get_message_channel_part,
             commands::get_runtime_settings,
             commands::update_runtime_settings,
             commands::create_group,
