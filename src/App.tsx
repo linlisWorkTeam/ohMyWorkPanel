@@ -676,8 +676,7 @@ export function App() {
         )}
       </nav>
       <div className="sidebar-footer">
-        <ThemeSwitcher />
-        {isAdmin && <button onClick={() => setShowSettings(true)}>运行设置</button>}
+        <button type="button" onClick={() => setShowSettings(true)}>运行设置</button>
         {requiresAuth && <button onClick={() => goLogin(null)}>退出登录{authUser ? `（${authUser.username}）` : ""}</button>}
       </div>
     </aside>
@@ -932,7 +931,24 @@ export function App() {
         </form>
       </Modal>
     )}
-    {showSettings && settings && <Modal title="运行设置" onClose={() => setShowSettings(false)}><form className="modal-form" onSubmit={saveSettings}><NumberSetting label="每群并发任务" value={settings.maxConcurrentRuns} onChange={(value) => setSettings({ ...settings, maxConcurrentRuns: value })} min={1} max={8} /><NumberSetting label="任务超时（秒）" value={settings.runTimeoutSeconds} onChange={(value) => setSettings({ ...settings, runTimeoutSeconds: value })} min={30} max={7200} /><NumberSetting label="上下文消息数" value={settings.contextMessageLimit} onChange={(value) => setSettings({ ...settings, contextMessageLimit: value })} min={5} max={200} /><NumberSetting label="管理员最大派生层级" value={settings.maxDelegationDepth} onChange={(value) => setSettings({ ...settings, maxDelegationDepth: value })} min={0} max={4} /><button className="primary-wide" type="submit">保存设置</button></form></Modal>}
+    {showSettings && (
+      <Modal title="运行设置" onClose={() => setShowSettings(false)}>
+        <div className="modal-form settings-modal">
+          <ThemeSwitcher />
+          {isAdmin && settings ? (
+            <form className="modal-form" onSubmit={saveSettings}>
+              <NumberSetting label="每群并发任务" value={settings.maxConcurrentRuns} onChange={(value) => setSettings({ ...settings, maxConcurrentRuns: value })} min={1} max={8} />
+              <NumberSetting label="任务超时（秒）" value={settings.runTimeoutSeconds} onChange={(value) => setSettings({ ...settings, runTimeoutSeconds: value })} min={30} max={7200} />
+              <NumberSetting label="上下文消息数" value={settings.contextMessageLimit} onChange={(value) => setSettings({ ...settings, contextMessageLimit: value })} min={5} max={200} />
+              <NumberSetting label="管理员最大派生层级" value={settings.maxDelegationDepth} onChange={(value) => setSettings({ ...settings, maxDelegationDepth: value })} min={0} max={4} />
+              <button className="primary-wide" type="submit">保存设置</button>
+            </form>
+          ) : (
+            <p className="form-hint">主题已即时生效。运行参数仅管理员可改。</p>
+          )}
+        </div>
+      </Modal>
+    )}
     {error && <div className="error-toast"><span>{error}</span><button onClick={() => setError(null)}>×</button></div>}
   </main>;
 }
@@ -1262,7 +1278,6 @@ function AuthScreen({ error, onError, onAuthed }: { error: string | null; onErro
         <button type="button" className="auth-switch" onClick={() => { setMode(mode === "login" ? "register" : "login"); onError(null); }}>
           {mode === "login" ? "没有账号？注册" : "已有账号？登录"}
         </button>
-        <ThemeSwitcher />
         {error && <div className="auth-error">{error}</div>}
       </section>
     </main>

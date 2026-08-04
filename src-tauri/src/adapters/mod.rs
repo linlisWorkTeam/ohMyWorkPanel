@@ -248,8 +248,18 @@ where
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     if kind == AdapterKind::Codex {
-        if let Some(key) = api_key.map(str::trim).filter(|s| !s.is_empty()) {
-            command.env("OPENAI_API_KEY", key);
+        // systemd units usually omit shell OPENAI_API_KEY; fall back to ~/.codex/auth.json
+        // (same key OpenCode Zen Go / local Codex CLI already use).
+        match codex::resolve_api_key(api_key) {
+            Some(key) => {
+                command.env("OPENAI_API_KEY", key);
+            }
+            None => {
+                return Err(
+                    "Codex 缺少 OPENAI_API_KEY：请在成员 API Key、环境变量 LINLIS_CODEX_API_KEY/OPENAI_API_KEY，或 ~/.codex/auth.json 中配置（OpenCode Go 所用密钥）。"
+                        .into(),
+                );
+            }
         }
     }
 

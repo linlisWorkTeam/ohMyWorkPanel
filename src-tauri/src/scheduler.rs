@@ -522,6 +522,8 @@ async fn run_agent(
     let _ = memory::ensure_linlis_layout(std::path::Path::new(&context.group.workspace_path), Some(&context.agent.id));
 
     let model = context.agent.model.as_deref();
+    // Member profile key is optional; adapters::codex::resolve_api_key also reads
+    // process env / ~/.codex/auth.json so Codex works under systemd.
     let codex_key = if kind == AdapterKind::Codex {
         let conn = open_db(&state.db_path)?;
         get_agent_api_key(&conn, &context.agent.id)?.filter(|k| !k.trim().is_empty())

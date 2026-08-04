@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#120018"/>
+      <stop offset="45%" stop-color="#1a0030"/>
+      <stop offset="100%" stop-color="#050010"/>
+    </linearGradient>
+    <linearGradient id="neonM" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ff2bd6"/>
+      <stop offset="100%" stop-color="#7a00ff"/>
+    </linearGradient>
+    <linearGradient id="neonC" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0%" stop-color="#00f0ff"/>
+      <stop offset="100%" stop-color="#0077ff"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="70%" cy="35%" r="45%">
+      <stop offset="0%" stop-color="#ff2bd655"/>
+      <stop offset="55%" stop-color="#00f0ff22"/>
+      <stop offset="100%" stop-color="#0000"/>
+    </radialGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#ff2bd612" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <rect width="1600" height="900" fill="url(#glow)"/>
+  <rect width="1600" height="900" fill="url(#grid)" opacity=".7"/>
+  <!-- city silhouette -->
+  <g fill="#0a0014">
+    <rect x="40" y="420" width="70" height="480"/>
+    <rect x="120" y="360" width="90" height="540"/>
+    <rect x="230" y="480" width="55" height="420"/>
+    <rect x="300" y="300" width="120" height="600"/>
+    <rect x="440" y="390" width="80" height="510"/>
+    <rect x="540" y="250" width="100" height="650"/>
+    <rect x="660" y="430" width="70" height="470"/>
+    <rect x="750" y="320" width="140" height="580"/>
+    <rect x="910" y="400" width="90" height="500"/>
+    <rect x="1020" y="280" width="110" height="620"/>
+    <rect x="1150" y="450" width="60" height="450"/>
+    <rect x="1230" y="340" width="130" height="560"/>
+    <rect x="1380" y="390" width="90" height="510"/>
+    <rect x="1490" y="470" width="70" height="430"/>
+  </g>
+  <!-- neon edges -->
+  <g stroke-width="2" fill="none" opacity=".85">
+    <path d="M120 360 L210 360" stroke="url(#neonM)"/>
+    <path d="M300 300 L420 300" stroke="url(#neonC)"/>
+    <path d="M540 250 L640 250" stroke="url(#neonM)"/>
+    <path d="M750 320 L890 320" stroke="url(#neonC)"/>
+    <path d="M1020 280 L1130 280" stroke="url(#neonM)"/>
+    <path d="M1230 340 L1360 340" stroke="url(#neonC)"/>
+  </g>
+  <!-- window lights -->
+  <g fill="#00f0ff" opacity=".35">
+    <rect x="140" y="400" width="6" height="10"/><rect x="160" y="430" width="6" height="10"/>
+    <rect x="330" y="340" width="6" height="10"/><rect x="360" y="380" width="6" height="10"/>
+    <rect x="570" y="290" width="6" height="10"/><rect x="600" y="330" width="6" height="10"/>
+    <rect x="800" y="360" width="6" height="10"/><rect x="840" y="400" width="6" height="10"/>
+    <rect x="1050" y="320" width="6" height="10"/><rect x="1080" y="360" width="6" height="10"/>
+  </g>
+  <g fill="#ff2bd6" opacity=".3">
+    <rect x="180" y="480" width="6" height="10"/><rect x="380" y="450" width="6" height="10"/>
+    <rect x="620" y="420" width="6" height="10"/><rect x="860" y="460" width="6" height="10"/>
+    <rect x="1260" y="400" width="6" height="10"/>
+  </g>
+  <!-- perspective floor -->
+  <g stroke="#ff2bd618" stroke-width="1">
+    <path d="M0 700 Q800 620 1600 700"/>
+    <path d="M0 760 Q800 680 1600 760"/>
+    <path d="M0 820 Q800 740 1600 820"/>
+    <path d="M200 900 L400 700"/><path d="M500 900 L650 700"/>
+    <path d="M800 900 L800 680"/><path d="M1100 900 L950 700"/>
+    <path d="M1400 900 L1200 700"/>
+  </g>
+</svg>
