@@ -223,7 +223,14 @@ const server = http.createServer((req, res) => {
   });
 });
 
-const PORT = 18888;
+process.on('uncaughtException', (err) => {
+  console.error(`[${new Date().toISOString()}] uncaughtException:`, err && err.stack ? err.stack : err);
+});
+process.on('unhandledRejection', (err) => {
+  console.error(`[${new Date().toISOString()}] unhandledRejection:`, err && err.stack ? err.stack : err);
+});
+
+const PORT = Number(process.env.LINLIS_CODEX_PROXY_PORT || 18888);
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`Codex Responses↔ChatCompletions proxy → DeepSeek ${TARGET}${TARGET_PATH}`);
+  console.log(`[${new Date().toISOString()}] Codex Responses↔ChatCompletions proxy on 127.0.0.1:${PORT} → ${TARGET}${TARGET_PATH}`);
 });

@@ -53,15 +53,16 @@ cat > "${CANARY_SLOT}/meta/RELEASE.json" <<EOF
 }
 EOF
 
+# Codex Responses shim (DeepSeek / OpenCode Zen Go) — keep alive via systemd.
+/bin/cp -f "${LINLIS_ROOT}/deploy/systemd/linlis-codex-proxy.service" /etc/systemd/system/linlis-codex-proxy.service
+/bin/cp -f "${LINLIS_ROOT}/deploy/systemd/linlis-work-panel-canary.service" /etc/systemd/system/linlis-work-panel-canary.service 2>/dev/null || true
 systemctl daemon-reload
+systemctl enable linlis-codex-proxy.service >/dev/null 2>&1 || true
 systemctl enable linlis-work-panel-canary.service >/dev/null 2>&1 || true
-# Codex Responses shim (DeepSeek models via Zen Go); ignore if already up.
-if ! ss -ltn 2>/dev/null | rg -q ':18888\b'; then
-  echo "==> ensuring codex-deepseek-proxy on :18888"
-  nohup node "${LINLIS_ROOT}/scripts/codex-deepseek-proxy.cjs" \
-    >/tmp/codex-deepseek-proxy.log 2>&1 &
-  sleep 1
-fi
+echo "==> ensuring linlis-codex-proxy.service on :18888"
+systemctl restart linlis-codex-proxy.service
+sleep 1
+systemctl is-active linlis-codex-proxy.service || true
 systemctl restart linlis-work-panel-canary.service
 sleep 1
 systemctl is-active linlis-work-panel-canary.service
