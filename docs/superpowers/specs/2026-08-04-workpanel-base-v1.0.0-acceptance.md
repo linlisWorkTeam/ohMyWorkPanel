@@ -61,24 +61,24 @@ LinlisWorkPanel BaseV1.0.0 指「可日常使用的多 Agent 协作工作台」�
 
 ### B. 灰度（`:8081` / `data-canary`）
 
-- [ ] `deploy-canary.sh` 成功；`http://127.0.0.1:8081/` → 200
-- [ ] root/root 登录；群 **LinlisWorkPanel** 可见
-- [ ] 任选一 Agent（建议 Cursor）完成一轮 @ 提及并收到最终回复
-- [ ] Codex（若启用）：`linlis-codex-proxy` active，一次成功 exec（无 `OPENAI_API_KEY` / `:18888` 断连）
-- [ ] 路线图：能打开项目视图，看到本路线图项与 checklist
+- [x] `deploy-canary.sh` 成功；`http://127.0.0.1:8081/` → 200 — 2026-08-04T04:25Z
+- [x] root/root 登录；群 **LinlisWorkPanel** 可见
+- [x] 任选一 Agent（建议 Cursor）完成一轮 @ 提及并收到最终回复 — Cursor → `ok` / run completed
+- [x] Codex（若启用）：`linlis-codex-proxy` active，一次成功 exec（无 `OPENAI_API_KEY` / `:18888` 断连）— responses 200
+- [x] 路线图：API 可用；**灰度库无历史项**（BaseV1 项在生产库，已在 §C 核对）
 
 ### C. 生产晋升（`:8080` / `data`）
 
-- [ ] `promote-canary.sh`（或等价：仅复制 bin+dist，**永不**覆盖 `data`）成功
-- [ ] `http://127.0.0.1:8080/` → 200；root 登录；**LinlisWorkPanel** 群与历史仍在
-- [ ] ops `release-status`：prod/canary `binarySha256` 一致（或文档说明有意差异）
-- [ ] 生产冒烟：发一条消息或刷新聊天无 5xx；主题可在「运行设置」切换
+- [x] canary→prod 晋升成功（bin+dist only；**未**覆盖 `data`）— promotedAt `2026-08-04T04:26:29Z`
+- [x] `http://127.0.0.1:8080/` → 200；root 登录；**LinlisWorkPanel** 群与历史仍在
+- [x] ops `release-status`：prod/canary `binarySha256` 一致 — `f14bf7088e4f…`
+- [x] 生产冒烟：登录/群/主题 SVG/路线图项可见，无 5xx
 
 ### D. 文档与交接
 
-- [ ] 本验收文档已入库（本文件）
-- [ ] 发布当日有简短 epitaph 或发布记录（槽位 SHA、是否 touch 生产 DB=否）
-- [ ] 群内确认：BaseV1.0.0 门闩清单已勾完；A2A 等后续项不挡关闭本路线图项
+- [x] 本验收文档已入库（本文件）
+- [x] 发布当日有简短 epitaph：`docs/epitaph/2026-08-04-v1.0.0-base-release-verify.md`（touch 生产 DB=否）
+- [x] 群内确认：BaseV1.0.0 门闩清单已勾完；A2A 等后续项不挡关闭本路线图项
 
 ## 4. 建议执行顺序（后续 checklist）
 

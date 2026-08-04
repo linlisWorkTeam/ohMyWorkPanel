@@ -6,6 +6,7 @@ Active handoff notes for future agents.
 
 | Date | Topic | Status |
 |------|-------|--------|
+| 2026-08-04 | [v1.0.0 Base 灰度/生产验证](./2026-08-04-v1.0.0-base-release-verify.md) | active |
 | 2026-08-03 | [v1.7 phases / chatbot / sandbox / keep-alive](./2026-08-03-v1.7-chatbot-phases.md) | active |
 | 2026-08-03 | [v1.6 工作流视图 / 服务端路径 / 群公告 / Ops](./2026-08-03-v1.6-workflow-pm.md) | active |
 | 2026-08-03 | [v1.5 自动化测试策略 + canary 门禁](./2026-08-03-v1.5-test-gate.md) | active |
