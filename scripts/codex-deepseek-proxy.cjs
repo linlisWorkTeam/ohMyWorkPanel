@@ -82,11 +82,19 @@ const server = http.createServer((req, res) => {
 
       console.log(`  → upstream: model=${chatReq.model}, stream=${chatReq.stream}, msgs=${chatMessages.length}, roles=${chatMessages.map(m=>m.role).join(',')}`);
 
+      if (!API_KEY) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'OPENAI_API_KEY missing (set env or /root/.codex/auth.json)',
+        }));
+      }
+
       const options = {
         hostname: TARGET,
         port: 443,
         path: TARGET_PATH,
         method: 'POST',
+        timeout: Number(process.env.CODEX_UPSTREAM_TIMEOUT_MS || 120000),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${API_KEY}`,
@@ -206,10 +214,19 @@ const server = http.createServer((req, res) => {
         }
       });
 
+      proxyReq.on('timeout', () => {
+        console.error('  ✗ upstream timeout');
+        proxyReq.destroy(new Error('upstream timeout'));
+      });
+
       proxyReq.on('error', (e) => {
         console.error('  ✗ connection error:', e.message);
-        res.writeHead(502, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: e.message }));
+        if (!res.headersSent) {
+          res.writeHead(502, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: e.message }));
+        } else {
+          res.end();
+        }
       });
 
       proxyReq.write(JSON.stringify(chatReq));

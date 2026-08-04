@@ -4,6 +4,7 @@ mod adapters;
 #[cfg(feature = "gui")]
 mod commands;
 mod ocr;
+pub mod codex_proxy;
 pub mod db;
 pub mod fs_browse;
 pub mod keepalive;

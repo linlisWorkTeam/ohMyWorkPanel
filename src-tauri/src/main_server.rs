@@ -79,6 +79,14 @@ async fn main() {
     linlis_work_panel_lib::keepalive::start_keepalive_loop(sched);
     linlis_work_panel_lib::metrics::start_perf_loop(db_path.clone());
 
+    // Codex Responses shim on :18888 — owned by this process (or reuse if already bound).
+    let _codex_proxy = linlis_work_panel_lib::codex_proxy::start_embedded().await;
+    println!(
+        "Codex proxy: port={} managed_sidecar={}",
+        _codex_proxy.port(),
+        _codex_proxy.managed_child()
+    );
+
     let dist_dir = env::var("LINLIS_WEB_DIST").unwrap_or_else(|_| "../dist".to_string());
     println!("Static: {}", dist_dir);
 

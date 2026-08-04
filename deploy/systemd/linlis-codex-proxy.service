@@ -1,19 +1,14 @@
+# DEPRECATED — Codex Responses shim is now spawned by linlis-work-panel-server.
+# Kept for reference only; deploy-canary disables this unit.
 [Unit]
-Description=Linlis Codex DeepSeek Responses shim (:18888)
+Description=DEPRECATED Linlis Codex proxy (use embedded sidecar in work-panel-server)
 After=network.target
-Documentation=file:///AI/LinlisWorkPanel/scripts/codex-deepseek-proxy.cjs
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/AI/LinlisWorkPanel
-ExecStart=/usr/bin/node /AI/LinlisWorkPanel/scripts/codex-deepseek-proxy.cjs
-Restart=always
-RestartSec=2
-Environment=NODE_ENV=production
-# Prefer auth.json; shell OPENAI_API_KEY also works if present
-StandardOutput=append:/tmp/codex-deepseek-proxy.log
-StandardError=append:/tmp/codex-deepseek-proxy.log
+ExecStart=/bin/false
+RemainAfterExit=no
 
 [Install]
 WantedBy=multi-user.target

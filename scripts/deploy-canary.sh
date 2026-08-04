@@ -53,19 +53,25 @@ cat > "${CANARY_SLOT}/meta/RELEASE.json" <<EOF
 }
 EOF
 
-# Codex Responses shim (DeepSeek / OpenCode Zen Go) — keep alive via systemd.
-/bin/cp -f "${LINLIS_ROOT}/deploy/systemd/linlis-codex-proxy.service" /etc/systemd/system/linlis-codex-proxy.service
-/bin/cp -f "${LINLIS_ROOT}/deploy/systemd/linlis-work-panel-canary.service" /etc/systemd/system/linlis-work-panel-canary.service 2>/dev/null || true
+# Codex shim is embedded in linlis-work-panel-server (sidecar on :18888).
+# Stop the legacy standalone unit so WorkPanel can own the port.
+/bin/cp -f "${LINLIS_ROOT}/deploy/systemd/linlis-work-panel-canary.service" /etc/systemd/system/linlis-work-panel-canary.service
+/bin/cp -f "${LINLIS_ROOT}/deploy/systemd/linlis-work-panel.service" /etc/systemd/system/linlis-work-panel.service
 systemctl daemon-reload
-systemctl enable linlis-codex-proxy.service >/dev/null 2>&1 || true
 systemctl enable linlis-work-panel-canary.service >/dev/null 2>&1 || true
-echo "==> ensuring linlis-codex-proxy.service on :18888"
-systemctl restart linlis-codex-proxy.service
-sleep 1
-systemctl is-active linlis-codex-proxy.service || true
+if systemctl list-unit-files linlis-codex-proxy.service >/dev/null 2>&1; then
+  echo "==> retiring standalone linlis-codex-proxy.service (now embedded)"
+  systemctl disable --now linlis-codex-proxy.service >/dev/null 2>&1 || true
+  # Ensure port is free for canary's embedded sidecar
+  fuser -k 18888/tcp >/dev/null 2>&1 || true
+  sleep 1
+fi
 systemctl restart linlis-work-panel-canary.service
-sleep 1
+sleep 2
 systemctl is-active linlis-work-panel-canary.service
 curl -sS -o /dev/null -w "canary_http=%{http_code}\n" "http://127.0.0.1:${CANARY_PORT}/" || true
+curl -sS -o /dev/null -w "codex_proxy_health=%{http_code}\n" "http://127.0.0.1:18888/health" || true
+# Show who owns :18888 (should be node child of canary server)
+ss -ltnp 2>/dev/null | rg '18888' || true
 echo "Canary ready: http://<host>:${CANARY_PORT}/  (data=${CANARY_DATA})"
 echo "Production untouched: http://<host>:${PROD_PORT}/  (data=${PROD_DATA})"

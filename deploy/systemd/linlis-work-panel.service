@@ -10,6 +10,8 @@ ExecStart=/opt/linlis-workpanel/prod/bin/linlis-work-panel-server
 Environment=LINLIS_DATA_DIR=/AI/LinlisWorkPanel/data
 Environment=LINLIS_WEB_DIST=/opt/linlis-workpanel/prod/dist
 Environment=LINLIS_PORT=8080
+Environment=LINLIS_ROOT=/AI/LinlisWorkPanel
+Environment=LINLIS_CODEX_PROXY_SCRIPT=/AI/LinlisWorkPanel/scripts/codex-deepseek-proxy.cjs
 Restart=always
 RestartSec=5
 
