@@ -11,7 +11,8 @@ status: active
 
 - **默认响应者**：`admin_member_id` 可设为活跃 **Agent 或 chatbot**；未设置则无 @ 时不自动回复；用户不能当兜底
 - **UI**：聊天群按钮「设为默认响应 / 撤销默认响应」；徽章「默认响应」
-- **Chatbot 上下文**：`build_chatbot_user_message` 把最近群聊（`context_message_limit` 默认 40）整段塞进 user（豆包式原生窗口，非向量记忆）
+- **Chatbot 上下文**：`build_chatbot_user_message` 整段塞进 user（豆包式原生窗口，非向量记忆）
+- **窗口分流（续）**：`chat_context_message_limit` 默认 **12**（聊天群/chatbot）；工作群 Agent 仍用 `context_message_limit` 默认 40；聊天字符预算 8k vs 24k。仍无摘要/RAG。
 - **keep-alive**：仅 Agent 管理员开启；chatbot 管理员不保活
 
 ## Key files

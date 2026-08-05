@@ -1170,7 +1170,9 @@ export function App() {
             <form className="modal-form" onSubmit={saveSettings}>
               <NumberSetting label="每群并发任务" value={settings.maxConcurrentRuns} onChange={(value) => setSettings({ ...settings, maxConcurrentRuns: value })} min={1} max={8} />
               <NumberSetting label="任务超时（秒）" value={settings.runTimeoutSeconds} onChange={(value) => setSettings({ ...settings, runTimeoutSeconds: value })} min={30} max={7200} />
-              <NumberSetting label="上下文消息数" value={settings.contextMessageLimit} onChange={(value) => setSettings({ ...settings, contextMessageLimit: value })} min={5} max={200} />
+              <NumberSetting label="工作群上下文消息数" value={settings.contextMessageLimit} onChange={(value) => setSettings({ ...settings, contextMessageLimit: value })} min={5} max={200} />
+              <NumberSetting label="聊天群/机器人上下文" value={settings.chatContextMessageLimit ?? 12} onChange={(value) => setSettings({ ...settings, chatContextMessageLimit: value })} min={5} max={40} />
+              <p className="form-hint">聊天群与 chatbot 用更小原生窗口（默认 12）；仍直接截断最旧消息，无摘要/向量长期记忆。</p>
               <NumberSetting label="管理员最大派生层级" value={settings.maxDelegationDepth} onChange={(value) => setSettings({ ...settings, maxDelegationDepth: value })} min={0} max={4} />
               <h3 className="settings-section-title">心跳</h3>
               <label className="settings-check">

@@ -2,7 +2,7 @@ use crate::adapters::{self, chatbot, AdapterKind};
 use crate::db::{
     create_task_run, get_agent_api_key, get_cli_session_id, get_group, get_members, get_settings_from,
     id, insert_run_event, member_from_row, message_from_row, now, open_db, run_from_row,
-    set_cli_session_id, set_run_phase, settings_or, AppResult,
+    set_cli_session_id, set_run_phase, AppResult,
 };
 use crate::event_sender::EventSender;
 use crate::logger;
@@ -254,16 +254,24 @@ fn get_execution_context(state: &SchedulerState, run_id: &str) -> AppResult<Exec
     if !agent.is_active {
         return Err("该 Agent 已被移除。".into());
     }
+    let settings = get_settings_from(&conn)?;
+    let history_limit = crate::context_policy::effective_context_message_limit(
+        &group.group_kind,
+        &agent.kind,
+        settings.context_message_limit,
+        settings.chat_context_message_limit,
+    );
+    let max_history_chars = crate::context_policy::effective_history_char_budget(
+        &group.group_kind,
+        &agent.kind,
+    );
     let mut stmt = conn
         .prepare(
             "SELECT m.id,m.group_id,m.sender_member_id,m.parent_run_id,m.content,m.status,m.created_at FROM messages m WHERE m.group_id=?1 ORDER BY m.created_at DESC LIMIT ?2",
         )
         .map_err(|e| e.to_string())?;
     let mut history = stmt
-        .query_map(
-            params![group.id, settings_or(&conn, "context_message_limit", 40)?],
-            message_from_row,
-        )
+        .query_map(params![group.id, history_limit], message_from_row)
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
@@ -273,8 +281,7 @@ fn get_execution_context(state: &SchedulerState, run_id: &str) -> AppResult<Exec
         .iter()
         .map(|m| (m.id.clone(), m.display_name.clone()))
         .collect();
-    // Cap history to keep argv under OS ARG_MAX and avoid multi-minute hangs.
-    const MAX_HISTORY_CHARS: usize = 24_000;
+    // Cap history to keep argv / HTTP body under budget (chat/chatbot tighter).
     let mut line_parts: Vec<String> = history
         .iter()
         .map(|m| {
@@ -289,14 +296,14 @@ fn get_execution_context(state: &SchedulerState, run_id: &str) -> AppResult<Exec
         })
         .collect();
     let mut lines = line_parts.join("\n");
-    while lines.len() > MAX_HISTORY_CHARS && line_parts.len() > 1 {
+    while lines.len() > max_history_chars && line_parts.len() > 1 {
         line_parts.remove(0);
         lines = line_parts.join("\n");
     }
-    if lines.chars().count() > MAX_HISTORY_CHARS {
+    if lines.chars().count() > max_history_chars {
         lines = format!(
             "…(前文已截断)\n{}",
-            truncate_chars_end(&lines, MAX_HISTORY_CHARS)
+            truncate_chars_end(&lines, max_history_chars)
         );
     }
     let root = history
@@ -393,7 +400,7 @@ fn get_execution_context(state: &SchedulerState, run_id: &str) -> AppResult<Exec
         group,
         agent,
         prompt,
-        settings: get_settings_from(&conn)?,
+        settings,
         recent_chat: lines,
         root_task: root,
     })

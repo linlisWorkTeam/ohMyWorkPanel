@@ -6,6 +6,7 @@ pub mod a2a;
 mod commands;
 mod ocr;
 pub mod codex_proxy;
+mod context_policy;
 pub mod db;
 pub mod extensions;
 pub mod fs_browse;

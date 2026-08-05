@@ -99,6 +99,7 @@ pub fn update_runtime_settings(
     if settings.max_concurrent_runs < 1
         || settings.run_timeout_seconds < 30
         || settings.context_message_limit < 5
+        || !(5..=40).contains(&settings.chat_context_message_limit)
         || !(0..=4).contains(&settings.max_delegation_depth)
     {
         return Err("运行设置超出允许范围。".into());
@@ -113,6 +114,10 @@ pub fn update_runtime_settings(
         ("max_concurrent_runs", settings.max_concurrent_runs),
         ("run_timeout_seconds", settings.run_timeout_seconds),
         ("context_message_limit", settings.context_message_limit),
+        (
+            "chat_context_message_limit",
+            settings.chat_context_message_limit,
+        ),
         ("max_delegation_depth", settings.max_delegation_depth),
         (
             "heartbeat_auto",

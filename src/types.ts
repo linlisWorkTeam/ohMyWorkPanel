@@ -171,6 +171,8 @@ export interface RuntimeSettings {
   maxConcurrentRuns: number;
   runTimeoutSeconds: number;
   contextMessageLimit: number;
+  /** Chat group / chatbot native window (default 12). */
+  chatContextMessageLimit?: number;
   maxDelegationDepth: number;
   heartbeatAuto?: boolean;
   heartbeatFocusSeconds?: number;

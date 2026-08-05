@@ -253,6 +253,9 @@ pub struct RuntimeSettings {
     pub max_concurrent_runs: i64,
     pub run_timeout_seconds: i64,
     pub context_message_limit: i64,
+    /// Smaller native window for chat groups / chatbot (default 12). No summary/RAG.
+    #[serde(default = "default_chat_context_message_limit")]
+    pub chat_context_message_limit: i64,
     pub max_delegation_depth: i64,
     /// Auto heartbeat rate (focus 1s / background 5s by default).
     #[serde(default = "default_true")]
@@ -265,6 +268,9 @@ pub struct RuntimeSettings {
 
 fn default_true() -> bool {
     true
+}
+fn default_chat_context_message_limit() -> i64 {
+    12
 }
 fn default_heartbeat_focus() -> i64 {
     1

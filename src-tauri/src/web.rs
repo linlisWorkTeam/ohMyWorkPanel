@@ -978,7 +978,12 @@ async fn get_message_channel_part_web(
      State(state): State<Arc<AppState>>,
      Json(settings): Json<RuntimeSettings>,
  ) -> Result<Json<RuntimeSettings>, (StatusCode, String)> {
-     if settings.max_concurrent_runs < 1 || settings.run_timeout_seconds < 30 || settings.context_message_limit < 5 || !(0..=4).contains(&settings.max_delegation_depth) {
+     if settings.max_concurrent_runs < 1
+         || settings.run_timeout_seconds < 30
+         || settings.context_message_limit < 5
+         || !(5..=40).contains(&settings.chat_context_message_limit)
+         || !(0..=4).contains(&settings.max_delegation_depth)
+     {
          return Err((StatusCode::BAD_REQUEST, "settings out of range".into()));
      }
      if !(1..=30).contains(&settings.heartbeat_focus_seconds)
@@ -991,6 +996,10 @@ async fn get_message_channel_part_web(
          ("max_concurrent_runs", settings.max_concurrent_runs),
          ("run_timeout_seconds", settings.run_timeout_seconds),
          ("context_message_limit", settings.context_message_limit),
+         (
+             "chat_context_message_limit",
+             settings.chat_context_message_limit,
+         ),
          ("max_delegation_depth", settings.max_delegation_depth),
          (
              "heartbeat_auto",
