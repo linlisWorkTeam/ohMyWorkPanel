@@ -44,6 +44,9 @@ systemctl is-active linlis-work-panel.service
 - [ ] 若经域名/HTTPS：再确认实时流（`wss`）一次
 - [ ] auth proxy / nginx（若启用）仍可访问对外入口
 - [ ] **未**覆盖 `/AI/LinlisWorkPanel/data`
+- [ ] （可选）生产 watchdog 已启用：`linlis-work-panel-watchdog.timer`（`scripts/ensure-prod-up.sh`，仅拉起死服务，不 promote）
+
+`promote-canary.sh` 在 stop 之后设有 EXIT/INT/TERM trap，中断时仍会尝试 `systemctl start` 生产，避免永久 dead。
 
 ## F. 前端壳冒烟（React / 静态资源）
 

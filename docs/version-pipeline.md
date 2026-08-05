@@ -83,7 +83,7 @@ status: active
 | UX | 重连横幅前 30s 静默 | `releasingState` + checklist |
 | 调度可见性 | 成员栏 **执行中 · 排队 N** + 展开取消 | `epitaph/2026-08-05-member-queue-visibility.md` |
 | 聊天 D0 | 默认响应者；chatbot 窗口 12 + 时间戳 + 滚动摘要 | `epitaph/2026-08-05-chat-default-responder-context.md` |
-| 发布治理 | `approve-prod-release.sh`；tag **v1.1.0** | scripts + GitHub |
+| 发布治理 | `approve-prod-release.sh`；promote trap；可选 prod watchdog；tag **v1.1.0** | scripts + GitHub |
 
 ---
 

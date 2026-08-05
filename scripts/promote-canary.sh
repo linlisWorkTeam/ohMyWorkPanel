@@ -50,15 +50,33 @@ EOF
 
 # Prefer stop→start over restart: if the client is interrupted mid-restart,
 # systemd can cancel the remaining start job and leave prod permanently stopped.
+# Trap: any exit/interrupt after we stop MUST attempt start (prevents permanent outage).
+PROD_STOPPED=0
+ensure_prod_started() {
+  if [[ "${PROD_STOPPED}" -eq 1 ]]; then
+    echo "==> ensure prod start (trap/cleanup)"
+    systemctl start linlis-work-panel.service || true
+  fi
+}
+trap ensure_prod_started EXIT INT TERM
+
 systemctl stop linlis-work-panel.service || true
+PROD_STOPPED=1
 sleep 1
 systemctl start linlis-work-panel.service
+PROD_STOPPED=0
 sleep 1
+if ! systemctl is-active --quiet linlis-work-panel.service; then
+  echo "ERROR: prod failed to start after promote — retrying once" >&2
+  systemctl start linlis-work-panel.service || true
+  sleep 1
+fi
 if ! systemctl is-active --quiet linlis-work-panel.service; then
   echo "ERROR: prod failed to start after promote" >&2
   systemctl status linlis-work-panel.service --no-pager -l >&2 || true
   exit 1
 fi
+trap - EXIT INT TERM
 # Ensure auth proxy is up (public edge: nginx → :9090 → :8080).
 if [[ -f "${LINLIS_ROOT}/deploy/systemd/linlis-work-panel-proxy.service" ]]; then
   /bin/cp -f "${LINLIS_ROOT}/deploy/systemd/linlis-work-panel-proxy.service" \

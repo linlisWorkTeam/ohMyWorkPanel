@@ -1,0 +1,11 @@
+[Unit]
+Description=LinlisWorkPanel prod watchdog every minute
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=60s
+AccuracySec=15s
+Unit=linlis-work-panel-watchdog.service
+
+[Install]
+WantedBy=timers.target
