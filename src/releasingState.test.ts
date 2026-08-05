@@ -18,9 +18,12 @@ describe("releasingState", () => {
     expect(shouldKeepReleasing(false, false, RELEASING_WINDOW_MS)).toBe(false);
   });
 
-  it("renders banner copy", () => {
+  it("renders banner copy only after 30s quiet period", () => {
     expect(releasingBannerText("connected", 0)).toBeNull();
-    expect(releasingBannerText("releasing", 0)).toMatch(/剩余约 60s/);
+    expect(releasingBannerText("releasing", 0)).toBeNull();
+    expect(releasingBannerText("releasing", 29_999)).toBeNull();
+    expect(releasingBannerText("releasing", 30_000)).toMatch(/剩余约 30s/);
+    expect(releasingBannerText("releasing", 53_000)).toMatch(/剩余约 7s/);
     expect(releasingBannerText("timeout", RELEASING_WINDOW_MS)).toMatch(/手动刷新/);
   });
 });
