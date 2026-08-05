@@ -78,7 +78,7 @@ status: active
 |---|---|---|
 | 文档与路径 | API 索引、mkdir 说明纠偏 | `epitaph/2026-08-05-docs-mkdir-api-index.md` |
 | 成员 | 加入已有登录用户 | `epitaph/2026-08-05-link-existing-user-member.md` |
-| PanelLive | Extension Host；同源代理；A2A live.*（禁 PCM）；Live 页签 | `epitaph/2026-08-05-extension-host-panellive.md` 等；roadmap v0.5 |
+| PanelLive | Extension Host；同源代理；A2A live.*（禁 PCM）；Live 页签；Live 短回复注入（<50 字） | `epitaph/2026-08-05-panellive-short-reply.md` 等；roadmap v0.5 |
 | 发版硬化 P1–P4 | 种子群 `is_system`；releasing 60s；心跳；metrics 20s | `epitaph/2026-08-05-release-hardening.md` |
 | UX | 重连横幅前 30s 静默 | `releasingState` + checklist |
 | 调度可见性 | 成员栏 **执行中 · 排队 N** + 展开取消 | `epitaph/2026-08-05-member-queue-visibility.md` |

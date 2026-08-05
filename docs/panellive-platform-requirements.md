@@ -50,7 +50,21 @@ MVP（方案 A）用 Mock STT/TTS 验证同一控制流。
 - [x] A2A 总线：`POST /api/a2a/dispatch`（`live.*` skills；禁 PCM 字段）  
 - [ ] （可选）短时云凭证下发：若 Key 由平台保管；**MVP 不需要**  
 
-## 6. 非目标
+## 6. PanelLive 模式 LLM 输出上限（强制）
+
+模型：`fun-asr-flash-2026-0615` + `cosyvoice-v3.5-flash`（省着用，尤其 TTS）。
+
+Live 开启时，平台必须给 ChatBot / 管理员 Agent 注入短回复约束（也可 `GET PanelLive/v1/llm-prompt`）：
+
+- **每次最终输出 < 50 个汉字**
+- PanelLive 在送 TTS 前会再硬截断 50 字（双保险）
+
+详见 `/AI/WorkPanelLive/docs/llm-prompt-panellive.md`。
+
+**平台实现（已落地）**：`extensions::live_short_reply_block` — 群 `panellive` 已 enable 时，对 `kind=chatbot` 或 `admin_member_id` 对应成员拉取 `GET :8790/v1/llm-prompt`（失败用文档 fallback），注入 Agent 任务提示 / ChatBot system；ChatBot Live 时 `max_tokens=128`。
+
+## 7. 非目标
 
 - Connecter 调用云 STT/TTS  
 - 在 WorkPanel 核心进程内嵌重采样/转码  
+ 

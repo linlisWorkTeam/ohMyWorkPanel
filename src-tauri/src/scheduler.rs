@@ -374,6 +374,13 @@ fn get_execution_context(state: &SchedulerState, run_id: &str) -> AppResult<Exec
     } else { None };
 
     let announcement_block = format_announcement_block(&group.announcement, 4096);
+    let live_block = crate::extensions::live_short_reply_block(
+        &conn,
+        &group.id,
+        &agent.kind,
+        &agent.id,
+        group.admin_member_id.as_deref(),
+    );
     let mem_excerpt = memory::read_memory_excerpt(
         std::path::Path::new(&group.workspace_path),
         Some(&agent.id),
@@ -385,11 +392,12 @@ fn get_execution_context(state: &SchedulerState, run_id: &str) -> AppResult<Exec
         format!("\n{mem_excerpt}\n")
     };
     let prompt = format!(
-        "你是群聊中的 Agent「{}」。职责：{}。\n工作目录：{}{}{}\n请只完成当前任务，明确说明结果与风险。需要其他 Agent 协作时，使用 @成员名 提及。\n任务根消息：{}\n最近群聊：{}\n你可以将重要经验通过 `!保存经验 <标题>: <内容> #标签` 保存。{}{}",
+        "你是群聊中的 Agent「{}」。职责：{}。\n工作目录：{}{}{}{}\n请只完成当前任务，明确说明结果与风险。需要其他 Agent 协作时，使用 @成员名 提及。\n任务根消息：{}\n最近群聊：{}\n你可以将重要经验通过 `!保存经验 <标题>: <内容> #标签` 保存。{}{}",
         agent.display_name,
         agent.role_description,
         group.workspace_path,
         announcement_block,
+        live_block,
         memory_block,
         root,
         lines,
@@ -458,14 +466,22 @@ async fn run_agent(
             context.root_task.clone()
         };
         let ann = truncate_chars(context.group.announcement.trim(), 800);
+        let live_block = crate::extensions::live_short_reply_block(
+            &conn,
+            &context.group.id,
+            &context.agent.kind,
+            &context.agent.id,
+            context.group.admin_member_id.as_deref(),
+        );
         let system = format!(
-            "你是群聊机器人「{}」。只做轻量对话，不要调用工具、不要改代码/文件。回答简洁。结合下方群聊上下文（最近原文 + 必要时的历史摘要）理解指代与话题；不要编造摘要里没有的事实。{}",
+            "你是群聊机器人「{}」。只做轻量对话，不要调用工具、不要改代码/文件。回答简洁。结合下方群聊上下文（最近原文 + 必要时的历史摘要）理解指代与话题；不要编造摘要里没有的事实。{}{}",
             context.agent.display_name,
             if ann.is_empty() {
                 String::new()
             } else {
                 format!("\n群公告：{ann}")
-            }
+            },
+            live_block
         );
         let model = context.agent.model.as_deref();
         let keep = context
@@ -484,12 +500,14 @@ async fn run_agent(
         .await
         .unwrap_or_else(|_| context.recent_chat.clone());
         let user = chatbot::build_chatbot_user_message(&window, &root);
+        // Live short replies: tighter completion budget (TTS < 50 汉字).
+        let max_tokens = if live_block.is_empty() { 512 } else { 128 };
         let text = chatbot::run_chatbot_completion(
             adapter_name,
             &api_key,
             &system,
             &user,
-            512,
+            max_tokens,
             token,
             model,
         )
@@ -699,12 +717,19 @@ fn format_announcement_block(announcement: &str, max_chars: usize) -> String {
 fn short_resume_prompt(context: &ExecutionContext) -> String {
     let task = extract_root_from_prompt(&context.prompt);
     let announcement_block = format_announcement_block(&context.group.announcement, 2048);
+    // Resume sessions keep the Live constraint if the prepared prompt had it.
+    let live_block = if context.prompt.contains("【PanelLive") {
+        format!("\n\n{}\n", crate::extensions::PANELLIVE_LLM_PROMPT_FALLBACK)
+    } else {
+        String::new()
+    };
     format!(
-        "你是群聊中的 Agent「{}」。职责：{}。\n工作目录：{}{}\n请只完成当前任务，明确说明结果与风险。需要其他 Agent 协作时，使用 @成员名 提及。\n任务根消息：{}\n（续接同一 CLI session，无需重复历史。）\n你可以将重要经验通过 `!保存经验 <标题>: <内容> #标签` 保存。",
+        "你是群聊中的 Agent「{}」。职责：{}。\n工作目录：{}{}{}\n请只完成当前任务，明确说明结果与风险。需要其他 Agent 协作时，使用 @成员名 提及。\n任务根消息：{}\n（续接同一 CLI session，无需重复历史。）\n你可以将重要经验通过 `!保存经验 <标题>: <内容> #标签` 保存。",
         context.agent.display_name,
         context.agent.role_description,
         context.group.workspace_path,
         announcement_block,
+        live_block,
         task
     )
 }
