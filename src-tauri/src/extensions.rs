@@ -236,6 +236,17 @@ pub fn sanitize_proxy_path(raw: &str) -> AppResult<String> {
     Ok(format!("/{trimmed}"))
 }
 
+/// Append browser query to sanitized path (needed for `?format=json` TTS etc.).
+pub fn with_proxy_query(path: &str, query: Option<&str>) -> AppResult<String> {
+    let Some(q) = query.map(str::trim).filter(|s| !s.is_empty()) else {
+        return Ok(path.to_string());
+    };
+    if q.contains('\0') || q.contains('\r') || q.contains('\n') || q.contains(' ') {
+        return Err("非法代理查询串".into());
+    }
+    Ok(format!("{path}?{q}"))
+}
+
 /// Same-origin base for browser iframe (never expose 127.0.0.1 to clients).
 pub fn panellive_public_base() -> &'static str {
     "/api/extensions/panellive"
@@ -335,6 +346,12 @@ mod tests {
         assert!(sanitize_proxy_path("../etc/passwd").is_err());
         assert_eq!(sanitize_proxy_path("live.html").unwrap(), "/live.html");
         assert_eq!(sanitize_proxy_path("v1/session/start").unwrap(), "/v1/session/start");
+        assert_eq!(
+            with_proxy_query("/v1/tts", Some("format=json")).unwrap(),
+            "/v1/tts?format=json"
+        );
+        assert_eq!(with_proxy_query("/v1/tts", None).unwrap(), "/v1/tts");
+        assert!(with_proxy_query("/v1/tts", Some("a b")).is_err());
     }
 
     #[test]

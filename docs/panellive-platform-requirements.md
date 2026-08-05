@@ -84,6 +84,14 @@ Live 开启时，平台必须给 ChatBot / 管理员 Agent 注入短回复约束
 - **麦克风**：需安全上下文（HTTPS 或 localhost）；`http://公网IP` 下 `mediaDevices` 为 undefined
 - 方案：`docs/superpowers/plans/2026-08-05-live-short-reply-injection.md`
 
+## 6.1 主聊天豆包式语音（Host UI）
+
+契约：`docs/superpowers/specs/2026-08-05-doubao-voice-ux-host.md`（Extend 全文见 WorkPanelLive 同主题 contract）。
+
+- 仅 `panellive` **enabled + healthy** 显示「按住说话」与气泡 ▶  
+- STT / TTS 一律走 `/api/extensions/panellive/v1/*`；TTS 朗读用 `purpose=playback`（截断 300）；Live 短回仍 `live`/50  
+- 松手即发（可带草稿拼接）；禁止 iframe 直连 `:8790`、禁止 PCM 进 A2A
+
 ## 7. 非目标
 
 - Connecter 调用云 STT/TTS  

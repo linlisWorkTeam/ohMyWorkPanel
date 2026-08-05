@@ -1,6 +1,6 @@
 ﻿import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { FormEvent, KeyboardEvent, memo, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { FormEvent, KeyboardEvent, memo, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 import { api, getAuthToken, onUnauthorized, requiresAuth, setAuthToken } from "./api";
 import {
   agentReplyDefaultOpen,
@@ -48,6 +48,21 @@ import { ProjectWorkflowView } from "./ProjectWorkflowView";
 import { ServerPathPicker } from "./ServerPathPicker";
 import { LivePanel } from "./LivePanel";
 import { liveTabEnabled, panelliveStatus } from "./extensions";
+import {
+  buildLiveMentionMessage,
+  messageToPlainText,
+  resolveLiveResponder,
+} from "./liveBridge";
+import {
+  cancelHoldRecording,
+  combineComposerAndTranscript,
+  playAudioBase64,
+  secureMicAvailable,
+  startHoldRecording,
+  stopHoldRecordingToWav,
+  sttViaProxy,
+  ttsPlaybackViaProxy,
+} from "./liveVoice";
 import { Brand, ThemeSwitcher } from "./theme";
 
 type NewMember = {
@@ -136,6 +151,11 @@ export function App() {
   const stickToBottom = useRef(true);
   const forceScrollGroupId = useRef<string | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const [voiceHolding, setVoiceHolding] = useState(false);
+  const [voiceBusy, setVoiceBusy] = useState(false);
+  const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
+  const playingAudioRef = useRef<HTMLAudioElement | null>(null);
+  const holdActiveRef = useRef(false);
   const currentGroupIdRef = useRef<string | undefined>(undefined);
   const [showJumpBottom, setShowJumpBottom] = useState(false);
   const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_MESSAGES);
@@ -740,6 +760,110 @@ export function App() {
     } catch (reason) { setComposer(body); setError(readError(reason)); }
     finally { setSending(false); composerRef.current?.focus(); }
   };
+
+  /** Doubao mode B: release → STT → append draft → send (with Live @responder when present). */
+  const sendVoiceTranscript = async (transcript: string) => {
+    if (!current || !senderMemberId || voiceBusy || sending) return;
+    const combined = combineComposerAndTranscript(composer, transcript);
+    if (!combined) return;
+    const responder = resolveLiveResponder(current.group, members);
+    const { content, mentionIds } = buildLiveMentionMessage(combined, responder);
+    const mentionSet = new Set([
+      ...mentionIds,
+      ...findMentionedMemberIds(content, activeMembers),
+    ]);
+    setComposer("");
+    setSending(true);
+    try {
+      await api.sendMessage(current.group.id, senderMemberId, content, [...mentionSet]);
+      await refresh(current.group.id);
+    } catch (reason) {
+      setComposer(combined);
+      setError(readError(reason));
+    } finally {
+      setSending(false);
+      composerRef.current?.focus();
+    }
+  };
+
+  const onHoldTalkStart = (event: PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    if (!liveReady || voiceBusy || sending || !current || holdActiveRef.current) return;
+    if (!secureMicAvailable()) {
+      setError("按住说话需要 HTTPS 或 localhost（当前无法访问麦克风）");
+      return;
+    }
+    const target = event.currentTarget;
+    target.setPointerCapture(event.pointerId);
+    holdActiveRef.current = true;
+    setVoiceHolding(true);
+    void startHoldRecording().catch((reason) => {
+      holdActiveRef.current = false;
+      setVoiceHolding(false);
+      setError(readError(reason));
+    });
+  };
+
+  const onHoldTalkEnd = () => {
+    if (!holdActiveRef.current) return;
+    holdActiveRef.current = false;
+    setVoiceHolding(false);
+    if (!current) {
+      cancelHoldRecording();
+      return;
+    }
+    setVoiceBusy(true);
+    void (async () => {
+      try {
+        const wav = await stopHoldRecordingToWav();
+        if (!wav) return;
+        const stt = await sttViaProxy(current.group.id, wav);
+        if (stt.error) throw new Error(stt.error);
+        const text = (stt.text ?? "").trim();
+        if (!text) {
+          setError("未识别到语音内容");
+          return;
+        }
+        await sendVoiceTranscript(text);
+      } catch (reason) {
+        setError(readError(reason));
+      } finally {
+        setVoiceBusy(false);
+      }
+    })();
+  };
+
+  const playMessageVoice = async (messageId: string, content: string) => {
+    if (!liveReady) return;
+    if (playingMessageId === messageId) return;
+    const plain = messageToPlainText(content);
+    if (!plain) return;
+    playingAudioRef.current?.pause();
+    playingAudioRef.current = null;
+    setPlayingMessageId(messageId);
+    try {
+      const tts = await ttsPlaybackViaProxy(plain);
+      if (tts.error || !tts.audioBase64) throw new Error(tts.error || "TTS 无音频");
+      if (tts.truncated) {
+        setError(`朗读已截断至 ${tts.maxChars ?? 300} 字（purpose=playback）`);
+      }
+      const audio = playAudioBase64(tts.audioBase64, tts.audioContentType || "audio/mpeg");
+      playingAudioRef.current = audio;
+      audio.onended = () => {
+        if (playingAudioRef.current === audio) {
+          playingAudioRef.current = null;
+          setPlayingMessageId(null);
+        }
+      };
+      audio.onerror = () => {
+        setPlayingMessageId(null);
+        setError("音频播放失败");
+      };
+    } catch (reason) {
+      setPlayingMessageId(null);
+      setError(readError(reason));
+    }
+  };
   const composerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     // Don't send while an IME (e.g. 中文输入法) is composing a selection.
     if (event.nativeEvent.isComposing) return;
@@ -988,7 +1112,16 @@ export function App() {
             return (
               <div key={message.id} className="day-block">
                 {showDay && <div className="day-divider"><span>{dayLabel(message.createdAt)}</span></div>}
-                <MessageBubble message={message} members={members} runs={current.runs} viewerMemberId={senderMemberId} onRun={changeRun} />
+                <MessageBubble
+                  message={message}
+                  members={members}
+                  runs={current.runs}
+                  viewerMemberId={senderMemberId}
+                  onRun={changeRun}
+                  voiceUxEnabled={liveReady}
+                  playingMessageId={playingMessageId}
+                  onPlayVoice={playMessageVoice}
+                />
               </div>
             );
           })}
@@ -1046,6 +1179,20 @@ export function App() {
                 {sendKeyMode === "enter" ? "↵ Enter" : "⌃↵ Ctrl"}
               </button>
               <button className="ocr-button" disabled={ocrRunning || ocrPasting} title={ocrPasting ? "正在识别粘贴的图片…" : "从图片识别文字"} onClick={() => void handleOcr()}>{ocrPasting ? "…" : "📷"}</button>
+              {liveReady && (
+                <button
+                  type="button"
+                  className={`hold-talk-button${voiceHolding ? " recording" : ""}`}
+                  disabled={voiceBusy || sending}
+                  title={secureMicAvailable() ? "按住说话，松手发送" : "需要 HTTPS 或 localhost 才能使用麦克风"}
+                  onPointerDown={onHoldTalkStart}
+                  onPointerUp={onHoldTalkEnd}
+                  onPointerCancel={onHoldTalkEnd}
+                  onContextMenu={(e) => e.preventDefault()}
+                >
+                  {voiceBusy ? "识别中…" : voiceHolding ? "松开发送" : "按住说话"}
+                </button>
+              )}
               <button className="send-button" disabled={!composer.trim() || sending} onClick={() => void send()}>{sending ? "发送中" : "发送"}</button>
             </span>
           </div>
@@ -1335,7 +1482,25 @@ export function App() {
   </main>;
 }
 
-const MessageBubble = memo(function MessageBubble({ message, members, runs, viewerMemberId, onRun }: { message: GroupState["messages"][number]; members: Member[]; runs: TaskRun[]; viewerMemberId: string | null; onRun: (run: TaskRun, operation: "cancel" | "retry") => void }) {
+const MessageBubble = memo(function MessageBubble({
+  message,
+  members,
+  runs,
+  viewerMemberId,
+  onRun,
+  voiceUxEnabled,
+  playingMessageId,
+  onPlayVoice,
+}: {
+  message: GroupState["messages"][number];
+  members: Member[];
+  runs: TaskRun[];
+  viewerMemberId: string | null;
+  onRun: (run: TaskRun, operation: "cancel" | "retry") => void;
+  voiceUxEnabled?: boolean;
+  playingMessageId?: string | null;
+  onPlayVoice?: (messageId: string, content: string) => void;
+}) {
   const sender = members.find((member) => member.id === message.senderMemberId);
   const run = runs.find((candidate) => candidate.outputMessageId === message.id);
   const own = Boolean(viewerMemberId) && message.senderMemberId === viewerMemberId;
@@ -1365,6 +1530,8 @@ const MessageBubble = memo(function MessageBubble({ message, members, runs, view
         : run?.status === "queued" ? "排队中" : "…"
     } />
   );
+  const showPlay = Boolean(voiceUxEnabled && hasContent && !responding && onPlayVoice);
+  const playing = playingMessageId === message.id;
   return (
     <article className={`message-row ${own ? "own" : ""} ${responding ? "is-responding" : ""}`}>
       <Avatar member={sender} responding={responding && !own} />
@@ -1378,7 +1545,7 @@ const MessageBubble = memo(function MessageBubble({ message, members, runs, view
           )}
           {run?.reviewStatus && <ReviewBadge reviewStatus={run.reviewStatus} />}
         </div>
-        <div className={`bubble ${message.status}${responding ? " streaming" : ""}`}>
+        <div className={`bubble ${message.status}${responding ? " streaming" : ""}${showPlay ? " has-play" : ""}`}>
           {foldAgent ? (
             <details
               className="agent-reply-fold"
@@ -1390,6 +1557,17 @@ const MessageBubble = memo(function MessageBubble({ message, members, runs, view
             </details>
           ) : (
             body
+          )}
+          {showPlay && (
+            <button
+              type="button"
+              className={`bubble-play-btn${playing ? " playing" : ""}`}
+              title={playing ? "播放中…" : "朗读消息"}
+              disabled={playing}
+              onClick={() => onPlayVoice?.(message.id, message.content)}
+            >
+              {playing ? "…" : "▶"}
+            </button>
           )}
         </div>
         {run?.errorMessage && <p className="run-error">{run.errorMessage}</p>}

@@ -75,6 +75,7 @@ scripts/
 - **Extend 页签入口**：PanelLive 等扩展 UI 必须走平台同源代理（如 `/api/extensions/panellive/...`），**禁止** iframe 直连 `http://127.0.0.1:端口`（浏览器会打到用户本机，且 HTTPS 会混合内容拦截）。
 - **Live / Host 仓边界**：STT/TTS/`live.html` **只改** `/AI/WorkPanelLive`（独立 git）；代理/`LivePanel`/短回复/A2A **只改**本仓。正式 Live 群 workspace=`/AI/WorkPanelLive`；错名群 `WorPanelLive（废弃·错名）` 已归档勿解档。见 `docs/superpowers/specs/2026-08-05-workspace-boundary-live-host.md`。
 - **群公告**：等同全员项目级 rule，写入后注入 Agent prompt，并尝试同步工作区 `.cursor/rules/group-announcement.mdc`。
+- **Live 豆包语音 UX**：主聊天「按住说话 / 气泡播放」在 Host（`src/liveVoice.ts`）；媒体走 `/api/extensions/panellive`；契约见 `docs/superpowers/specs/2026-08-05-doubao-voice-ux-host.md`。
 - 本机需 Node 20+、Rust stable、WebView2（Windows）。
 - Agent 运行依赖本机已登录的 CLI（codex/claude/opencode/agent）。
 - `cargo test` 需在 `src-tauri/` 目录运行。

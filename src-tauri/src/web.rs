@@ -1620,10 +1620,13 @@ async fn proxy_panellive(
     State(state): State<Arc<AppState>>,
     method: axum::http::Method,
     Path(path): Path<String>,
+    uri: axum::http::Uri,
     headers: axum::http::HeaderMap,
     body: axum::body::Bytes,
 ) -> Result<Response, (StatusCode, String)> {
-    let upstream_path = crate::extensions::sanitize_proxy_path(&path)
+    let sanitized = crate::extensions::sanitize_proxy_path(&path)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    let upstream_path = crate::extensions::with_proxy_query(sanitized.as_str(), uri.query())
         .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
     let root = crate::extensions::panellive_root();
     let manifest = crate::extensions::load_panellive_manifest(&root)
