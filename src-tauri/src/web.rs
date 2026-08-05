@@ -1617,6 +1617,7 @@ async fn put_panellive_extension_web(
 }
 
 async fn proxy_panellive(
+    State(state): State<Arc<AppState>>,
     method: axum::http::Method,
     Path(path): Path<String>,
     headers: axum::http::HeaderMap,
@@ -1642,7 +1643,10 @@ async fn proxy_panellive(
             [
                 (axum::http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"),
                 (axum::http::header::ACCESS_CONTROL_ALLOW_METHODS, "GET,POST,OPTIONS"),
-                (axum::http::header::ACCESS_CONTROL_ALLOW_HEADERS, "Content-Type,X-Panellive-Token"),
+                (
+                    axum::http::header::ACCESS_CONTROL_ALLOW_HEADERS,
+                    "Content-Type,X-Panellive-Token,X-Linlis-Group-Id",
+                ),
             ],
             Vec::new(),
         )
@@ -1662,6 +1666,23 @@ async fn proxy_panellive(
         ct.as_deref(),
     )
     .map_err(|e| (StatusCode::BAD_GATEWAY, e))?;
+    // Session lifecycle via iframe proxy (no JWT): mark live_sessions when group header present.
+    if method_s == "POST" && ex.status == 200 {
+        let gid = headers
+            .get("x-linlis-group-id")
+            .and_then(|v| v.to_str().ok())
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        if let Some(group_id) = gid {
+            if upstream_path.starts_with("/v1/session/start") {
+                state.sched.mark_live_started(group_id);
+            } else if upstream_path.starts_with("/v1/session/cancel")
+                || upstream_path.starts_with("/v1/session/stop")
+            {
+                state.sched.mark_live_stopped(group_id);
+            }
+        }
+    }
     let status = StatusCode::from_u16(ex.status).unwrap_or(StatusCode::BAD_GATEWAY);
     Ok((
         status,

@@ -946,7 +946,15 @@ export function App() {
           <button className="icon-button mobile-members" onClick={toggleMembers} aria-label="成员面板">成员</button>
         </header>
         {mainView === "live" ? (
-          <LivePanel extension={liveExt} onOpenSettings={() => setShowSettings(true)} />
+          <LivePanel
+            extension={liveExt}
+            group={current?.group ?? null}
+            members={members}
+            messages={current?.messages ?? []}
+            senderMemberId={senderMemberId}
+            onOpenSettings={() => setShowSettings(true)}
+            onError={(msg) => setError(msg)}
+          />
         ) : !isChatGroup && mainView === "project" ? (
           <ProjectWorkflowView
             group={current.group}

@@ -63,9 +63,13 @@ Live 开启时，平台必须给 ChatBot / 管理员 Agent 注入短回复约束
 
 **平台实现（已落地，对齐方案 T1–T3）**：
 
-- **Live 会话态**：`SchedulerState.live_sessions` — `live.session.start` 置位 / `stop|cancel` 清除（内存；重启即清）
+- **Live 会话态**：`SchedulerState.live_sessions`
+  - A2A `live.session.start|stop|cancel` 置位/清除
+  - **同源代理** `POST …/v1/session/start|cancel` 若带 `X-Linlis-Group-Id` 同样置位/清除（iframe Live UI 路径）
 - **提示词**：`live_prompt.rs` — `GET /v1/llm-prompt`（1.5s 超时、60s 缓存、内置 fallback；端口来自 manifest）
 - **注入条件**：仅 **会话激活** 的群 + chatbot / 群管理员 Agent；ChatBot Live 时 `max_tokens=128`
+- **聊天一致**：`LivePanel` 向 iframe 同步群聊 `messages`；STT 文本经 `postMessage` → `sendMessage` 写入同一群（@默认响应者）
+- **麦克风**：需安全上下文（HTTPS 或 localhost）；`http://公网IP` 下 `mediaDevices` 为 undefined
 - 方案：`docs/superpowers/plans/2026-08-05-live-short-reply-injection.md`
 
 ## 7. 非目标
