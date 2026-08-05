@@ -44,16 +44,29 @@ cat > "${PROD_SLOT}/meta/RELEASE.json" <<EOF
 }
 EOF
 
-systemctl restart linlis-work-panel.service
+# Prefer stop→start over restart: if the client is interrupted mid-restart,
+# systemd can cancel the remaining start job and leave prod permanently stopped.
+systemctl stop linlis-work-panel.service || true
 sleep 1
-systemctl is-active linlis-work-panel.service
-# Proxy Requires=prod: restarting prod stops the proxy and does NOT bring it back.
+systemctl start linlis-work-panel.service
+sleep 1
+if ! systemctl is-active --quiet linlis-work-panel.service; then
+  echo "ERROR: prod failed to start after promote" >&2
+  systemctl status linlis-work-panel.service --no-pager -l >&2 || true
+  exit 1
+fi
+# Ensure auth proxy is up (public edge: nginx → :9090 → :8080).
+if [[ -f "${LINLIS_ROOT}/deploy/systemd/linlis-work-panel-proxy.service" ]]; then
+  /bin/cp -f "${LINLIS_ROOT}/deploy/systemd/linlis-work-panel-proxy.service" \
+    /etc/systemd/system/linlis-work-panel-proxy.service
+  systemctl daemon-reload
+fi
 if systemctl list-unit-files linlis-work-panel-proxy.service >/dev/null 2>&1; then
+  systemctl enable linlis-work-panel-proxy.service >/dev/null 2>&1 || true
   systemctl restart linlis-work-panel-proxy.service
   sleep 1
   systemctl is-active linlis-work-panel-proxy.service
 fi
-# Public edge (nginx → :9090 → :8080); keep enabled so domain stays up after reboots.
 if systemctl list-unit-files nginx.service >/dev/null 2>&1; then
   systemctl enable nginx.service >/dev/null 2>&1 || true
   systemctl start nginx.service >/dev/null 2>&1 || true

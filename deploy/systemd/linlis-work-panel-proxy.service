@@ -1,0 +1,16 @@
+[Unit]
+Description=LinlisWorkPanel Auth Proxy (port 9090 -> 8080)
+# Wants (not Requires): prod stop must not tear down proxy in the same cancellable job.
+After=network.target linlis-work-panel.service
+Wants=linlis-work-panel.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/AI/LinlisWorkPanel
+ExecStart=/usr/bin/node proxy.cjs
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
