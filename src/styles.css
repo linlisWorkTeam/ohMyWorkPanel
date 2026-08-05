@@ -258,6 +258,19 @@
 .avatar.responding { animation: avatar-pulse 1.6s ease-out infinite; }
 .member-row.is-responding { background:#f0f7ff; }
 .responding-badge { background:#e7f0ff !important; color:#3574bd !important; }
+.member-queue-toggle {
+  border:0; background:transparent; padding:0; margin:0; color:inherit; font:inherit;
+  cursor:pointer; text-align:left; text-decoration:underline dotted;
+}
+.member-queue-toggle:hover { color:#3574bd; }
+.member-queue-list {
+  list-style:none; margin:4px 0 0; padding:0; display:grid; gap:4px;
+}
+.member-queue-list li {
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  font-size:10px; color:#5a6678; background:#f5f8fc; border-radius:6px; padding:4px 6px;
+}
+.member-queue-list button { font-size:10px; padding:2px 6px; }
 .message-row.is-responding .message-meta strong { color:#3b7fc4; }
 
 /* Group title + view toggle */

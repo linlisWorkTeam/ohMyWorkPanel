@@ -22,8 +22,8 @@ status: active
 
 | 层 | 工具 | 现状（门禁实测） |
 |---|---|---|
-| 前端单测 | Vitest | **14** 文件 / **45** 用例（见下表） |
-| Rust 单测 | `cargo test --lib` | **57** 用例（adapters/a2a/db/extensions/memory/metrics/…） |
+| 前端单测 | Vitest | **15** 文件 / **53** 用例（见下表；含 queueCounts） |
+| Rust 单测 | `cargo test --lib` | **58** 用例（adapters/a2a/db/extensions/memory/metrics/…） |
 | 集成测 | 规划中 | Web API / 全链路 mock run（Phase 2）— **仍未落地** |
 | E2E | 规划中 | Playwright 对 canary（Phase 3）；本机偶发手工用 headless shell，**未进门禁** |
 | 适配器 smoke | `scripts/smoke-adapters.ps1` | 尽力、不阻塞交付 |
@@ -46,6 +46,7 @@ status: active
 | `authSession.test.ts` | 发送者成员解析 | ✅ |
 | `agentModels.test.ts` | 模型目录（含 cursor grok/kimi） | ✅ |
 | `sendKey` / `chatUi` / `markdownLite` / `roadmapUi` | 发送键、折叠、MD、路线图 UI 纯函数 | ✅ |
+| `queueCounts.test.ts` | 同 Agent running/queued 聚合、忙闲文案、展开列表排序 | ✅（2026-08-05） |
 
 **结论（前端用例）**：无发现「断言错误实现」的过时用例；`docs` 旧基线（只写 mentions/messageContent）**已过时**，以本表为准。
 
@@ -84,6 +85,7 @@ status: active
 | ID | 风险点 | 层 | 状态 |
 |---|---|---|---|
 | R1 | 同 Agent 并行抢跑 | L1 `plan_queued_starts` | ✅ |
+| R1b | 成员栏排队数可见/串计数 | L1 `queueCounts` | ✅ |
 | R2 | parts / legacy content 破坏 | L1 message_content 双侧 | ✅ |
 | R3 | Cursor `--resume` / session 清空重试 | L1 parse + adapter args | 部分；契约测 Phase 2 |
 | R4 | workspace_path=`/` 拒跑 | L1/L2 | Phase 2 |

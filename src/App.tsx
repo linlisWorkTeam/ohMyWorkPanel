@@ -19,6 +19,7 @@ import { defaultModelForAdapter, modelsForAdapter } from "./agentModels";
 import { canSubmitUserMember, chatbotSlotTaken, type UserAddMode } from "./memberForm";
 import { markdownToHtml } from "./markdownLite";
 import { detectMemoryPressure, formatHeartbeatLabel } from "./heartbeatPolicy";
+import { agentBusyLabel, queueCounts, runsForAgentActive } from "./queueCounts";
 import { isIgnorableWsKind, shouldResyncAfterWsEvent, subscribeWsLinkState } from "./realtimeWs";
 import { releasingBannerText, type WsLinkState } from "./releasingState";
 import type { MetricsSample } from "./types";
@@ -975,10 +976,20 @@ export function App() {
             公告：{(current.group.announcement ?? "").slice(0, 120)}{(current.group.announcement ?? "").length > 120 ? "…" : ""}
           </div>
         )}
-        <div className="member-list">{members.map((member) => {
-          const responding = current.runs.some((run) => run.agentMemberId === member.id && (run.status === "queued" || run.status === "running"));
-          return <MemberRow key={member.id} member={member} group={current.group} responding={responding} detecting={detecting === member.id} onAdmin={setAdmin} onRemove={removeMember} onDetect={detect} onModel={(m, model) => void changeMemberModel(m, model)} />;
-        })}</div>
+        <div className="member-list">{members.map((member) => (
+          <MemberRow
+            key={member.id}
+            member={member}
+            group={current.group}
+            runs={current.runs}
+            detecting={detecting === member.id}
+            onAdmin={setAdmin}
+            onRemove={removeMember}
+            onDetect={detect}
+            onModel={(m, model) => void changeMemberModel(m, model)}
+            onCancelRun={(run) => void changeRun(run, "cancel")}
+          />
+        ))}</div>
         {showAddMember ? <form className="add-member-form" onSubmit={addMember}>
           <select
             value={addMemberKind}
@@ -1439,15 +1450,27 @@ function TypingIndicator({ label }: { label: string }) {
   );
 }
 
-function MemberRow({ member, group, responding, detecting, onAdmin, onRemove, onDetect, onModel }: {
-  member: Member; group: Group; responding?: boolean; detecting?: boolean;
+function MemberRow({ member, group, runs, detecting, onAdmin, onRemove, onDetect, onModel, onCancelRun }: {
+  member: Member; group: Group; runs: TaskRun[]; detecting?: boolean;
   onAdmin: (id: string | null) => void; onRemove: (member: Member) => void; onDetect: (member: Member) => void;
   onModel: (member: Member, model: string) => void;
+  onCancelRun: (run: TaskRun) => void;
 }) {
   const isAdmin = group.adminMemberId === member.id;
   const modelOptions = modelsForAdapter(member.adapter);
+  const counts = queueCounts(runs, member.id);
+  const busy = agentBusyLabel(counts);
+  const responding = busy != null;
+  const [queueOpen, setQueueOpen] = useState(false);
+  useEffect(() => {
+    if (!responding) setQueueOpen(false);
+  }, [responding]);
+  const activeRuns = queueOpen ? runsForAgentActive(runs, member.id) : [];
+  const idleRuntime =
+    member.runtimeStatus === "ready" ? "已就绪" : member.runtimeStatus === "unavailable" ? "不可用" : "待检测";
+  const busyOrIdle = detecting ? "检测中…" : busy ?? idleRuntime;
   const statusText = member.kind === "agent"
-    ? `${member.adapter} · ${detecting ? "检测中…" : responding ? "生成回复中" : member.runtimeStatus === "ready" ? "已就绪" : member.runtimeStatus === "unavailable" ? "不可用" : "待检测"}${member.keepAlive ? ` · 保活${member.warmStatus ? `(${member.warmStatus})` : ""}` : ""}`
+    ? `${member.adapter} · ${busyOrIdle}${member.keepAlive ? ` · 保活${member.warmStatus ? `(${member.warmStatus})` : ""}` : ""}`
     : member.kind === "chatbot"
       ? `${member.adapter ?? "chatbot"} · ${member.model || "deepseek-v4-flash"} · ${member.apiKeySet ? "已配置 Key" : "缺 Key"}`
       : member.roleDescription || "本地成员";
@@ -1460,12 +1483,34 @@ function MemberRow({ member, group, responding, detecting, onAdmin, onRemove, on
           {member.id === group.ownerMemberId && <em>群主</em>}
           {isAdmin && <em className="admin-badge">管理员</em>}
           {member.kind === "chatbot" && <em className="admin-badge">机器人</em>}
-          {responding && <em className="responding-badge">回应中</em>}
+          {busy && <em className="responding-badge">{busy}</em>}
         </strong>
         <span>
-          {statusText}
+          {member.kind === "agent" && busy ? (
+            <button
+              type="button"
+              className="member-queue-toggle"
+              onClick={() => setQueueOpen((open) => !open)}
+              aria-expanded={queueOpen}
+              title={queueOpen ? "收起排队任务" : "展开排队任务"}
+            >
+              {statusText}
+            </button>
+          ) : (
+            statusText
+          )}
           {member.tags ? ` · 🏷 ${member.tags}` : ""}
         </span>
+        {queueOpen && activeRuns.length > 0 && (
+          <ul className="member-queue-list">
+            {activeRuns.map((run) => (
+              <li key={run.id}>
+                <span>{run.status === "running" ? "执行中" : "排队中"} · {run.id.slice(0, 8)}</span>
+                <button type="button" className="danger" onClick={() => onCancelRun(run)}>取消</button>
+              </li>
+            ))}
+          </ul>
+        )}
         {modelOptions.length > 0 && (member.kind === "agent" || member.kind === "chatbot") && (
           <select
             className="member-model-select"
