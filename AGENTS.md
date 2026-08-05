@@ -60,12 +60,16 @@ scripts/
 | `cd src-tauri && cargo test --no-default-features --lib` | Rust 单测（与门禁一致） |
 | `cd src-tauri && cargo build` | Rust 编译检查 |
 | `powershell -File scripts/smoke-adapters.ps1` | 适配器 smoke（不进门禁） |
-| `./scripts/deploy-canary.sh` | 先跑门禁再构建/部署灰度 |
-| `./scripts/promote-canary.sh` | 灰度产物晋升生产（不覆盖 DB） |
+| `./scripts/deploy-canary.sh` | 先跑门禁再构建/部署灰度（不得动生产） |
+| `./scripts/approve-prod-release.sh` | root 一次性批准生产变更（15 分钟） |
+| `./scripts/promote-canary.sh` | 灰度→生产（需批准令牌；不覆盖 DB） |
+
+发版勾选清单（含前端壳/白屏/实时 UI）：[`docs/release-checklist.md`](docs/release-checklist.md)。
 
 ## 注意事项
 
-- **发布流程（群公告）**：行为变更须先更新 docs → 部署/验证灰度（`:8081`）→ 灰度通过后再 commit，并通过后再 `promote-canary` 更新生产（`:8080`）。禁止用 `LINLIS_SKIP_TEST_GATE` 绕过门禁。
+- **发布流程（群公告）**：行为变更须先更新 docs → 部署/验证灰度（`:8081`）→ 灰度通过后再 commit。**晋升生产必须 root 批准**：`./scripts/approve-prod-release.sh "…" && ./scripts/promote-canary.sh`。Agent 不得伪造批准令牌或擅自 `systemctl restart` 生产。禁止用 `LINLIS_SKIP_TEST_GATE` 绕过测试门禁。灰度/生产均须按 `docs/release-checklist.md` 做前端壳冒烟（§F），避免「前台 React 崩了」类假死漏检。
+- **槽位隔离**：生产 Codex shim `:18888`；灰度 `:18889`。`deploy-canary` 禁止 `fuser -k 18888`、禁止改写生产 systemd unit。
 - **Commit 前**：遵守 `.cursor/rules/pre-commit-test-gate.mdc`——复核自动化测试设计，并跑通 `pnpm run test:gate`；与上条群公告一并满足。
 - **工作区路径**：建群/改工作区选**服务器绝对路径**（`ServerPathPicker` / `GET /api/fs/list`），不是浏览器本机路径；可在当前目录下 `POST /api/fs/mkdir` 新建文件夹后再选用（不可在 `/` 下直接建）。路由索引见 `docs/api-web.md`。
 - **群公告**：等同全员项目级 rule，写入后注入 Agent prompt，并尝试同步工作区 `.cursor/rules/group-announcement.mdc`。

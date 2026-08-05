@@ -53,25 +53,40 @@ cat > "${CANARY_SLOT}/meta/RELEASE.json" <<EOF
 }
 EOF
 
-# Codex shim is embedded in linlis-work-panel-server (sidecar on :18888).
-# Stop the legacy standalone unit so WorkPanel can own the port.
-/bin/cp -f "${LINLIS_ROOT}/deploy/systemd/linlis-work-panel-canary.service" /etc/systemd/system/linlis-work-panel-canary.service
-/bin/cp -f "${LINLIS_ROOT}/deploy/systemd/linlis-work-panel.service" /etc/systemd/system/linlis-work-panel.service
+# Canary-only unit sync. Never rewrite / restart production units here.
+/bin/cp -f "${LINLIS_ROOT}/deploy/systemd/linlis-work-panel-canary.service" \
+  /etc/systemd/system/linlis-work-panel-canary.service
 systemctl daemon-reload
 systemctl enable linlis-work-panel-canary.service >/dev/null 2>&1 || true
 if systemctl list-unit-files linlis-codex-proxy.service >/dev/null 2>&1; then
   echo "==> retiring standalone linlis-codex-proxy.service (now embedded)"
   systemctl disable --now linlis-codex-proxy.service >/dev/null 2>&1 || true
-  # Ensure port is free for canary's embedded sidecar
-  fuser -k 18888/tcp >/dev/null 2>&1 || true
-  sleep 1
 fi
+# Canary uses :18889 (see unit). Do NOT fuser-kill :18888 — that is production's Codex shim.
 systemctl restart linlis-work-panel-canary.service
 sleep 2
 systemctl is-active linlis-work-panel-canary.service
+# Fail loud if deploy-canary accidentally stopped production.
+if ! systemctl is-active --quiet linlis-work-panel.service; then
+  echo "ERROR: production linlis-work-panel.service is not active after canary deploy" >&2
+  echo "Canary must never take prod down — investigate before continuing." >&2
+  systemctl status linlis-work-panel.service --no-pager -l >&2 || true
+  exit 1
+fi
 curl -sS -o /dev/null -w "canary_http=%{http_code}\n" "http://127.0.0.1:${CANARY_PORT}/" || true
-curl -sS -o /dev/null -w "codex_proxy_health=%{http_code}\n" "http://127.0.0.1:18888/health" || true
-# Show who owns :18888 (should be node child of canary server)
-ss -ltnp 2>/dev/null | rg '18888' || true
-echo "Canary ready: http://<host>:${CANARY_PORT}/  (data=${CANARY_DATA})"
-echo "Production untouched: http://<host>:${PROD_PORT}/  (data=${PROD_DATA})"
+curl -sS -o /dev/null -w "canary_codex_health=%{http_code}\n" "http://127.0.0.1:18889/health" || true
+curl -sS -o /dev/null -w "prod_http=%{http_code}\n" "http://127.0.0.1:${PROD_PORT}/" || true
+ss -ltnp 2>/dev/null | rg '1888[89]|808[01]' || true
+# Frontend shell smoke (catch white-screen / broken hashed assets)
+CANARY_JS=$(curl -sS "http://127.0.0.1:${CANARY_PORT}/" | sed -n 's/.*src="\(\/assets\/[^"]*\.js\)".*/\1/p' | head -1 || true)
+CANARY_CSS=$(curl -sS "http://127.0.0.1:${CANARY_PORT}/" | sed -n 's/.*href="\(\/assets\/[^"]*\.css\)".*/\1/p' | head -1 || true)
+if [[ -n "${CANARY_JS}" ]]; then
+  curl -sS -o /dev/null -w "canary_js=%{http_code} path=${CANARY_JS}\n" "http://127.0.0.1:${CANARY_PORT}${CANARY_JS}" || true
+fi
+if [[ -n "${CANARY_CSS}" ]]; then
+  curl -sS -o /dev/null -w "canary_css=%{http_code} path=${CANARY_CSS}\n" "http://127.0.0.1:${CANARY_PORT}${CANARY_CSS}" || true
+fi
+echo "Canary ready: http://<host>:${CANARY_PORT}/  (data=${CANARY_DATA}, codex=:18889)"
+echo "Production untouched: http://<host>:${PROD_PORT}/  (data=${PROD_DATA}, codex=:18888)"
+echo "UI checklist: docs/release-checklist.md (§F frontend shell + HTTPS wss)"
+echo "Promote to prod requires: ./scripts/approve-prod-release.sh \"...\" && ./scripts/promote-canary.sh"

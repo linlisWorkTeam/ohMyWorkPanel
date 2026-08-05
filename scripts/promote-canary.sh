@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 # Promote canary artifacts → production slot (binary + dist only).
 # Production SQLite / LinlisWorkPanel group data is NEVER overwritten.
+# Requires root one-shot approval (see scripts/approve-prod-release.sh).
 set -euo pipefail
 source "$(dirname "$0")/release-layout.sh"
+# shellcheck source=lib/prod-approval.sh
+source "$(dirname "$0")/lib/prod-approval.sh"
 
 echo "==> promote-canary → prod"
+require_prod_approval "promote-canary (canary → production :${PROD_PORT})"
 if [[ ! -x "${CANARY_SLOT}/bin/linlis-work-panel-server" ]]; then
   echo "ERROR: canary binary missing at ${CANARY_SLOT}/bin/" >&2
   exit 1
@@ -73,5 +77,14 @@ if systemctl list-unit-files nginx.service >/dev/null 2>&1; then
 fi
 curl -sS -o /dev/null -w "prod_http=%{http_code}\n" "http://127.0.0.1:${PROD_PORT}/" || true
 curl -sS -o /dev/null -w "proxy_http=%{http_code}\n" "http://127.0.0.1:9090/" || true
+PROD_JS=$(curl -sS "http://127.0.0.1:${PROD_PORT}/" | sed -n 's/.*src="\(\/assets\/[^"]*\.js\)".*/\1/p' | head -1 || true)
+PROD_CSS=$(curl -sS "http://127.0.0.1:${PROD_PORT}/" | sed -n 's/.*href="\(\/assets\/[^"]*\.css\)".*/\1/p' | head -1 || true)
+if [[ -n "${PROD_JS}" ]]; then
+  curl -sS -o /dev/null -w "prod_js=%{http_code} path=${PROD_JS}\n" "http://127.0.0.1:${PROD_PORT}${PROD_JS}" || true
+fi
+if [[ -n "${PROD_CSS}" ]]; then
+  curl -sS -o /dev/null -w "prod_css=%{http_code} path=${PROD_CSS}\n" "http://127.0.0.1:${PROD_PORT}${PROD_CSS}" || true
+fi
 echo "Promoted. Prod UI/binary updated; data still at ${PROD_DATA}"
 echo "Login + LinlisWorkPanel group should remain intact."
+echo "UI checklist: docs/release-checklist.md (§F frontend shell + HTTPS wss)"
