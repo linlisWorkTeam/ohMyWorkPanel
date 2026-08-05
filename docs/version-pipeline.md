@@ -8,7 +8,8 @@ status: active
 
 > **本文是产品/平台演进的单一事实源（SSOT）。**  
 > 新功能先在本文件占位（轨道 + 阶段），再开 Feature / 写 epitaph；禁止「东改西改」无版本归属的散弹改动。  
-> 细节仍以 `docs/epitaph/*` 与 `docs/superpowers/{specs,plans}/*` 为准；本文件只看**流水线与方向**。
+> 细节仍以 `docs/epitaph/*` 与 `docs/superpowers/{specs,plans}/*` 为准；本文件只看**流水线与方向**。  
+> Git 标签：**`v1.1.0`**（2026-08-05，含聊天 D0 / 排队可见 / 发版硬化等；见 README）。
 
 ## 怎么用（Agent / 人类）
 
@@ -69,9 +70,9 @@ status: active
 
 **含义**：Base 之后，默认「生产可用协作面板」；其后改动按轨道增量，经灰度再晋升。
 
-### 阶段 3 — Base 之后已上灰度（相对生产可能超前）
+### 阶段 3 — Base 之后 → **v1.1.0**（已打 tag / 已 promote 生产，2026-08-05）
 
-> 下列多项已在 canary；**生产是否已全部 promote 以当日槽位为准**，晋升须管理员审批。勿在 promote 的 stop→start 之间中断。
+> 下列随 canary 验证后已晋升生产（`prod` RELEASE `promotedAt` ≈ `2026-08-05T08:28:53Z`）。后续增量仍须灰度 → 批准 → promote；勿中断 stop→start。
 
 | 批次 | 能力摘要 | 交接 / 计划 |
 |---|---|---|
@@ -79,9 +80,10 @@ status: active
 | 成员 | 加入已有登录用户 | `epitaph/2026-08-05-link-existing-user-member.md` |
 | PanelLive | Extension Host；同源代理；A2A live.*（禁 PCM）；Live 页签 | `epitaph/2026-08-05-extension-host-panellive.md` 等；roadmap v0.5 |
 | 发版硬化 P1–P4 | 种子群 `is_system`；releasing 60s；心跳；metrics 20s | `epitaph/2026-08-05-release-hardening.md` |
-| UX | 重连横幅前 30s 静默（灰度有、生产可能仍旧） | `releasingState` + checklist |
+| UX | 重连横幅前 30s 静默 | `releasingState` + checklist |
 | 调度可见性 | 成员栏 **执行中 · 排队 N** + 展开取消 | `epitaph/2026-08-05-member-queue-visibility.md` |
-| 发布治理 | `approve-prod-release.sh` 生产晋升门禁 | scripts + release-checklist |
+| 聊天 D0 | 默认响应者；chatbot 窗口 12 + 时间戳 + 滚动摘要 | `epitaph/2026-08-05-chat-default-responder-context.md` |
+| 发布治理 | `approve-prod-release.sh`；tag **v1.1.0** | scripts + GitHub |
 
 ---
 
@@ -101,7 +103,7 @@ status: active
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
-| D0 | 默认响应者可设；chatbot 窗口默认 12 + **滚动摘要**（超窗折叠后累加；非向量 RAG） | ✅ 灰度 |
+| D0 | 默认响应者可设；chatbot 窗口默认 12 + **滚动摘要**（超窗折叠后累加；非向量 RAG） | ✅ **v1.1.0 / 生产** |
 | D1 | 聊天群类型体验：与工作群 UI 区分；表情/富媒体；主题按**用户**隔离 | **待拍板 Feature** |
 | D2 | ChatBot 保持快响应；知识能力用可 @ Agent，不塞进 chatbot 本体 | 方向锁定；与 D0 一致 |
 | D3 | 多平台映射（建议 QQ MVP → 防回环设计） | **暂缓**；仅调研，不进当前迭代 |
@@ -110,11 +112,11 @@ status: active
 
 ## 下一站（建议顺序，避免并行发散）
 
-1. **稳态债（B）**：生产追上已验证的灰度包（横幅 30s 静默、排队数可见、硬化 P1–P4 等）——**仅管理员批后 promote**；promote 全程勿中断。
-2. **聊天群 D1（若拍板）**：表情/富媒体 + 用户主题隔离；先 PRD 再平台实现。
-3. **质量 E**：按 `docs/testing-strategy.md` 补 Web 集成 / #310 / run_heartbeat 后端等缺口。
-4. **PanelLive C**：按契约深化；不扩平台音频面。
-5. **D3 多平台**：单独里程碑，不与 D1 捆绑。
+1. **聊天群 D1（若拍板）**：表情/富媒体 + 用户主题隔离；先 PRD 再平台实现。
+2. **质量 E**：按 `docs/testing-strategy.md` 补 Web 集成 / #310 / run_heartbeat 后端等缺口。
+3. **PanelLive C**：按契约深化；不扩平台音频面。
+4. **D3 多平台**：单独里程碑，不与 D1 捆绑。
+5. **稳态债（B）**：后续每次增量仍灰度 → 批准 promote；保持 watchdog/探活，勿中断 stop→start。
 
 ---
 
