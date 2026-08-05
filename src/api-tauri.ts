@@ -30,6 +30,8 @@ export const api = {
   listJoinableUsers: (groupId: string) =>
     invoke<{ id: string; username: string }[]>("list_joinable_users", { groupId }),
   verify: async () => ({ sub: "desktop", username: "desktop", isAdmin: true }),
+  markGroupRead: (_groupId: string) => Promise.resolve({ ok: true as const }),
+  listPresence: () => Promise.resolve({ onlineUserIds: [] as string[] }),
   setGroupArchived: (groupId: string, archived: boolean) =>
     invoke<Group>("set_group_archived_cmd", { groupId, archived }),
   updateMemberModel: (memberId: string, model: string | null) =>

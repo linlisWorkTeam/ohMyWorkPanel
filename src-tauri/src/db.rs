@@ -189,6 +189,12 @@ pub fn init_db(path: &Path) -> AppResult<()> {
           through_created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS group_read_cursors (
+          user_id TEXT NOT NULL,
+          group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+          last_read_at INTEGER NOT NULL,
+          PRIMARY KEY (user_id, group_id)
+        );
         "#,
     );
     for (key, value) in [
@@ -389,6 +395,7 @@ pub fn group_from_row(row: &Row<'_>) -> rusqlite::Result<Group> {
             .unwrap_or_else(|| "project".into()),
         archived: row.get::<_, i64>(9).unwrap_or(0) != 0,
         is_system: row.get::<_, i64>(10).unwrap_or(0) != 0,
+        unread_count: 0,
     })
 }
 
@@ -613,23 +620,109 @@ pub fn resolve_user_member_auth_id(
 
 /// Groups visible to a login user. Admins see all; others only groups linked via members.auth_user_id.
 pub fn get_groups_for_user(connection: &Connection, user_id: &str) -> AppResult<Vec<Group>> {
-    if is_admin_user(connection, user_id)? {
-        return get_groups(connection);
-    }
-    let mut stmt = connection
-        .prepare(&format!(
-            "{GROUP_SELECT} WHERE id IN (
+    let mut groups = if is_admin_user(connection, user_id)? {
+        get_groups(connection)?
+    } else {
+        let mut stmt = connection
+            .prepare(&format!(
+                "{GROUP_SELECT} WHERE id IN (
                SELECT DISTINCT group_id FROM members
                WHERE auth_user_id=?1 AND is_active=1 AND kind='user'
              ) ORDER BY archived ASC, created_at DESC"
-        ))
+            ))
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![user_id], group_from_row)
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        rows
+    };
+    for g in &mut groups {
+        g.unread_count = count_group_unread(connection, user_id, &g.id)?;
+    }
+    // Unread first among non-archived; keep archived after (archived ASC already).
+    groups.sort_by(|a, b| {
+        match (a.archived, b.archived) {
+            (false, true) => std::cmp::Ordering::Less,
+            (true, false) => std::cmp::Ordering::Greater,
+            _ => {
+                let au = if a.unread_count > 0 { 1 } else { 0 };
+                let bu = if b.unread_count > 0 { 1 } else { 0 };
+                bu.cmp(&au)
+                    .then_with(|| b.created_at.cmp(&a.created_at))
+            }
+        }
+    });
+    Ok(groups)
+}
+
+fn read_cursor_baseline(
+    connection: &Connection,
+    user_id: &str,
+    group_id: &str,
+) -> AppResult<i64> {
+    let cursor: Option<i64> = connection
+        .query_row(
+            "SELECT last_read_at FROM group_read_cursors WHERE user_id=?1 AND group_id=?2",
+            params![user_id, group_id],
+            |r| r.get(0),
+        )
+        .optional()
         .map_err(|e| e.to_string())?;
-    let rows = stmt
-        .query_map(params![user_id], group_from_row)
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
+    if let Some(ts) = cursor {
+        return Ok(ts);
+    }
+    // Never opened: baseline = membership join time (not entire history).
+    let joined: Option<i64> = connection
+        .query_row(
+            "SELECT created_at FROM members WHERE group_id=?1 AND auth_user_id=?2 AND kind='user' AND is_active=1 ORDER BY created_at ASC LIMIT 1",
+            params![group_id, user_id],
+            |r| r.get(0),
+        )
+        .optional()
         .map_err(|e| e.to_string())?;
-    Ok(rows)
+    Ok(joined.unwrap_or(0))
+}
+
+/// Messages after baseline, excluding the viewer's own user-member sends.
+pub fn count_group_unread(
+    connection: &Connection,
+    user_id: &str,
+    group_id: &str,
+) -> AppResult<i64> {
+    let baseline = read_cursor_baseline(connection, user_id, group_id)?;
+    let n: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM messages m
+             WHERE m.group_id=?1 AND m.created_at > ?2
+               AND m.status != 'streaming'
+               AND m.sender_member_id NOT IN (
+                 SELECT id FROM members
+                 WHERE group_id=?1 AND auth_user_id=?3 AND kind='user' AND is_active=1
+               )",
+            params![group_id, baseline, user_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(n)
+}
+
+pub fn mark_group_read(
+    connection: &Connection,
+    user_id: &str,
+    group_id: &str,
+) -> AppResult<()> {
+    let ts = now();
+    connection
+        .execute(
+            "INSERT INTO group_read_cursors(user_id, group_id, last_read_at)
+             VALUES(?1,?2,?3)
+             ON CONFLICT(user_id, group_id) DO UPDATE SET last_read_at=excluded.last_read_at",
+            params![user_id, group_id, ts],
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 pub fn user_can_access_group(connection: &Connection, user_id: &str, group_id: &str) -> AppResult<bool> {
@@ -1709,6 +1802,54 @@ mod tests {
         // user cannot be default responder even if listed as admin
         let skip_user = resolve_target_agent_ids(&conn, "g", Some("u"), &[]).unwrap();
         assert!(skip_user.is_empty());
+    }
+
+    #[test]
+    fn unread_counts_after_cursor_excludes_own() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        init_db(file.path()).unwrap();
+        let conn = open_db(file.path()).unwrap();
+        let ts = now();
+        conn.execute(
+            "INSERT INTO users(id,username,password_hash,created_at,is_admin) VALUES('u1','alice','x',?1,0)",
+            params![ts],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at) VALUES('g','g','.','m1',NULL,?1)",
+            params![ts],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,auth_user_id) VALUES('m1','g','user','Alice','#000','',1,?1,'u1')",
+            params![ts],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at) VALUES('bot','g','chatbot','Bot','#000','',1,?1)",
+            params![ts],
+        )
+        .unwrap();
+        // before mark: baseline = member created_at → later messages count
+        conn.execute(
+            "INSERT INTO messages(id,group_id,sender_member_id,parent_run_id,content,status,created_at) VALUES('m-own','g','m1',NULL,'me','completed',?1)",
+            params![ts + 10],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO messages(id,group_id,sender_member_id,parent_run_id,content,status,created_at) VALUES('m-bot','g','bot',NULL,'hi','completed',?1)",
+            params![ts + 20],
+        )
+        .unwrap();
+        assert_eq!(count_group_unread(&conn, "u1", "g").unwrap(), 1);
+        mark_group_read(&conn, "u1", "g").unwrap();
+        assert_eq!(count_group_unread(&conn, "u1", "g").unwrap(), 0);
+        conn.execute(
+            "INSERT INTO messages(id,group_id,sender_member_id,parent_run_id,content,status,created_at) VALUES('m-bot2','g','bot',NULL,'again','completed',?1)",
+            params![now() + 1000],
+        )
+        .unwrap();
+        assert_eq!(count_group_unread(&conn, "u1", "g").unwrap(), 1);
     }
 
     #[test]

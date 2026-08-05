@@ -31,6 +31,9 @@ pub struct Group {
     /// Built-in seed / system group (e.g. LinlisWorkPanel); not deletable.
     #[serde(default)]
     pub is_system: bool,
+    /// Unread message count for the current viewer (web list API).
+    #[serde(default)]
+    pub unread_count: i64,
 }
 
 fn default_group_kind() -> String {

@@ -409,7 +409,19 @@
 
 .group-item-row { display:flex; align-items:center; gap:2px; border-radius:9px; }
 .group-item-row.selected { background:#2d3a4d; }
+.group-item-row.has-unread .group-name { font-weight:700; color:#fff; }
 .group-item-row .group-item { flex:1; min-width:0; }
+.unread-badge {
+  margin-left:auto; min-width:18px; height:18px; padding:0 5px; border-radius:9px;
+  background:#e85d4c; color:#fff; font-size:10px; font-style:normal; font-weight:700;
+  display:inline-flex; align-items:center; justify-content:center; line-height:1;
+}
+.avatar { position:relative; }
+.avatar.is-online::after {
+  content:""; position:absolute; right:-1px; bottom:-1px; width:8px; height:8px;
+  border-radius:50%; background:#3bb273; border:2px solid #fff; box-sizing:content-box;
+}
+.online-badge { background:#e7f7ee !important; color:#2f8f5b !important; }
 .group-archive-btn { border:0; background:transparent; color:#8a96a5; width:28px; height:28px; border-radius:7px; font-size:18px; line-height:1; flex-shrink:0; }
 .group-archive-btn:hover { background:#344155; color:#fff; }
 .archived-section { margin-top:10px; padding-top:8px; border-top:1px solid #344155; }

@@ -72,6 +72,7 @@ async fn main() {
         db_path: db_path.clone(),
         tx: tx.clone(),
         sched: sched.clone(),
+        presence: Arc::new(linlis_work_panel_lib::presence::PresenceRegistry::default()),
     });
 
     // Start background scheduler for agent runs

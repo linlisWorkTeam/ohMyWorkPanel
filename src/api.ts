@@ -26,6 +26,8 @@ export const api = {
     Promise.reject(new Error("Desktop mode does not use web register")) as Promise<{ token: string; user_id: string; username: string }>,
   bootstrap: () => invoke<{ groups: GroupState["group"][] }>("bootstrap"),
   getGroupState: (groupId: string) => invoke<GroupState>("get_group_state", { groupId }),
+  markGroupRead: (_groupId: string) => Promise.resolve({ ok: true as const }),
+  listPresence: () => Promise.resolve({ onlineUserIds: [] as string[] }),
   listMessagesBefore: (groupId: string, beforeCreatedAt: number, beforeId: string, limit?: number) =>
     invoke<MessagePage>("list_messages_before", { groupId, beforeCreatedAt, beforeId, limit }),
   getMessageChannelPart: (groupId: string, messageId: string, channel: "thinking" | "artifact") =>

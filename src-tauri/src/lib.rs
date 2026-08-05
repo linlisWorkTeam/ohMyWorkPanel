@@ -8,6 +8,7 @@ mod ocr;
 pub mod codex_proxy;
 mod context_policy;
 pub mod db;
+pub mod presence;
 pub mod extensions;
 pub mod fs_browse;
 pub mod keepalive;

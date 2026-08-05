@@ -129,6 +129,10 @@ export const api = {
   // Groups
   getGroupState: (groupId: string) =>
     apiFetch<GroupState>(`/api/groups/${groupId}`),
+  markGroupRead: (groupId: string) =>
+    apiFetch<{ ok: boolean }>(`/api/groups/${groupId}/read`, { method: "PUT" }),
+  listPresence: () =>
+    apiFetch<{ onlineUserIds: string[] }>("/api/presence"),
 
   listMessagesBefore: (groupId: string, beforeCreatedAt: number, beforeId: string, limit = 50) => {
     const q = new URLSearchParams({

@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State, WebSocketUpgrade},
+    extract::{Path, Query, State, WebSocketUpgrade},
     extract::ws::{Message as WsMessage, WebSocket},
     http::{Request, StatusCode},
     middleware::{self, Next},
@@ -10,11 +10,13 @@ use axum::{
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
 use crate::auth::Claims;
 use crate::logger::{self, LogEntry, LogQuery};
+use crate::presence::PresenceRegistry;
 use crate::scheduler::{self, SchedulerState};
     use crate::db::{
     create_feature_db, create_feature_task_db,
@@ -23,9 +25,10 @@ use crate::scheduler::{self, SchedulerState};
     get_feature_tasks, get_groups_for_user,
     get_group as db_get_group,
     get_preset_roles, get_roadmap_items, get_roadmap_state_db, get_runs,
-    get_messages_before, get_settings_from, group_state, id, is_admin_user, member_from_row, now,
-    open_db, require_admin, require_group_access, resolve_target_agent_ids, set_group_announcement, update_feature_db,
-    update_feature_task_db, update_group_workspace, update_roadmap_item_db,
+    get_messages_before, get_settings_from, group_state, id, is_admin_user, mark_group_read,
+    member_from_row, now, open_db, require_admin, require_group_access, resolve_target_agent_ids,
+    set_group_announcement, update_feature_db, update_feature_task_db, update_group_workspace,
+    update_roadmap_item_db,
 };
 use crate::fs_browse::{self, DirListing};
 use crate::ops;
@@ -77,6 +80,7 @@ pub struct AppState {
     pub db_path: std::path::PathBuf,
     pub tx: broadcast::Sender<String>,
     pub sched: SchedulerState,
+    pub presence: Arc<PresenceRegistry>,
 }
 
 // === Claims Extractor ===
@@ -268,7 +272,30 @@ async fn get_group(
 ) -> Result<Json<GroupState>, (StatusCode, String)> {
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
+    // Entering a group clears unread for this user.
+    let _ = mark_group_read(&conn, &claims.sub, &group_id);
     group_state(&conn, &group_id).map(Json).map_err(|e| (StatusCode::NOT_FOUND, e))
+}
+
+async fn mark_group_read_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(group_id): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
+    mark_group_read(&conn, &claims.sub, &group_id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    Ok(Json(json!({ "ok": true, "groupId": group_id })))
+}
+
+async fn list_presence_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(_claims): ClaimsExtractor,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    Ok(Json(json!({
+        "onlineUserIds": state.presence.online_user_ids(),
+    })))
 }
 
 #[derive(Debug, Deserialize)]
@@ -476,13 +503,42 @@ async fn send_message_web(
 
 async fn ws_handler(
     ws: WebSocketUpgrade,
+    Query(query): Query<HashMap<String, String>>,
     State(state): State<Arc<AppState>>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, state))
+    let user_id = query
+        .get("token")
+        .and_then(|t| crate::auth::validate_jwt(t).ok())
+        .map(|c| c.sub);
+    ws.on_upgrade(move |socket| handle_socket(socket, state, user_id))
 }
 
-async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
+fn emit_presence(tx: &broadcast::Sender<String>, user_id: &str, online: bool) {
+    let payload = json!({
+        "kind": "presence",
+        "userId": user_id,
+        "online": online,
+        "ts": now(),
+    });
+    let _ = tx.send(payload.to_string());
+}
+
+async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, user_id: Option<String>) {
     let mut rx = state.tx.subscribe();
+    if let Some(ref uid) = user_id {
+        if state.presence.connect(uid) {
+            emit_presence(&state.tx, uid, true);
+        }
+        // Snapshot for this client.
+        let snap = json!({
+            "kind": "presence_snapshot",
+            "onlineUserIds": state.presence.online_user_ids(),
+            "ts": now(),
+        });
+        let _ = socket
+            .send(WsMessage::Text(snap.to_string().into()))
+            .await;
+    }
     // Keep proxies from idle-closing the socket; browsers deliver Text frames to JS.
     let mut beat = tokio::time::interval(std::time::Duration::from_secs(25));
     beat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -542,6 +598,11 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                     _ => {}
                 }
             }
+        }
+    }
+    if let Some(ref uid) = user_id {
+        if state.presence.disconnect(uid) {
+            emit_presence(&state.tx, uid, false);
         }
     }
 }
@@ -1726,6 +1787,8 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/api/groups", get(list_groups))
          .route("/api/groups", post(create_group_web))
         .route("/api/groups/{id}", get(get_group))
+        .route("/api/groups/{id}/read", put(mark_group_read_web))
+        .route("/api/presence", get(list_presence_web))
         .route("/api/groups/{id}/announcement", get(get_announcement_web).put(put_announcement_web))
         .route("/api/groups/{id}/workspace", put(put_workspace_web))
         .route("/api/groups/{id}/archive", put(put_group_archive_web))

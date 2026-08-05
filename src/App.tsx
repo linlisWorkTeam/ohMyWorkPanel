@@ -20,6 +20,12 @@ import { canSubmitUserMember, chatbotSlotTaken, type UserAddMode } from "./membe
 import { markdownToHtml } from "./markdownLite";
 import { detectMemoryPressure, formatHeartbeatLabel } from "./heartbeatPolicy";
 import { agentBusyLabel, queueCounts, runsForAgentActive } from "./queueCounts";
+import {
+  bumpUnread,
+  clearUnread,
+  formatUnreadBadge,
+  sortGroupsForSidebar,
+} from "./groupListSort";
 import { isIgnorableWsKind, shouldResyncAfterWsEvent, subscribeWsLinkState } from "./realtimeWs";
 import { releasingBannerText, type WsLinkState } from "./releasingState";
 import type { MetricsSample } from "./types";
@@ -84,6 +90,7 @@ export function App() {
   // Web: never enter main UI until bootstrap succeeds; stale localStorage token → login.
   const [session, setSession] = useState<Session>(() => (requiresAuth ? "checking" : "ready"));
   const [groups, setGroups] = useState<Group[]>([]);
+  const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(() => new Set());
   const [current, setCurrent] = useState<GroupState | null>(null);
   const [composer, setComposer] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -281,10 +288,15 @@ export function App() {
         } catch { /* keep cached */ }
         const boot = await api.bootstrap();
         if (disposed) return;
-        setGroups(boot.groups);
+        setGroups(sortGroupsForSidebar(boot.groups));
+        try {
+          const presence = await api.listPresence();
+          if (!disposed) setOnlineUserIds(new Set(presence.onlineUserIds ?? []));
+        } catch { /* optional */ }
         if (boot.groups[0]) {
           forceScrollGroupId.current = boot.groups[0].id;
           await refresh(boot.groups[0].id);
+          setGroups((prev) => clearUnread(prev, boot.groups[0].id));
         } else {
           setCurrent(null);
           // Only admins may create groups when empty.
@@ -327,6 +339,26 @@ export function App() {
       const payload = event.payload;
       const activeGroupId = currentGroupIdRef.current;
       if (isIgnorableWsKind(payload.kind)) return;
+      if (payload.kind === "presence_snapshot" && Array.isArray(payload.onlineUserIds)) {
+        setOnlineUserIds(new Set(payload.onlineUserIds.filter(Boolean) as string[]));
+        return;
+      }
+      if (payload.kind === "presence" && payload.userId) {
+        setOnlineUserIds((prev) => {
+          const next = new Set(prev);
+          if (payload.online) next.add(payload.userId!);
+          else next.delete(payload.userId!);
+          return next;
+        });
+        return;
+      }
+      if (
+        payload.groupId &&
+        (payload.kind === "message_created" ||
+          (payload.kind === "run_status" && payload.status === "completed"))
+      ) {
+        setGroups((prev) => bumpUnread(prev, payload.groupId!, activeGroupId));
+      }
       if (payload.kind === "orchestration_status") {
         if (activeGroupId) {
           void refresh(activeGroupId).catch((reason) => {
@@ -340,7 +372,7 @@ export function App() {
         void (async () => {
           try {
             const boot = await api.bootstrap();
-            setGroups(boot.groups);
+            setGroups(sortGroupsForSidebar(boot.groups));
             const gid = activeGroupId || boot.groups[0]?.id;
             if (gid) {
               await refresh(gid);
@@ -550,7 +582,17 @@ export function App() {
     setComposer("");
     setShowSidebar(false);
     setMainView("chat");
-    void refresh(group.id).catch((reason) => setError(readError(reason)));
+    setGroups((prev) => clearUnread(prev, group.id));
+    void (async () => {
+      try {
+        await api.markGroupRead?.(group.id);
+      } catch { /* getGroupState also marks read */ }
+      try {
+        await refresh(group.id);
+      } catch (reason) {
+        setError(readError(reason));
+      }
+    })();
   };
 
   if (requiresAuth && session === "checking") {
@@ -579,7 +621,7 @@ export function App() {
     : null;
   const activeMembers = members.filter((member) => member.isActive);
   const addMemberKind = chatbotTaken && newMember.kind === "chatbot" ? "agent" : newMember.kind;
-  const activeGroups = groups.filter((g) => !g.archived);
+  const activeGroups = sortGroupsForSidebar(groups.filter((g) => !g.archived));
   const archivedGroups = groups.filter((g) => g.archived);
   const mentionSuggestions = mentionQuery === null ? [] : activeMembers.filter((member) => member.displayName.toLowerCase().includes(mentionQuery.toLowerCase())).slice(0, 8);
   const allMessages = current?.messages ?? [];
@@ -799,10 +841,13 @@ export function App() {
       <div className="sidebar-heading"><span>群聊</span>{isAdmin && <button className="icon-button" onClick={() => setShowCreate(true)} aria-label="新建群聊">＋</button>}</div>
       <nav className="group-list">
         {activeGroups.map((group) => (
-          <div key={group.id} className={`group-item-row ${group.id === current?.group.id ? "selected" : ""}`}>
+          <div key={group.id} className={`group-item-row ${group.id === current?.group.id ? "selected" : ""} ${(group.unreadCount ?? 0) > 0 ? "has-unread" : ""}`}>
             <button type="button" className="group-item" onClick={() => selectGroup(group)}>
               <span className="group-avatar">{group.name.slice(0, 1)}</span>
               <span className="group-name">{group.name}{group.groupKind === "chat" ? " · 聊" : ""}</span>
+              {(group.unreadCount ?? 0) > 0 && (
+                <em className="unread-badge" aria-label={`${group.unreadCount} 条未读`}>{formatUnreadBadge(group.unreadCount ?? 0)}</em>
+              )}
             </button>
             {isAdmin && <button type="button" className="group-archive-btn" title="归档群组" aria-label="归档群组" onClick={(e) => void archiveGroup(group, true, e)}>−</button>}
           </div>
@@ -982,6 +1027,7 @@ export function App() {
             member={member}
             group={current.group}
             runs={current.runs}
+            online={member.kind === "user" && !!member.authUserId && onlineUserIds.has(member.authUserId)}
             detecting={detecting === member.id}
             onAdmin={setAdmin}
             onRemove={removeMember}
@@ -1452,8 +1498,8 @@ function TypingIndicator({ label }: { label: string }) {
   );
 }
 
-function MemberRow({ member, group, runs, detecting, onAdmin, onRemove, onDetect, onModel, onCancelRun }: {
-  member: Member; group: Group; runs: TaskRun[]; detecting?: boolean;
+function MemberRow({ member, group, runs, detecting, online, onAdmin, onRemove, onDetect, onModel, onCancelRun }: {
+  member: Member; group: Group; runs: TaskRun[]; detecting?: boolean; online?: boolean;
   onAdmin: (id: string | null) => void; onRemove: (member: Member) => void; onDetect: (member: Member) => void;
   onModel: (member: Member, model: string) => void;
   onCancelRun: (run: TaskRun) => void;
@@ -1478,7 +1524,7 @@ function MemberRow({ member, group, runs, detecting, onAdmin, onRemove, onDetect
       : member.roleDescription || "本地成员";
   return (
     <div className={`member-row ${member.isActive ? "" : "inactive"} ${responding ? "is-responding" : ""}`}>
-      <Avatar member={member} responding={responding} />
+      <Avatar member={member} responding={responding} online={online} />
       <div className="member-details">
         <strong>
           {member.displayName}
@@ -1487,6 +1533,7 @@ function MemberRow({ member, group, runs, detecting, onAdmin, onRemove, onDetect
             <em className="admin-badge">{group.groupKind === "chat" ? "默认响应" : "管理员"}</em>
           )}
           {member.kind === "chatbot" && <em className="admin-badge">机器人</em>}
+          {online && <em className="online-badge">在线</em>}
           {busy && <em className="responding-badge">{busy}</em>}
         </strong>
         <span>
@@ -1542,9 +1589,9 @@ function MemberRow({ member, group, runs, detecting, onAdmin, onRemove, onDetect
     </div>
   );
 }
-function Avatar({ member, responding }: { member?: Member; responding?: boolean }) {
+function Avatar({ member, responding, online }: { member?: Member; responding?: boolean; online?: boolean }) {
   return (
-    <span className={`avatar ${responding ? "responding" : ""}`} style={{ background: member?.avatarColor ?? "#8792a5" }}>
+    <span className={`avatar ${responding ? "responding" : ""} ${online ? "is-online" : ""}`} style={{ background: member?.avatarColor ?? "#8792a5" }}>
       {member?.displayName.slice(0, 1) ?? "?"}
     </span>
   );

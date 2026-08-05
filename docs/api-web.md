@@ -24,7 +24,9 @@
 
 | 方法 | 路径 |
 |---|---|
-| GET/POST | `/api/groups` |
+| GET/POST | `/api/groups`（GET 含 `unreadCount`；未读群优先排序） |
+| PUT | `/api/groups/{id}/read`（进群清未读） |
+| GET | `/api/presence`（`onlineUserIds`） |
 | GET | `/api/groups/{id}` |
 | GET/PUT | `/api/groups/{id}/announcement` |
 | PUT | `/api/groups/{id}/workspace` |

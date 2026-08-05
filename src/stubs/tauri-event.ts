@@ -106,6 +106,9 @@ function normalizePayload(data: Record<string, unknown>) {
     seq: data.seq ?? null,
     deltaCount: data.deltaCount ?? data.delta_count ?? null,
     rssMib: data.rssMib ?? data.rss_mib ?? null,
+    userId: data.userId ?? data.user_id ?? null,
+    online: data.online ?? null,
+    onlineUserIds: data.onlineUserIds ?? data.online_user_ids ?? null,
   };
 }
 

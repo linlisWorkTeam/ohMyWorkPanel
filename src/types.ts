@@ -26,6 +26,8 @@ export interface Group {
   archived?: boolean;
   /** Built-in seed group — not deletable; may allow absolute agent workspace. */
   isSystem?: boolean;
+  /** Unread messages for current viewer (sidebar badge). */
+  unreadCount?: number;
 }
 
 export interface DirEntryInfo {
@@ -141,13 +143,16 @@ export interface MessagePage {
 }
 
 export interface ChatEvent {
-  kind: "message_created" | "message_delta" | "run_status" | "member_removed" | "scheduler_error" | "run_heartbeat" | "ws_reconnected" | string;
+  kind: "message_created" | "message_delta" | "run_status" | "member_removed" | "scheduler_error" | "run_heartbeat" | "ws_reconnected" | "presence" | "presence_snapshot" | string;
   groupId: string;
   runId: string | null;
   messageId: string | null;
   delta: string | null;
   status: RunStatus | string | null;
   error: string | null;
+  userId?: string | null;
+  online?: boolean | null;
+  onlineUserIds?: string[] | null;
   /** thinking | artifact | final */
   channel?: string | null;
   /** When true, delta replaces channel text instead of appending */
