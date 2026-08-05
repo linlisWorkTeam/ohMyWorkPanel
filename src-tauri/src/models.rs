@@ -280,6 +280,10 @@ pub struct ExecutionContext {
     pub agent: Member,
     pub prompt: String,
     pub settings: RuntimeSettings,
+    /// Recent group chat plain lines (oldest→newest), for chatbot native window context.
+    pub recent_chat: String,
+    /// Root task / triggering message plain text.
+    pub root_task: String,
 }
  
  // === Project Management ===

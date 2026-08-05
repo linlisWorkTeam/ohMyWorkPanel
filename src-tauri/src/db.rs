@@ -1061,8 +1061,25 @@ pub fn active_agent_ids(
     Ok(agents)
 }
 
+/// Default responder (group admin) may be an active agent or chatbot.
+pub fn member_is_default_responder_candidate(
+    conn: &Connection,
+    group_id: &str,
+    member_id: &str,
+) -> AppResult<bool> {
+    let kind: Option<String> = conn
+        .query_row(
+            "SELECT kind FROM members WHERE id=?1 AND group_id=?2 AND is_active=1",
+            params![member_id, group_id],
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    Ok(matches!(kind.as_deref(), Some("agent") | Some("chatbot")))
+}
+
 /// Who should run for a new message.
-/// - No @mentions → fall back to group admin agent (if set).
+/// - No @mentions → fall back to group admin **only if set** and admin is agent/chatbot.
 /// - @ only users (or inactive) → no agents (admin must not speak).
 /// - @ agent/chatbot → those agents only.
 pub fn resolve_target_agent_ids(
@@ -1074,7 +1091,9 @@ pub fn resolve_target_agent_ids(
     let mut agents = active_agent_ids(conn, group_id, mentions)?;
     if agents.is_empty() && mentions.is_empty() {
         if let Some(admin) = admin_member_id {
-            agents.push(admin.to_string());
+            if member_is_default_responder_candidate(conn, group_id, admin)? {
+                agents.push(admin.to_string());
+            }
         }
     }
     Ok(agents)
@@ -1567,6 +1586,9 @@ mod tests {
         // No mentions → admin fallback
         let no_mention = resolve_target_agent_ids(&conn, "g", Some("admin"), &[]).unwrap();
         assert_eq!(no_mention, vec!["admin".to_string()]);
+        // Unset admin → no default responder
+        let no_admin = resolve_target_agent_ids(&conn, "g", None, &[]).unwrap();
+        assert!(no_admin.is_empty());
         // @user only → no agent
         let user_only =
             resolve_target_agent_ids(&conn, "g", Some("admin"), &["guest".into()]).unwrap();
@@ -1575,6 +1597,35 @@ mod tests {
         let agent_hit =
             resolve_target_agent_ids(&conn, "g", Some("admin"), &["admin".into()]).unwrap();
         assert_eq!(agent_hit, vec!["admin".to_string()]);
+    }
+
+    #[test]
+    fn resolve_target_chatbot_admin_is_default_responder() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        init_db(file.path()).unwrap();
+        let conn = open_db(file.path()).unwrap();
+        let ts = now();
+        conn.execute(
+            "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at,group_kind) VALUES('g','g','.','u','bot',?1,'chat')",
+            params![ts],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at) VALUES('u','g','user','Owner','#000','',1,?1)",
+            params![ts],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at) VALUES('bot','g','chatbot','Cat','#000','',1,?1)",
+            params![ts],
+        )
+        .unwrap();
+        assert!(member_is_default_responder_candidate(&conn, "g", "bot").unwrap());
+        let ids = resolve_target_agent_ids(&conn, "g", Some("bot"), &[]).unwrap();
+        assert_eq!(ids, vec!["bot".to_string()]);
+        // user cannot be default responder even if listed as admin
+        let skip_user = resolve_target_agent_ids(&conn, "g", Some("u"), &[]).unwrap();
+        assert!(skip_user.is_empty());
     }
 
     #[test]

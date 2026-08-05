@@ -39,7 +39,7 @@
 | POST | `/api/a2a/dispatch`（Live skills；禁 PCM；stop→cancel） |
 | PUT | `/api/members/{member_id}/model` |
 | PUT | `/api/members/{member_id}/workspace` |
-| PUT | `/api/groups/{group_id}/admin` |
+| PUT | `/api/groups/{group_id}/admin`（`memberId`：活跃 agent **或 chatbot**；`null` 清除。聊天群=默认响应者；未设则无 @ 不兜底） |
 
 添加 `kind=user` 成员时：
 

@@ -1481,7 +1481,9 @@ function MemberRow({ member, group, runs, detecting, onAdmin, onRemove, onDetect
         <strong>
           {member.displayName}
           {member.id === group.ownerMemberId && <em>群主</em>}
-          {isAdmin && <em className="admin-badge">管理员</em>}
+          {isAdmin && (
+            <em className="admin-badge">{group.groupKind === "chat" ? "默认响应" : "管理员"}</em>
+          )}
           {member.kind === "chatbot" && <em className="admin-badge">机器人</em>}
           {busy && <em className="responding-badge">{busy}</em>}
         </strong>
@@ -1524,10 +1526,14 @@ function MemberRow({ member, group, runs, detecting, onAdmin, onRemove, onDetect
       </div>
       <div className="member-actions">
         {member.kind === "agent" && (
-          <>
-            <button disabled={!!detecting} onClick={() => onDetect(member)}>{detecting ? "检测中" : "检测"}</button>
-            <button onClick={() => onAdmin(isAdmin ? null : member.id)}>{isAdmin ? "撤销" : "设管理"}</button>
-          </>
+          <button disabled={!!detecting} onClick={() => onDetect(member)}>{detecting ? "检测中" : "检测"}</button>
+        )}
+        {(member.kind === "agent" || member.kind === "chatbot") && (
+          <button onClick={() => onAdmin(isAdmin ? null : member.id)} title={group.groupKind === "chat" ? "未设置时无人默认回复；设置后无 @ 时由该成员兜底" : "群管理员（Agent 可保活）"}>
+            {isAdmin
+              ? (group.groupKind === "chat" ? "撤销默认响应" : "撤销")
+              : (group.groupKind === "chat" ? "设为默认响应" : "设管理")}
+          </button>
         )}
         {member.id !== group.ownerMemberId && <button className="danger" onClick={() => onRemove(member)}>移除</button>}
       </div>

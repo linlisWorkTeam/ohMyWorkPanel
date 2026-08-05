@@ -31,6 +31,20 @@ pub fn normalize_adapter(provider: &str) -> Result<&'static str, String> {
     }
 }
 
+/// Native window context for chatbot (Doubao-style): dump recent group lines + current turn.
+/// No RAG — short chats rely on full recent window only.
+pub fn build_chatbot_user_message(recent_chat: &str, root_message: &str) -> String {
+    let recent = recent_chat.trim();
+    let root = root_message.trim();
+    if recent.is_empty() {
+        return root.to_string();
+    }
+    if root.is_empty() {
+        return format!("最近群聊（从旧到新）：\n{recent}\n\n请结合上文回复。");
+    }
+    format!("最近群聊（从旧到新）：\n{recent}\n\n当前消息：{root}")
+}
+
 /// Non-streaming chat via system `curl` (avoids heavy HTTP crate compile/OOM on 2GB hosts).
 pub async fn run_chatbot_completion(
     provider: &str,
@@ -129,5 +143,17 @@ mod tests {
     fn provider_urls() {
         assert!(provider_base_url("chatbot-opencode-go").unwrap().contains("opencode.ai"));
         assert!(provider_base_url("chatbot-deepseek").unwrap().contains("deepseek.com"));
+    }
+
+    #[test]
+    fn chatbot_user_message_includes_recent_window() {
+        let msg = build_chatbot_user_message("Alice: hi\nBot: hello", "继续聊");
+        assert!(msg.contains("Alice: hi"));
+        assert!(msg.contains("当前消息：继续聊"));
+    }
+
+    #[test]
+    fn chatbot_user_message_falls_back_to_root_only() {
+        assert_eq!(build_chatbot_user_message("", "单独一句"), "单独一句");
     }
 }

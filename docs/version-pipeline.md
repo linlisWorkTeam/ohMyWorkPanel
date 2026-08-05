@@ -101,8 +101,9 @@ status: active
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
+| D0 | 默认响应者可设（admin=agent/chatbot，未设则无兜底）；chatbot **原生窗口**塞最近约 40 条群聊（非 RAG） | ✅ 灰度（见 epitaph） |
 | D1 | 聊天群类型体验：与工作群 UI 区分；表情/富媒体；主题按**用户**隔离 | **待拍板 Feature** |
-| D2 | ChatBot 保持快响应；知识能力用可 @ Agent，不塞进 chatbot 本体 | 方向锁定，待 PRD |
+| D2 | ChatBot 保持快响应；知识能力用可 @ Agent，不塞进 chatbot 本体 | 方向锁定；与 D0 一致 |
 | D3 | 多平台映射（建议 QQ MVP → 防回环设计） | **暂缓**；仅调研，不进当前迭代 |
 
 ---

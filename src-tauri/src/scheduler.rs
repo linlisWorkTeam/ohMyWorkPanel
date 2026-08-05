@@ -394,6 +394,8 @@ fn get_execution_context(state: &SchedulerState, run_id: &str) -> AppResult<Exec
         agent,
         prompt,
         settings: get_settings_from(&conn)?,
+        recent_chat: lines,
+        root_task: root,
     })
 }
 
@@ -442,15 +444,14 @@ async fn run_agent(
         let api_key = get_agent_api_key(&conn, &context.agent.id)?
             .filter(|k| !k.trim().is_empty())
             .ok_or_else(|| "聊天机器人未配置 API Key。".to_string())?;
-        let root = extract_root_from_prompt(&context.prompt);
+        let root = if context.root_task.trim().is_empty() {
+            extract_root_from_prompt(&context.prompt)
+        } else {
+            context.root_task.clone()
+        };
         let ann = truncate_chars(context.group.announcement.trim(), 800);
-        let mem = memory::read_memory_excerpt(
-            std::path::Path::new(&context.group.workspace_path),
-            None,
-            600,
-        );
         let system = format!(
-            "你是群聊机器人「{}」。只做轻量对话，不要调用工具、不要改代码/文件。回答简洁。{}",
+            "你是群聊机器人「{}」。只做轻量对话，不要调用工具、不要改代码/文件。回答简洁。结合下方最近群聊上下文理解指代与话题（原生窗口上下文，非向量长期记忆）。{}",
             context.agent.display_name,
             if ann.is_empty() {
                 String::new()
@@ -458,7 +459,7 @@ async fn run_agent(
                 format!("\n群公告：{ann}")
             }
         );
-        let user = format!("{root}\n{mem}");
+        let user = chatbot::build_chatbot_user_message(&context.recent_chat, &root);
         let model = context.agent.model.as_deref();
         let text = chatbot::run_chatbot_completion(
             adapter_name,

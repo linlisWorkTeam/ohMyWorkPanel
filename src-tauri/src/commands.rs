@@ -392,15 +392,8 @@ pub fn set_admin(
     let conn = open_db(&state.db_path)?;
     let _ = get_group(&conn, &group_id)?;
     if let Some(id) = &member_id {
-        let valid = conn
-            .query_row(
-                "SELECT COUNT(*) FROM members WHERE id=?1 AND group_id=?2 AND kind='agent' AND is_active=1",
-                params![id, group_id],
-                |r| r.get::<_, i64>(0),
-            )
-            .map_err(|e| e.to_string())?;
-        if valid != 1 {
-            return Err("管理员必须是本群的活跃 Agent。".into());
+        if !crate::db::member_is_default_responder_candidate(&conn, &group_id, id)? {
+            return Err("默认响应者必须是本群活跃的 Agent 或聊天机器人。".into());
         }
     }
     conn.execute(
@@ -408,16 +401,25 @@ pub fn set_admin(
         params![member_id, group_id],
     )
     .map_err(|e| e.to_string())?;
-    // Only admin agent gets keep-alive; clear others in this group.
+    // Only admin *agent* gets keep-alive; chatbots stay cold / fast HTTP.
     let _ = conn.execute(
         "UPDATE agent_profiles SET keep_alive=0, updated_at=?1 WHERE member_id IN (SELECT id FROM members WHERE group_id=?2 AND kind='agent')",
         params![now(), group_id],
     );
     if let Some(id) = &member_id {
-        let _ = conn.execute(
-            "UPDATE agent_profiles SET keep_alive=1, warm_status='warming', updated_at=?1 WHERE member_id=?2",
-            params![now(), id],
-        );
+        let kind: String = conn
+            .query_row(
+                "SELECT kind FROM members WHERE id=?1",
+                params![id],
+                |r| r.get(0),
+            )
+            .unwrap_or_default();
+        if kind == "agent" {
+            let _ = conn.execute(
+                "UPDATE agent_profiles SET keep_alive=1, warm_status='warming', updated_at=?1 WHERE member_id=?2",
+                params![now(), id],
+            );
+        }
     }
     group_state(&conn, &group_id)
 }

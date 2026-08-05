@@ -754,27 +754,34 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
      require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
      let _ = db_get_group(&conn, &group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
      if let Some(id) = member_id {
-         let valid = conn
-             .query_row("SELECT COUNT(*) FROM members WHERE id=?1 AND group_id=?2 AND kind='agent' AND is_active=1", params![id, group_id], |r| r.get::<_, i64>(0))
-             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-         if valid != 1 {
-             return Err((StatusCode::BAD_REQUEST, "admin must be active agent".into()));
+         let ok = crate::db::member_is_default_responder_candidate(&conn, &group_id, id)
+             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+         if !ok {
+             return Err((
+                 StatusCode::BAD_REQUEST,
+                 "默认响应者必须是本群活跃的 Agent 或聊天机器人".into(),
+             ));
          }
      }
      conn.execute("UPDATE groups SET admin_member_id=?1 WHERE id=?2", params![member_id, group_id])
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-     // Only admin agent gets keep-alive; clear others in this group.
+     // Only admin *agent* gets keep-alive; chatbots stay cold / fast HTTP.
      conn.execute(
          "UPDATE agent_profiles SET keep_alive=0, updated_at=?1 WHERE member_id IN (SELECT id FROM members WHERE group_id=?2 AND kind='agent')",
          params![now(), group_id],
      )
      .ok();
      if let Some(id) = member_id {
-         conn.execute(
-             "UPDATE agent_profiles SET keep_alive=1, warm_status='warming', updated_at=?1 WHERE member_id=?2",
-             params![now(), id],
-         )
-         .ok();
+         let kind: String = conn
+             .query_row("SELECT kind FROM members WHERE id=?1", params![id], |r| r.get(0))
+             .unwrap_or_default();
+         if kind == "agent" {
+             conn.execute(
+                 "UPDATE agent_profiles SET keep_alive=1, warm_status='warming', updated_at=?1 WHERE member_id=?2",
+                 params![now(), id],
+             )
+             .ok();
+         }
      }
      group_state(&conn, &group_id).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
  }
