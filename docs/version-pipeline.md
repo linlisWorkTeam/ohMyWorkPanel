@@ -9,7 +9,7 @@ status: active
 > **本文是产品/平台演进的单一事实源（SSOT）。**  
 > 新功能先在本文件占位（轨道 + 阶段），再开 Feature / 写 epitaph；禁止「东改西改」无版本归属的散弹改动。  
 > 细节仍以 `docs/epitaph/*` 与 `docs/superpowers/{specs,plans}/*` 为准；本文件只看**流水线与方向**。  
-> Git 标签：**`v1.1.0`**（2026-08-05，含聊天 D0 / 排队可见 / 发版硬化等；见 README）。
+> 当前生产产物：豆包语音 UX 等已 promote（`prod` RELEASE ≈ `2026-08-05T16:49:03Z`）。Git 标签待补 **`v1.2.0`**；前序 **`v1.1.0`**。下一产品里程碑：**WorkPanel V1.3.0（工作流）**（设计审稿中）。
 
 ## 怎么用（Agent / 人类）
 
@@ -87,17 +87,41 @@ status: active
 | 邀请/删除 | 邀请链接入群（24h）；移除 vs 永久删除（purge/roster_hidden） | `epitaph/2026-08-05-invite-hard-delete.md` |
 | 发布治理 | `approve-prod-release.sh`；promote trap；可选 prod watchdog；tag **v1.1.0** | scripts + GitHub |
 
+### 阶段 4 — **v1.2.0**（生产基线，2026-08-06）
+
+> 管理员指令「基线该版本」：将当时 canary（含豆包语音 UX）promote 生产。`prod` RELEASE 以 promote 时刻为准。
+
+| 批次 | 能力摘要 | 交接 / 契约 |
+|---|---|---|
+| Host 豆包语音 | 主聊天「按住说话」+ 气泡 ▶；`purpose=playback`；松手即发 | `epitaph/2026-08-05-doubao-voice-ux-host.md`；Extend contract |
+| 代理修复 | PanelLive 同源代理**转发 query**（`?format=json`） | `extensions::with_proxy_query` |
+| Live 一致 | 会话态经代理；聊天同步进 Live UI | `epitaph/2026-08-05-live-session-chat-parity.md` |
+| 工作区边界 | Live Extend ↔ Host 仓/群拍板（文档） | `specs/2026-08-05-workspace-boundary-live-host.md` |
+| 发布 | promote 已完成；**git tag `v1.2.0` 待补**；不碰 prod DB | 本阶段 |
+
+### 阶段 5 — **WorkPanel V1.3.0（工作流）**（设计审稿中，2026-08-06）
+
+> 与历史 epitaph「v1.3 双槽位」不同名不同义。全量设计：[`specs/2026-08-06-workpanel-v1.3.0-workflow-era-design.md`](superpowers/specs/2026-08-06-workpanel-v1.3.0-workflow-era-design.md)。实现 **S1→S4** 分批。
+
+| 切片 | 内容 | 状态 |
+|---|---|---|
+| S1 | 版本页签 + Tag 时间线；去掉项目看板/Roadmap 进度 | 待开工（设计通过后） |
+| S2 | 新建/导入版本；Roadmap What/Who/How；虚拟 Tag | 待 S1 |
+| S3 | Ask 模式；Wave 生成；`/roadmap` `/wave` | 待 S2 |
+| S4 | Wave 六阶段执行；▶/⏸；Codex loop；发布前 awaiting_release | 待 S3 |
+
 ---
 
 ## 锁定的产品方向（勿漂移）
 
 | 轨道 | 定位 | 做 | 不做（本阶段） |
 |---|---|---|---|
-| **A 工作群** | 绑定 workspace 的 Agent 协作（主产品） | @ 调度、串行、A2A、公告、项目视图、经验/记忆 | 把工作群做成纯社交 IM |
+| **A 工作群** | 绑定 workspace 的 Agent 协作（主产品） | @ 调度、串行、A2A、公告、**版本/Wave 工作流**、经验/记忆 | 把工作群做成纯社交 IM |
 | **B 发布与稳态** | 双槽位自迭代不断供 | 门禁、灰度公告、探活/心跳/指标、promote 审批 | Agent 擅自 promote；打断 stop→start |
 | **C PanelLive** | 扩展宿主；音视频在扩展侧 | iframe + 同源代理 + A2A 控制面 | 平台转发 PCM / 群消息塞音频 |
 | **D 聊天群** | `groupKind=chat`，无业务 workspace；轻对话 | Phase 1：体验地基（见下） | 未拍板前不做多平台中枢大工程 |
 | **E 质量** | 门禁绿 + 策略文档同步 | 纯函数/调度单测；补缺口见 testing-strategy | 用真 CLI smoke 替代门禁 |
+| **F 工作流 V1.3.0** | Git Tag 版本 + Ask + Wave | 见阶段 5 设计文 | 一次做完 S1–S4；自动无审批 promote |
 
 ### 轨道 D — 聊天群（已对齐的方向，待拍板开工）
 
@@ -114,11 +138,12 @@ status: active
 
 ## 下一站（建议顺序，避免并行发散）
 
-1. **聊天群 D1（若拍板）**：表情/富媒体 + 用户主题隔离；先 PRD 再平台实现。
-2. **质量 E**：按 `docs/testing-strategy.md` 补 Web 集成 / #310 / run_heartbeat 后端等缺口。
-3. **PanelLive C**：按契约深化；不扩平台音频面。
-4. **D3 多平台**：单独里程碑，不与 D1 捆绑。
-5. **稳态债（B）**：后续每次增量仍灰度 → 批准 promote；保持 watchdog/探活，勿中断 stop→start。
+1. **WorkPanel V1.3.0 S1（设计通过后）**：版本页壳 + Tag 时间线；见阶段 5 设计文。
+2. **补打 git tag `v1.2.0`**（产物已在生产；标签与文档对齐）。
+3. **V1.3.0 S2→S4**：按设计切片推进。
+4. **聊天群 D1（若拍板）**：表情/富媒体 + 用户主题隔离。
+5. **质量 E / PanelLive C / D3**：不与 V1.3.0 主路径抢并发。
+6. **稳态债（B）**：每次增量仍灰度 → 批准 promote；勿中断 stop→start。
 
 ---
 
@@ -142,3 +167,4 @@ status: active
 | [`docs/release-checklist.md`](release-checklist.md) | 发版检查 |
 | [`docs/panellive-platform-requirements.md`](panellive-platform-requirements.md) | Live 契约 |
 | [`docs/roadmap.md`](roadmap.md) | 历史勾选 + 指向本文 |
+| [`docs/superpowers/specs/2026-08-06-workpanel-v1.3.0-workflow-era-design.md`](superpowers/specs/2026-08-06-workpanel-v1.3.0-workflow-era-design.md) | V1.3.0 工作流全量设计 |

@@ -8,6 +8,8 @@ Active handoff notes for future agents.
 
 | Date | Topic | Status |
 |------|-------|--------|
+| 2026-08-06 | [V1.3.0 工作流时代设计](../superpowers/specs/2026-08-06-workpanel-v1.3.0-workflow-era-design.md) | draft-for-review |
+| 2026-08-06 | [v1.2.0 生产基线 promote](./2026-08-06-v1.2.0-baseline-promote.md) | active（tag 待补） |
 | 2026-08-05 | [版本流水线 SSOT](../version-pipeline.md) | active（非 epitaph，索引挂此） |
 | 2026-08-05 | [Live/Host 工作区边界拍板](../superpowers/specs/2026-08-05-workspace-boundary-live-host.md) | decided |
 | 2026-08-05 | [Host 豆包语音 UX（按住说话/气泡播放）](./2026-08-05-doubao-voice-ux-host.md) | active |
