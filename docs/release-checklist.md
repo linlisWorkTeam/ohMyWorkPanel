@@ -21,6 +21,13 @@ systemctl is-active linlis-work-panel.service
 - [ ] canary HTTP `/` → 200
 - [ ] **前端壳冒烟（防白屏 / React 起不来）** — 见 §F
 - [ ] root 登录；关键群可见
+- [ ] **A2A 灰度改动公告（必做）** — 每次 `deploy-canary` 成功后，在灰度环境「灰度测试」群经 A2A `@` 该群管理员，推送本次改动点：
+  ```bash
+  ./scripts/canary-announce-a2a.sh
+  # 或自定义摘要：
+  ./scripts/canary-announce-a2a.sh $'-\n- 修复登录白屏 React #310\n- …'
+  ```
+  约定：目标群名默认 `灰度测试`（`:8081` / `data-canary`）；由群主发消息 `@管理员 Agent`，管理员在群内复述/确认改动清单；调用嵌套 ≤3 层。
 - [ ] 若改了聊天/实时：HTTPS 入口测一轮 @Agent，确认流式更新（勿只测本机 `http://127.0.0.1`）
 - [ ] 生产未被误停（`prod` service active，`/` → 200）
 

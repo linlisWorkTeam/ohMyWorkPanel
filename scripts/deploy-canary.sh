@@ -89,4 +89,5 @@ fi
 echo "Canary ready: http://<host>:${CANARY_PORT}/  (data=${CANARY_DATA}, codex=:18889)"
 echo "Production untouched: http://<host>:${PROD_PORT}/  (data=${PROD_DATA}, codex=:18888)"
 echo "UI checklist: docs/release-checklist.md (§F frontend shell + HTTPS wss)"
+echo "NEXT (required): ./scripts/canary-announce-a2a.sh   # A2A @灰度测试管理员 推送本次改动点"
 echo "Promote to prod requires: ./scripts/approve-prod-release.sh \"...\" && ./scripts/promote-canary.sh"

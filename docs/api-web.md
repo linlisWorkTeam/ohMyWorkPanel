@@ -104,4 +104,5 @@
 
 - 前端封装：`src/api-web.ts`
 - 目录逻辑：`src-tauri/src/fs_browse.rs`
-- 发布流程：群公告 + `docs/epitaph/2026-08-01-v1.3-prod-canary.md`
+- 发布流程：群公告 + `docs/epitaph/2026-08-01-v1.3-prod-canary.md` + `docs/release-checklist.md`
+- 灰度推包后 A2A 公告：`scripts/canary-announce-a2a.sh`（在 canary「灰度测试」群 `@` 管理员推送改动点）
