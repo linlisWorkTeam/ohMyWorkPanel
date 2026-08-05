@@ -16,7 +16,7 @@ use rusqlite::{params, OptionalExtension};
 use std::{
     collections::{HashMap, HashSet},
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Mutex,
     },
 };
@@ -31,7 +31,10 @@ pub struct SchedulerState {
     pub scheduling_groups: Arc<Mutex<std::collections::HashSet<String>>>,
 }
 
-pub fn emit(state: &SchedulerState, event: ChatEvent) {
+static EVENT_SEQ: AtomicU64 = AtomicU64::new(1);
+
+pub fn emit(state: &SchedulerState, mut event: ChatEvent) {
+    event.seq = Some(EVENT_SEQ.fetch_add(1, Ordering::Relaxed));
     // Tauri mode
     #[cfg(feature = "gui")]
     if let EventSender::Tauri(app) = &state.event_sender {
@@ -75,6 +78,9 @@ fn emit_phase(state: &SchedulerState, group_id: &str, run_id: &str, phase: &str)
             phase: Some(phase.into()),
             elapsed_ms: Some(elapsed),
             total_ms: Some(total),
+            seq: None,
+            delta_count: None,
+            rss_mib: None,
         },
     );
 }
@@ -194,7 +200,10 @@ pub fn schedule_group(state: SchedulerState, group_id: String) {
                         phase: Some("starting".into()),
                         elapsed_ms: None,
                         total_ms: None,
-                    },
+            seq: None,
+            delta_count: None,
+            rss_mib: None,
+        },
                 );
                 let child_state = state.clone();
                 tokio::spawn(async move {
@@ -217,7 +226,10 @@ pub fn schedule_group(state: SchedulerState, group_id: String) {
                         phase: None,
                         elapsed_ms: None,
                         total_ms: None,
-            },
+            seq: None,
+            delta_count: None,
+            rss_mib: None,
+        },
         ),
     }
 }
@@ -464,15 +476,35 @@ async fn run_agent(
     }
 
     let kind = AdapterKind::parse(adapter_name)?;
+    let delta_count = Arc::new(AtomicU64::new(0));
+    let hb_stop = Arc::new(AtomicBool::new(false));
+    {
+        let interval = if context.settings.heartbeat_auto {
+            context.settings.heartbeat_focus_seconds.max(1) as u64
+        } else {
+            context.settings.heartbeat_background_seconds.max(1) as u64
+        };
+        spawn_run_heartbeat(
+            state.clone(),
+            context.group.id.clone(),
+            context.run.id.clone(),
+            interval,
+            delta_count.clone(),
+            hb_stop.clone(),
+        );
+    }
     let make_on_delta = || {
         let state_clone = state.clone();
         let run = context.run.clone();
         let group_id = context.group.id.clone();
+        let delta_count = delta_count.clone();
         move |channel: String, delta: String, replace: bool| {
             let state = state_clone.clone();
             let run = run.clone();
             let group_id = group_id.clone();
+            let delta_count = delta_count.clone();
             async move {
+                delta_count.fetch_add(1, Ordering::Relaxed);
                 // First token → streaming phase
                 if let Ok(conn) = open_db(&state.db_path) {
                     let phase: Option<String> = conn
@@ -495,7 +527,9 @@ async fn run_agent(
 
     if kind == AdapterKind::Mock {
         emit_phase(state, &context.group.id, &context.run.id, "streaming");
-        adapters::run_mock_stream(token, make_on_delta()).await?;
+        let result = adapters::run_mock_stream(token, make_on_delta()).await;
+        hb_stop.store(true, Ordering::Relaxed);
+        result?;
         return Ok(());
     }
 
@@ -514,10 +548,11 @@ async fn run_agent(
         context.prompt.clone()
     };
 
-    let cwd = memory::resolve_agent_workspace_under_group(
+    let cwd = memory::resolve_agent_workspace(
         std::path::Path::new(&context.group.workspace_path),
         &context.agent.id,
         context.agent.workspace_path.as_deref(),
+        context.group.is_system,
     )?;
     let _ = memory::ensure_linlis_layout(std::path::Path::new(&context.group.workspace_path), Some(&context.agent.id));
 
@@ -570,8 +605,12 @@ async fn run_agent(
             )
             .await?
         }
-        Err(error) => return Err(error),
+        Err(error) => {
+            hb_stop.store(true, Ordering::Relaxed);
+            return Err(error);
+        }
     };
+    hb_stop.store(true, Ordering::Relaxed);
 
     if kind == AdapterKind::Cursor {
         if let Some(id) = captured.or(session_id) {
@@ -580,6 +619,48 @@ async fn run_agent(
         }
     }
     Ok(())
+}
+
+fn spawn_run_heartbeat(
+    state: SchedulerState,
+    group_id: String,
+    run_id: String,
+    interval_secs: u64,
+    delta_count: Arc<AtomicU64>,
+    stop: Arc<AtomicBool>,
+) {
+    let started = std::time::Instant::now();
+    tokio::spawn(async move {
+        let secs = interval_secs.max(1);
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(secs)).await;
+            if stop.load(Ordering::Relaxed) {
+                break;
+            }
+            let still_running = open_db(&state.db_path)
+                .ok()
+                .and_then(|conn| {
+                    conn.query_row(
+                        "SELECT status FROM task_runs WHERE id=?1",
+                        params![run_id],
+                        |r| r.get::<_, String>(0),
+                    )
+                    .ok()
+                })
+                .map(|s| s == "running" || s == "queued")
+                .unwrap_or(false);
+            if !still_running {
+                break;
+            }
+            let mut ev = ChatEvent::bare("run_heartbeat", &group_id);
+            ev.run_id = Some(run_id.clone());
+            ev.status = Some("running".into());
+            ev.elapsed_ms = Some(started.elapsed().as_millis() as i64);
+            ev.delta_count = Some(delta_count.load(Ordering::Relaxed) as i64);
+            ev.rss_mib = crate::metrics::read_rss_mib();
+            emit(&state, ev);
+        }
+    });
 }
 
 fn format_announcement_block(announcement: &str, max_chars: usize) -> String {
@@ -696,6 +777,9 @@ fn append_delta(
             phase: None,
             elapsed_ms: None,
             total_ms: None,
+            seq: None,
+            delta_count: None,
+            rss_mib: None,
         },
     );
     Ok(())
@@ -745,7 +829,10 @@ async fn finish_failed(state: &SchedulerState, run_id: &str, error: &str) {
                         phase: None,
                         elapsed_ms: None,
                         total_ms: None,
-            },
+            seq: None,
+            delta_count: None,
+            rss_mib: None,
+        },
         );
         if let EventSender::Web(tx) = &state.event_sender {
             orchestrator::on_run_terminal(
@@ -878,7 +965,10 @@ async fn finish_completed(state: &SchedulerState, context: &ExecutionContext) {
                         phase: None,
                         elapsed_ms: None,
                         total_ms: None,
-            },
+            seq: None,
+            delta_count: None,
+            rss_mib: None,
+        },
         );
         if !is_review {
             if let EventSender::Web(tx) = &state.event_sender {

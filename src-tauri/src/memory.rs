@@ -96,10 +96,21 @@ fn truncate(s: &str, max: usize) -> String {
 }
 
 /// Resolve agent workspace under group root; create default if empty.
+/// When `allow_cross_workspace` is true (seed/system groups only), an explicit
+/// absolute `configured` path may leave the group directory.
 pub fn resolve_agent_workspace_under_group(
     group_ws: &Path,
     agent_member_id: &str,
     configured: Option<&str>,
+) -> Result<PathBuf, String> {
+    resolve_agent_workspace(group_ws, agent_member_id, configured, false)
+}
+
+pub fn resolve_agent_workspace(
+    group_ws: &Path,
+    agent_member_id: &str,
+    configured: Option<&str>,
+    allow_cross_workspace: bool,
 ) -> Result<PathBuf, String> {
     let group_canon = group_ws
         .canonicalize()
@@ -118,7 +129,7 @@ pub fn resolve_agent_workspace_under_group(
         std::fs::create_dir_all(d.join("scratch")).map_err(|e| e.to_string())?;
         d.canonicalize().unwrap_or(d)
     };
-    if !target.starts_with(&group_canon) {
+    if !target.starts_with(&group_canon) && !allow_cross_workspace {
         return Err("Agent 工作区必须位于群工作区目录之内。".into());
     }
     Ok(target)
@@ -144,5 +155,22 @@ mod tests {
         )
         .unwrap_err();
         assert!(err.contains("之内"));
+    }
+
+    #[test]
+    fn seed_group_may_use_explicit_absolute_workspace() {
+        let dir = tempfile::tempdir().unwrap();
+        let group = dir.path().join("group");
+        let outside = dir.path().join("outside");
+        std::fs::create_dir_all(&group).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        let ok = resolve_agent_workspace(
+            &group,
+            "a1",
+            Some(outside.to_str().unwrap()),
+            true,
+        )
+        .unwrap();
+        assert_eq!(ok, outside.canonicalize().unwrap());
     }
 }

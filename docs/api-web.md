@@ -54,14 +54,17 @@
 | GET | `/api/groups/{group_id}/messages` |
 | GET | `/api/groups/{group_id}/messages/{message_id}/parts/{channel}` |
 | GET | `/api/groups/{group_id}/runs` |
+| GET | `/api/groups/{group_id}/runs/active`（queued/running，重连 resync） |
 | POST | `/api/runs/{run_id}/cancel` |
 | POST | `/api/runs/{run_id}/retry` |
+| GET | `/api/health`（无鉴权；发布/重连探活） |
+| GET | `/api/metrics/latest`（主进程 RSS/CPU；设置页 5s 拉） |
 
 ## 设置 / OCR / 预设角色
 
 | 方法 | 路径 |
 |---|---|
-| GET/PUT | `/api/settings` |
+| GET/PUT | `/api/settings`（含心跳 Auto / 聚焦秒 / 后台秒） |
 | POST | `/api/ocr`、`/api/ocr/base64` |
 | GET | `/api/preset-roles` |
 

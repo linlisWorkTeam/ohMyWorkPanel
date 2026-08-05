@@ -103,12 +103,26 @@ pub fn update_runtime_settings(
     {
         return Err("运行设置超出允许范围。".into());
     }
+    if !(1..=30).contains(&settings.heartbeat_focus_seconds)
+        || !(1..=60).contains(&settings.heartbeat_background_seconds)
+    {
+        return Err("心跳间隔超出允许范围。".into());
+    }
     let conn = open_db(&state.db_path)?;
     for (key, value) in [
         ("max_concurrent_runs", settings.max_concurrent_runs),
         ("run_timeout_seconds", settings.run_timeout_seconds),
         ("context_message_limit", settings.context_message_limit),
         ("max_delegation_depth", settings.max_delegation_depth),
+        (
+            "heartbeat_auto",
+            if settings.heartbeat_auto { 1 } else { 0 },
+        ),
+        ("heartbeat_focus_seconds", settings.heartbeat_focus_seconds),
+        (
+            "heartbeat_background_seconds",
+            settings.heartbeat_background_seconds,
+        ),
     ] {
         conn.execute(
             "INSERT INTO app_settings(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
@@ -361,6 +375,9 @@ pub async fn remove_member(
                         phase: None,
                         elapsed_ms: None,
                         total_ms: None,
+            seq: None,
+            delta_count: None,
+            rss_mib: None,
         },
     );
     Ok(())
@@ -491,6 +508,9 @@ pub async fn send_message(
                         phase: None,
                         elapsed_ms: None,
                         total_ms: None,
+            seq: None,
+            delta_count: None,
+            rss_mib: None,
         },
     );
     schedule_group(to_scheduler(&state, &app), group_id.clone());
@@ -551,6 +571,9 @@ pub async fn cancel_run(
                         phase: None,
                         elapsed_ms: None,
                         total_ms: None,
+            seq: None,
+            delta_count: None,
+            rss_mib: None,
         },
     );
     Ok(())
@@ -830,10 +853,11 @@ pub fn update_member_workspace_cmd(
         )
         .map_err(|e| e.to_string())?;
     let group = get_group(&conn, &member.group_id)?;
-    let resolved = crate::memory::resolve_agent_workspace_under_group(
+    let resolved = crate::memory::resolve_agent_workspace(
         std::path::Path::new(&group.workspace_path),
         &member_id,
         Some(&workspace_path),
+        group.is_system,
     )?;
     crate::db::set_member_workspace(&conn, &member_id, resolved.to_string_lossy().as_ref())?;
     conn.query_row(

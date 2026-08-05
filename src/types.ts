@@ -24,6 +24,8 @@ export interface Group {
   /** project (default) | chat */
   groupKind?: "project" | "chat" | string;
   archived?: boolean;
+  /** Built-in seed group — not deletable; may allow absolute agent workspace. */
+  isSystem?: boolean;
 }
 
 export interface DirEntryInfo {
@@ -139,7 +141,7 @@ export interface MessagePage {
 }
 
 export interface ChatEvent {
-  kind: "message_created" | "message_delta" | "run_status" | "member_removed" | "scheduler_error";
+  kind: "message_created" | "message_delta" | "run_status" | "member_removed" | "scheduler_error" | "run_heartbeat" | "ws_reconnected" | string;
   groupId: string;
   runId: string | null;
   messageId: string | null;
@@ -153,6 +155,9 @@ export interface ChatEvent {
   phase?: RunPhase | null;
   elapsedMs?: number | null;
   totalMs?: number | null;
+  seq?: number | null;
+  deltaCount?: number | null;
+  rssMib?: number | null;
 }
 
 export interface PresetRole {
@@ -167,6 +172,15 @@ export interface RuntimeSettings {
   runTimeoutSeconds: number;
   contextMessageLimit: number;
   maxDelegationDepth: number;
+  heartbeatAuto?: boolean;
+  heartbeatFocusSeconds?: number;
+  heartbeatBackgroundSeconds?: number;
+}
+
+export interface MetricsSample {
+  rssMib: number;
+  cpuPct: number;
+  ts: number;
 }
 
 export interface ExtensionTab {

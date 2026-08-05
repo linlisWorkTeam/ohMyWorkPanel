@@ -28,6 +28,9 @@ pub struct Group {
     pub group_kind: String,
     #[serde(default)]
     pub archived: bool,
+    /// Built-in seed / system group (e.g. LinlisWorkPanel); not deletable.
+    #[serde(default)]
+    pub is_system: bool,
 }
 
 fn default_group_kind() -> String {
@@ -214,6 +217,34 @@ pub struct ChatEvent {
     pub elapsed_ms: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub total_ms: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub seq: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delta_count: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rss_mib: Option<f64>,
+}
+
+impl ChatEvent {
+    pub fn bare(kind: impl Into<String>, group_id: impl Into<String>) -> Self {
+        Self {
+            kind: kind.into(),
+            group_id: group_id.into(),
+            run_id: None,
+            message_id: None,
+            delta: None,
+            status: None,
+            error: None,
+            channel: None,
+            replace: None,
+            phase: None,
+            elapsed_ms: None,
+            total_ms: None,
+            seq: None,
+            delta_count: None,
+            rss_mib: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -223,6 +254,23 @@ pub struct RuntimeSettings {
     pub run_timeout_seconds: i64,
     pub context_message_limit: i64,
     pub max_delegation_depth: i64,
+    /// Auto heartbeat rate (focus 1s / background 5s by default).
+    #[serde(default = "default_true")]
+    pub heartbeat_auto: bool,
+    #[serde(default = "default_heartbeat_focus")]
+    pub heartbeat_focus_seconds: i64,
+    #[serde(default = "default_heartbeat_background")]
+    pub heartbeat_background_seconds: i64,
+}
+
+fn default_true() -> bool {
+    true
+}
+fn default_heartbeat_focus() -> i64 {
+    1
+}
+fn default_heartbeat_background() -> i64 {
+    5
 }
 
 #[derive(Clone)]

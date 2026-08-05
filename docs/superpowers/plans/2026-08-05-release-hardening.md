@@ -84,4 +84,4 @@ owner: OpenClaw (PM) → Cursor Agent (impl)
 
 ## 状态
 
-- **等待测试完成 + 管理员发版指令**；Cursor Agent 暂缓 M1–M5 大规模实现，直至明确开工。
+- **已实现并推灰度**（M1–M4 + docs）；生产晋升仍待管理员 approve + promote。

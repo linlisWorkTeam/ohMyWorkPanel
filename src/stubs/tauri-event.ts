@@ -4,10 +4,17 @@
 import {
   heartbeatPayload,
   isIgnorableWsKind,
+  publishWsLinkState,
   reconnectDelayMs,
   WS_CLIENT_HEARTBEAT_MS,
   WS_RECONNECTED_KIND,
 } from "../realtimeWs";
+import {
+  nextLinkStateOnClose,
+  RELEASING_HEALTH_POLL_MS,
+  RELEASING_WINDOW_MS,
+  type WsLinkState,
+} from "../releasingState";
 
 type WsListener = (event: { payload: any }) => void;
 const listeners = new Map<string, Set<WsListener>>();
@@ -15,7 +22,43 @@ let sharedWs: WebSocket | null = null;
 let authToken: string | null = null;
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 let visibilityBound = false;
+let linkState: WsLinkState = "connected";
+let closedAt = 0;
+let releasingTimer: ReturnType<typeof setInterval> | null = null;
+let healthTimer: ReturnType<typeof setInterval> | null = null;
 const TOKEN_KEY = "linlis_auth_token";
+
+function publishLink(state: WsLinkState) {
+  linkState = state;
+  const elapsed = closedAt ? Date.now() - closedAt : 0;
+  publishWsLinkState(state, elapsed);
+}
+
+function stopReleasingWatch() {
+  if (releasingTimer) { clearInterval(releasingTimer); releasingTimer = null; }
+  if (healthTimer) { clearInterval(healthTimer); healthTimer = null; }
+}
+
+function startReleasingWatch() {
+  stopReleasingWatch();
+  closedAt = Date.now();
+  publishLink("releasing");
+  healthTimer = setInterval(() => {
+    void fetch("/api/health", { cache: "no-store" }).catch(() => undefined);
+  }, RELEASING_HEALTH_POLL_MS);
+  releasingTimer = setInterval(() => {
+    const state = nextLinkStateOnClose(Date.now(), closedAt);
+    publishLink(state);
+    if (state === "timeout") stopReleasingWatch();
+  }, 1000);
+  // Cap watch at window
+  setTimeout(() => {
+    if (linkState === "releasing") {
+      publishLink("timeout");
+      stopReleasingWatch();
+    }
+  }, RELEASING_WINDOW_MS + 50);
+}
 
 function wsUrl(token: string | null): string {
   // Must match page protocol: https pages require wss (ws:// is blocked as mixed content).
@@ -60,6 +103,9 @@ function normalizePayload(data: Record<string, unknown>) {
     phase: data.phase ?? null,
     elapsedMs: data.elapsedMs ?? data.elapsed_ms ?? null,
     totalMs: data.totalMs ?? data.total_ms ?? null,
+    seq: data.seq ?? null,
+    deltaCount: data.deltaCount ?? data.delta_count ?? null,
+    rssMib: data.rssMib ?? data.rss_mib ?? null,
   };
 }
 
@@ -128,6 +174,8 @@ function ensureWs() {
   const ws = sharedWs;
   ws.onopen = () => {
     reconnectAttempts = 0;
+    stopReleasingWatch();
+    publishLink("connected");
     startHeartbeat(ws);
     dispatch("chat-event", { kind: WS_RECONNECTED_KIND, groupId: null });
   };
@@ -150,6 +198,7 @@ function ensureWs() {
   };
   ws.onclose = () => {
     stopHeartbeat();
+    startReleasingWatch();
     scheduleReconnect();
   };
   ws.onerror = () => { try { ws.close(); } catch { /* ignore */ } };

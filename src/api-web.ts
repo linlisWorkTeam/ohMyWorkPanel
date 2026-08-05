@@ -1,7 +1,7 @@
 ﻿// Web API layer - replaces api.ts when running in browser (non-Tauri mode).
 // Uses fetch() + WebSocket instead of Tauri invoke().
 import type {
-  GroupState, Member, MessageChannelPart, MessagePage, PresetRole, RuntimeSettings, Message,
+  GroupState, Member, MessageChannelPart, MessagePage, MetricsSample, PresetRole, RuntimeSettings, Message, TaskRun,
   RoadmapItem, Feature, FeatureTask, RoadmapState, RoadmapOrchestration,
   CreateRoadmapItemInput, UpdateRoadmapItemInput,
   CreateFeatureInput, UpdateFeatureInput,
@@ -222,6 +222,9 @@ export const api = {
     apiFetch<string>(`/api/runs/${runId}/retry`, { method: "POST" }),
 
   getSettings: () => apiFetch<RuntimeSettings>("/api/settings"),
+  getMetricsLatest: () => apiFetch<MetricsSample>("/api/metrics/latest"),
+  listActiveRuns: (groupId: string) =>
+    apiFetch<TaskRun[]>(`/api/groups/${groupId}/runs/active`),
 
   updateSettings: (settings: RuntimeSettings) =>
     apiFetch<RuntimeSettings>("/api/settings", {

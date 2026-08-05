@@ -63,7 +63,10 @@ fn web_emit_delta(
         phase: None,
         elapsed_ms: None,
         total_ms: None,
-    };
+            seq: None,
+            delta_count: None,
+            rss_mib: None,
+        };
     if let Ok(payload) = serde_json::to_string(&event) {
         let _ = tx.send(payload);
     }
@@ -841,10 +844,11 @@ async fn put_member_workspace_web(
         return Err((StatusCode::BAD_REQUEST, "仅 Agent 可设置工作区".into()));
     }
     let group = db_get_group(&conn, &member.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
-    let resolved = crate::memory::resolve_agent_workspace_under_group(
+    let resolved = crate::memory::resolve_agent_workspace(
         std::path::Path::new(&group.workspace_path),
         &member_id,
         Some(&body.workspace_path),
+        group.is_system,
     )
     .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
     crate::db::set_member_workspace(&conn, &member_id, resolved.to_string_lossy().as_ref())
@@ -970,12 +974,26 @@ async fn get_message_channel_part_web(
      if settings.max_concurrent_runs < 1 || settings.run_timeout_seconds < 30 || settings.context_message_limit < 5 || !(0..=4).contains(&settings.max_delegation_depth) {
          return Err((StatusCode::BAD_REQUEST, "settings out of range".into()));
      }
+     if !(1..=30).contains(&settings.heartbeat_focus_seconds)
+         || !(1..=60).contains(&settings.heartbeat_background_seconds)
+     {
+         return Err((StatusCode::BAD_REQUEST, "heartbeat settings out of range".into()));
+     }
      let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
      for (key, value) in [
          ("max_concurrent_runs", settings.max_concurrent_runs),
          ("run_timeout_seconds", settings.run_timeout_seconds),
          ("context_message_limit", settings.context_message_limit),
          ("max_delegation_depth", settings.max_delegation_depth),
+         (
+             "heartbeat_auto",
+             if settings.heartbeat_auto { 1 } else { 0 },
+         ),
+         ("heartbeat_focus_seconds", settings.heartbeat_focus_seconds),
+         (
+             "heartbeat_background_seconds",
+             settings.heartbeat_background_seconds,
+         ),
      ] {
          conn.execute(
              "INSERT INTO app_settings(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
@@ -984,6 +1002,33 @@ async fn get_message_channel_part_web(
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
      }
      get_settings_from(&conn).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+ }
+
+ async fn health_web() -> Json<serde_json::Value> {
+     Json(serde_json::json!({ "ok": true, "service": "linlis-work-panel" }))
+ }
+
+ async fn metrics_latest_web(
+     State(state): State<Arc<AppState>>,
+ ) -> Result<Json<crate::metrics::Sample>, (StatusCode, String)> {
+     crate::metrics::latest_or_from_db(&state.db_path)
+         .map(Json)
+         .ok_or((StatusCode::NOT_FOUND, "no metrics sample yet".into()))
+ }
+
+ async fn list_active_runs_web(
+     State(state): State<Arc<AppState>>,
+     ClaimsExtractor(claims): ClaimsExtractor,
+     Path(group_id): Path<String>,
+ ) -> Result<Json<Vec<TaskRun>>, (StatusCode, String)> {
+     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
+     let runs = get_runs(&conn, &group_id).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     Ok(Json(
+         runs.into_iter()
+             .filter(|r| r.status == "queued" || r.status == "running")
+             .collect(),
+     ))
  }
 
  // === OCR ===
@@ -1656,7 +1701,8 @@ async fn list_orchestrations_web(
 pub fn build_router(state: Arc<AppState>) -> Router {
     let auth_routes = Router::new()
         .route("/api/auth/register", post(register))
-        .route("/api/auth/login", post(login));
+        .route("/api/auth/login", post(login))
+        .route("/api/health", get(health_web));
 
     let protected = Router::new()
         .route("/api/auth/verify", get(verify))
@@ -1695,11 +1741,13 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         )
          // Runs
          .route("/api/groups/{group_id}/runs", get(list_runs_web))
+         .route("/api/groups/{group_id}/runs/active", get(list_active_runs_web))
          .route("/api/runs/{run_id}/cancel", post(cancel_run_web))
          .route("/api/runs/{run_id}/retry", post(retry_run_web))
-         // Settings
+         // Settings / metrics
          .route("/api/settings", get(get_settings_web))
          .route("/api/settings", put(update_settings_web))
+         .route("/api/metrics/latest", get(metrics_latest_web))
          // OCR
          .route("/api/ocr", post(ocr_image_web))
          .route("/api/ocr/base64", post(ocr_base64_web))

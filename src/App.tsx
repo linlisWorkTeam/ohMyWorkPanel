@@ -18,7 +18,10 @@ import {
 import { defaultModelForAdapter, modelsForAdapter } from "./agentModels";
 import { canSubmitUserMember, chatbotSlotTaken, type UserAddMode } from "./memberForm";
 import { markdownToHtml } from "./markdownLite";
-import { isIgnorableWsKind, shouldResyncAfterWsEvent } from "./realtimeWs";
+import { detectMemoryPressure, formatHeartbeatLabel } from "./heartbeatPolicy";
+import { isIgnorableWsKind, shouldResyncAfterWsEvent, subscribeWsLinkState } from "./realtimeWs";
+import { releasingBannerText, type WsLinkState } from "./releasingState";
+import type { MetricsSample } from "./types";
 import {
   INITIAL_VISIBLE_MESSAGES,
   OLDER_PAGE_SIZE,
@@ -105,6 +108,14 @@ export function App() {
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [settings, setSettings] = useState<RuntimeSettings | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [wsLink, setWsLink] = useState<{ state: WsLinkState; elapsedMs: number }>({
+    state: "connected",
+    elapsedMs: 0,
+  });
+  const [metrics, setMetrics] = useState<MetricsSample | null>(null);
+  const [pageFocused, setPageFocused] = useState(
+    () => typeof document === "undefined" || document.visibilityState === "visible",
+  );
   const [showSidebar, setShowSidebar] = useState(false);
   const [sending, setSending] = useState(false);
   const [detecting, setDetecting] = useState<string | null>(null);
@@ -216,6 +227,34 @@ export function App() {
     return onUnauthorized(() => goLogin("登录已失效，请重新登录"));
   }, []);
 
+  useEffect(() => subscribeWsLinkState((state, elapsedMs) => setWsLink({ state, elapsedMs })), []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const onVis = () => setPageFocused(document.visibilityState === "visible");
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
+
+  useEffect(() => {
+    if (!showSettings) {
+      setMetrics(null);
+      return;
+    }
+    let cancelled = false;
+    const pull = () => {
+      void api.getMetricsLatest?.().then((m) => {
+        if (!cancelled) setMetrics(m);
+      }).catch(() => undefined);
+    };
+    pull();
+    const t = window.setInterval(pull, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(t);
+    };
+  }, [showSettings]);
+
   // Boot: no token → login; has token → bootstrap; failure → login.
   useEffect(() => {
     if (!requiresAuth) return;
@@ -297,12 +336,45 @@ export function App() {
         return;
       }
       if (shouldResyncAfterWsEvent(payload.kind)) {
-        if (activeGroupId) {
-          void refresh(activeGroupId).catch((reason) => {
+        void (async () => {
+          try {
+            const boot = await api.bootstrap();
+            setGroups(boot.groups);
+            const gid = activeGroupId || boot.groups[0]?.id;
+            if (gid) {
+              await refresh(gid);
+              try {
+                const active = await api.listActiveRuns?.(gid);
+                if (active) {
+                  setCurrent((prev) => {
+                    if (!prev || prev.group.id !== gid) return prev;
+                    const byId = new Map(prev.runs.map((r) => [r.id, r]));
+                    for (const r of active) byId.set(r.id, r);
+                    return { ...prev, runs: [...byId.values()] };
+                  });
+                }
+              } catch { /* optional */ }
+            }
+          } catch (reason) {
             if (isUnauthorizedError(reason)) goLogin("登录已失效，请重新登录");
             else setError(readError(reason));
-          });
-        }
+          }
+        })();
+        return;
+      }
+      if (payload.kind === "run_heartbeat" && payload.runId) {
+        setCurrent((previous) => {
+          if (!previous) return previous;
+          const idx = previous.runs.findIndex((r) => r.id === payload.runId);
+          if (idx < 0) return previous;
+          const runs = previous.runs.slice();
+          runs[idx] = {
+            ...runs[idx],
+            status: (payload.status as TaskRun["status"]) ?? runs[idx].status,
+            phaseUpdatedAt: Date.now(),
+          };
+          return { ...previous, runs };
+        });
         return;
       }
       const inCurrent = (previous: GroupState | null) =>
@@ -1075,12 +1147,58 @@ export function App() {
               </p>
             </div>
           )}
+          <div className="extension-settings">
+            <h3 className="settings-section-title">进程指标（主进程）</h3>
+            <p className="form-hint">
+              {metrics
+                ? `CPU ${metrics.cpuPct.toFixed(1)}% · RSS ${metrics.rssMib.toFixed(1)} MiB · 采样 ${new Date(metrics.ts).toLocaleTimeString()}`
+                : "打开设置后每 5s 拉取 /api/metrics/latest（后台仍 20s 落库）"}
+            </p>
+          </div>
           {isAdmin && settings ? (
             <form className="modal-form" onSubmit={saveSettings}>
               <NumberSetting label="每群并发任务" value={settings.maxConcurrentRuns} onChange={(value) => setSettings({ ...settings, maxConcurrentRuns: value })} min={1} max={8} />
               <NumberSetting label="任务超时（秒）" value={settings.runTimeoutSeconds} onChange={(value) => setSettings({ ...settings, runTimeoutSeconds: value })} min={30} max={7200} />
               <NumberSetting label="上下文消息数" value={settings.contextMessageLimit} onChange={(value) => setSettings({ ...settings, contextMessageLimit: value })} min={5} max={200} />
               <NumberSetting label="管理员最大派生层级" value={settings.maxDelegationDepth} onChange={(value) => setSettings({ ...settings, maxDelegationDepth: value })} min={0} max={4} />
+              <h3 className="settings-section-title">心跳</h3>
+              <label className="settings-check">
+                <input
+                  type="checkbox"
+                  checked={settings.heartbeatAuto !== false}
+                  onChange={(e) => setSettings({ ...settings, heartbeatAuto: e.target.checked })}
+                />
+                Auto（聚焦/后台动态频率；不做 100ms HTTP 轮询）
+              </label>
+              <NumberSetting
+                label="聚焦心跳（秒）"
+                value={settings.heartbeatFocusSeconds ?? 1}
+                onChange={(value) => setSettings({ ...settings, heartbeatFocusSeconds: value })}
+                min={1}
+                max={30}
+              />
+              <NumberSetting
+                label="非聚焦心跳（秒）"
+                value={settings.heartbeatBackgroundSeconds ?? 5}
+                onChange={(value) => setSettings({ ...settings, heartbeatBackgroundSeconds: value })}
+                min={1}
+                max={60}
+              />
+              <p className="form-hint">
+                {formatHeartbeatLabel({
+                  focused: pageFocused,
+                  settings: {
+                    heartbeatAuto: settings.heartbeatAuto !== false,
+                    heartbeatFocusSeconds: settings.heartbeatFocusSeconds ?? 1,
+                    heartbeatBackgroundSeconds: settings.heartbeatBackgroundSeconds ?? 5,
+                  },
+                  memoryPressure: detectMemoryPressure(
+                    typeof navigator !== "undefined"
+                      ? (navigator as Navigator & { deviceMemory?: number }).deviceMemory
+                      : undefined,
+                  ),
+                })}
+              </p>
               <button className="primary-wide" type="submit">保存设置</button>
             </form>
           ) : (
@@ -1088,6 +1206,11 @@ export function App() {
           )}
         </div>
       </Modal>
+    )}
+    {releasingBannerText(wsLink.state, wsLink.elapsedMs) && (
+      <div className="error-toast" style={{ bottom: error ? 64 : 16 }}>
+        <span>{releasingBannerText(wsLink.state, wsLink.elapsedMs)}</span>
+      </div>
     )}
     {error && <div className="error-toast"><span>{error}</span><button onClick={() => setError(null)}>×</button></div>}
   </main>;

@@ -155,6 +155,7 @@ pub fn init_db(path: &Path) -> AppResult<()> {
         "ALTER TABLE task_runs ADD COLUMN phase_updated_at INTEGER",
         "ALTER TABLE groups ADD COLUMN group_kind TEXT NOT NULL DEFAULT 'project'",
         "ALTER TABLE groups ADD COLUMN archived INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE groups ADD COLUMN is_system INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE members ADD COLUMN auth_user_id TEXT",
         "ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0",
     ] {
@@ -189,6 +190,9 @@ pub fn init_db(path: &Path) -> AppResult<()> {
         ("run_timeout_seconds", "900"),
         ("context_message_limit", "40"),
         ("max_delegation_depth", "2"),
+        ("heartbeat_auto", "1"),
+        ("heartbeat_focus_seconds", "1"),
+        ("heartbeat_background_seconds", "5"),
     ] {
         connection
             .execute(
@@ -253,13 +257,17 @@ pub fn ensure_default_seed(connection: &Connection) -> AppResult<()> {
         )
         .unwrap_or(0);
     if group_exists > 0 {
+        let _ = connection.execute(
+            "UPDATE groups SET is_system=1 WHERE id=?1",
+            params![GROUP_ID],
+        );
         return Ok(());
     }
 
     connection
         .execute(
-            "INSERT INTO groups(id, name, workspace_path, owner_member_id, admin_member_id, created_at)
-             VALUES(?1, 'LinlisWorkPanel', ?2, ?3, ?4, ?5)",
+            "INSERT INTO groups(id, name, workspace_path, owner_member_id, admin_member_id, created_at, is_system)
+             VALUES(?1, 'LinlisWorkPanel', ?2, ?3, ?4, ?5, 1)",
             params![GROUP_ID, WORKSPACE, OWNER_MEMBER_ID, CODEX_MEMBER_ID, created_at],
         )
         .map_err(|e| e.to_string())?;
@@ -357,7 +365,7 @@ ALTER TABLE members_new RENAME TO members;
     result
 }
 
-pub const GROUP_SELECT: &str = "SELECT id,name,workspace_path,owner_member_id,admin_member_id,created_at,COALESCE(announcement,''),announcement_updated_at,COALESCE(group_kind,'project'),COALESCE(archived,0) FROM groups";
+pub const GROUP_SELECT: &str = "SELECT id,name,workspace_path,owner_member_id,admin_member_id,created_at,COALESCE(announcement,''),announcement_updated_at,COALESCE(group_kind,'project'),COALESCE(archived,0),COALESCE(is_system,0) FROM groups";
 
 pub fn group_from_row(row: &Row<'_>) -> rusqlite::Result<Group> {
     Ok(Group {
@@ -373,7 +381,23 @@ pub fn group_from_row(row: &Row<'_>) -> rusqlite::Result<Group> {
             .get::<_, Option<String>>(8)?
             .unwrap_or_else(|| "project".into()),
         archived: row.get::<_, i64>(9).unwrap_or(0) != 0,
+        is_system: row.get::<_, i64>(10).unwrap_or(0) != 0,
     })
+}
+
+/// Reject deleting built-in system groups (guard for future delete APIs).
+pub fn assert_group_deletable(connection: &Connection, group_id: &str) -> AppResult<()> {
+    let is_system: i64 = connection
+        .query_row(
+            "SELECT COALESCE(is_system,0) FROM groups WHERE id=?1",
+            params![group_id],
+            |r| r.get(0),
+        )
+        .map_err(|_| format!("群不存在：{group_id}"))?;
+    if is_system != 0 {
+        return Err("系统种子群不可删除".into());
+    }
+    Ok(())
 }
 
 pub fn member_from_row(row: &Row<'_>) -> rusqlite::Result<Member> {
@@ -901,11 +925,25 @@ pub fn get_settings_from(connection: &Connection) -> AppResult<RuntimeSettings> 
             .parse::<i64>()
             .map_err(|_| format!("设置 {key} 不是有效整数"))
     };
+    let get_or = |key: &str, default: i64| -> i64 {
+        connection
+            .query_row(
+                "SELECT value FROM app_settings WHERE key=?1",
+                params![key],
+                |r| r.get::<_, String>(0),
+            )
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(default)
+    };
     Ok(RuntimeSettings {
         max_concurrent_runs: get("max_concurrent_runs")?,
         run_timeout_seconds: get("run_timeout_seconds")?,
         context_message_limit: get("context_message_limit")?,
         max_delegation_depth: get("max_delegation_depth")?,
+        heartbeat_auto: get_or("heartbeat_auto", 1) != 0,
+        heartbeat_focus_seconds: get_or("heartbeat_focus_seconds", 1).max(1),
+        heartbeat_background_seconds: get_or("heartbeat_background_seconds", 5).max(1),
     })
 }
 
@@ -1537,5 +1575,22 @@ mod tests {
         let agent_hit =
             resolve_target_agent_ids(&conn, "g", Some("admin"), &["admin".into()]).unwrap();
         assert_eq!(agent_hit, vec!["admin".to_string()]);
+    }
+
+    #[test]
+    fn seed_group_is_system_and_not_deletable() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        init_db(file.path()).unwrap();
+        let conn = open_db(file.path()).unwrap();
+        let seed = get_group(&conn, "seed-group-workpanel").unwrap();
+        assert!(seed.is_system);
+        let err = assert_group_deletable(&conn, "seed-group-workpanel").unwrap_err();
+        assert!(err.contains("不可删除"));
+        conn.execute(
+            "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at,is_system) VALUES('g2','g2','.','u',NULL,1,0)",
+            [],
+        )
+        .unwrap();
+        assert!(assert_group_deletable(&conn, "g2").is_ok());
     }
 }
