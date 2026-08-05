@@ -1,3 +1,15 @@
+use chrono::{Local, TimeZone};
+
+/// Format a history line with local timestamp so chatbot can reason about "刚才/今天".
+/// `created_at_ms` is epoch millis (same as `db::now()`).
+pub fn format_history_line(display_name: &str, content: &str, created_at_ms: i64) -> String {
+    let ts = match Local.timestamp_millis_opt(created_at_ms) {
+        chrono::LocalResult::Single(dt) => dt.format("%Y-%m-%d %H:%M").to_string(),
+        _ => created_at_ms.to_string(),
+    };
+    format!("[{ts}] {display_name}: {content}")
+}
+
 /// Resolve how many recent messages to load into the prompt window.
 /// - Project agents: `project_limit` (default 40).
 /// - Chat groups or chatbot members: `chat_limit` (default 12) — smaller native window, no summary/RAG.
@@ -28,6 +40,15 @@ pub fn effective_history_char_budget(group_kind: &str, agent_kind: &str) -> usiz
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn history_line_includes_timestamp() {
+        // 2026-08-05 08:00:00 UTC → local may differ; assert bracket + name + body shape.
+        let line = format_history_line("Alice", "你好", 1_786_204_800_000);
+        assert!(line.contains("Alice: 你好"), "{line}");
+        assert!(line.starts_with('['), "{line}");
+        assert!(line.contains(']'), "{line}");
+    }
 
     #[test]
     fn project_agent_uses_project_limit() {

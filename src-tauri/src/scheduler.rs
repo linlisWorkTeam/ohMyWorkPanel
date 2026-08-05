@@ -285,13 +285,13 @@ fn get_execution_context(state: &SchedulerState, run_id: &str) -> AppResult<Exec
     let mut line_parts: Vec<String> = history
         .iter()
         .map(|m| {
-            format!(
-                "{}: {}",
+            crate::context_policy::format_history_line(
                 display
                     .get(&m.sender_member_id)
-                    .cloned()
-                    .unwrap_or_else(|| "成员".into()),
-                truncate_chars(&parts_to_plain_text(&m.content), 2_000)
+                    .map(String::as_str)
+                    .unwrap_or("成员"),
+                &truncate_chars(&parts_to_plain_text(&m.content), 2_000),
+                m.created_at,
             )
         })
         .collect();
