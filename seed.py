@@ -1,5 +1,4 @@
 ﻿import uuid, sqlite3, time
-conn.executescript(open(" " /AI/LinlisWorkPanel/src-tauri/src/db.rs\).read().split(pub fn init_db)[1].split(pub fn group_from_row)[0])
 
 def id():
     return str(uuid.uuid4())
