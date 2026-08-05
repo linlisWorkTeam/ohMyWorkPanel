@@ -439,6 +439,24 @@ export function App() {
     return () => { cancelled = true; };
   }, [showAddMember, current?.group.id, newMember.kind, newMember.userAddMode]);
 
+  const reloadExtensions = async (groupId?: string) => {
+    const id = groupId ?? current?.group.id;
+    if (!id) return;
+    try {
+      setExtensions(await api.listGroupExtensions(id));
+    } catch {
+      setExtensions([]);
+    }
+  };
+
+  useEffect(() => {
+    if (!current?.group.id) {
+      setExtensions([]);
+      return;
+    }
+    void reloadExtensions(current.group.id);
+  }, [current?.group.id]);
+
   const handleMessageScroll = () => {
     const node = messageListRef.current;
     if (!node) return;
@@ -606,24 +624,6 @@ export function App() {
     }
   };
   const selectMention = (member: Member) => setComposer((value) => value.replace(/@([^\s@]*)$/u, `@${member.displayName} `));
-
-  const reloadExtensions = async (groupId?: string) => {
-    const id = groupId ?? current?.group.id;
-    if (!id) return;
-    try {
-      setExtensions(await api.listGroupExtensions(id));
-    } catch {
-      setExtensions([]);
-    }
-  };
-
-  useEffect(() => {
-    if (!current?.group.id) {
-      setExtensions([]);
-      return;
-    }
-    void reloadExtensions(current.group.id);
-  }, [current?.group.id]);
 
   const togglePanellive = async (enabled: boolean) => {
     if (!current) return;

@@ -10,8 +10,9 @@ export function liveTabEnabled(ext: ExtensionStatus | null | undefined): boolean
 
 export function liveEntryUrl(ext: ExtensionStatus | null | undefined): string | null {
   if (!ext?.enabled) return null;
-  const tab = ext.tabs.find((t) => t.id === "live" || t.route === "tab://live");
-  if (!tab) return null;
+  const tab = ext.tabs?.find((t) => t.id === "live" || t.route === "tab://live");
+  if (!tab?.entry) return null;
   const entry = tab.entry.startsWith("/") ? tab.entry : `/${tab.entry}`;
-  return `${ext.baseUrl.replace(/\/$/, "")}${entry}`;
+  const base = (ext.baseUrl ?? "").replace(/\/$/, "");
+  return base ? `${base}${entry}` : null;
 }

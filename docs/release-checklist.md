@@ -68,5 +68,6 @@ curl -sS -o /dev/null -w "css=%{http_code}\n" "http://127.0.0.1:${PORT}${CSS}"
 | 页面在但 Agent 输出不实时 | HTTPS 页用了 `ws://`，被混合内容拦截 | 域名入口测 `wss`；见 commit `7d932c8` |
 | 发版后白屏 / chunk 404 | HTML 与 `/assets/*` 哈希不一致或 SW 旧缓存 | §F 校验 JS/CSS 200；SW 对 assets 为 network-first |
 | 单组件异常整页挂 | 无 ErrorBoundary 兜底 | Console 查堆栈；修 render 空指针后再发 |
+| 登录后整页白屏（`#root` 空）+ Console `React #310` | 鉴权 early return（checking/login）**之后**又挂了 `useEffect`/`useState`，login→ready 钩子数量变化 | 所有 hooks 必须放在 auth early return **之前**（见 `App.tsx` 注释） |
 
 详见 epitaph：`docs/epitaph/2026-08-05-frontend-outage-lessons.md`。

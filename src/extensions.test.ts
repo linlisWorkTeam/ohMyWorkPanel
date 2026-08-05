@@ -31,4 +31,9 @@ describe("extensions helpers", () => {
     expect(liveTabEnabled(ext({ enabled: false }))).toBe(false);
     expect(liveEntryUrl(ext({ enabled: false }))).toBeNull();
   });
+
+  it("tolerates missing tabs/baseUrl without throwing", () => {
+    expect(liveEntryUrl(ext({ tabs: undefined as unknown as ExtensionStatus["tabs"] }))).toBeNull();
+    expect(liveEntryUrl(ext({ baseUrl: "" }))).toBeNull();
+  });
 });
