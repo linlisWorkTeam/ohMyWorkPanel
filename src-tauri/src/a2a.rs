@@ -107,7 +107,11 @@ pub fn validate_events_payload(payload: &Value) -> Result<(), String> {
 }
 
 /// Dispatch control-plane skill; may call PanelLive upstream (server-side 127.0.0.1).
-pub fn dispatch_live_skill(envelope: &A2aEnvelope) -> Result<A2aDispatchResult, String> {
+/// When `sched` is provided, updates in-memory Live session marks for the group.
+pub fn dispatch_live_skill(
+    envelope: &A2aEnvelope,
+    sched: Option<&crate::scheduler::SchedulerState>,
+) -> Result<A2aDispatchResult, String> {
     validate_live_skill(&envelope.skill)?;
     if let Some(reason) = payload_contains_forbidden_media(&envelope.payload) {
         return Err(reason.into());
@@ -130,6 +134,9 @@ pub fn dispatch_live_skill(envelope: &A2aEnvelope) -> Result<A2aDispatchResult, 
                 .and_then(|x| x.as_str())
                 .map(|s| s.to_string())
                 .or_else(|| envelope.session_id.clone());
+            if let Some(s) = sched {
+                s.mark_live_started(&envelope.group_id);
+            }
             ("Live session started via PanelLive".into(), sid)
         }
         "live.session.stop" | "live.session.cancel" => {
@@ -143,6 +150,9 @@ pub fn dispatch_live_skill(envelope: &A2aEnvelope) -> Result<A2aDispatchResult, 
                 crate::extensions::http_post_json_local(host, port, "/v1/session/cancel", &body)?;
             if code != 200 {
                 return Err(format!("PanelLive session/cancel HTTP {code}: {resp}"));
+            }
+            if let Some(s) = sched {
+                s.mark_live_stopped(&envelope.group_id);
             }
             ("Live session cancel accepted (stop→cancel)".into(), Some(sid))
         }
@@ -204,7 +214,7 @@ mod tests {
             source: None,
             target: None,
         };
-        let err = dispatch_live_skill(&env).unwrap_err();
+        let err = dispatch_live_skill(&env, None).unwrap_err();
         assert!(err.contains("禁止"));
     }
 
@@ -218,7 +228,7 @@ mod tests {
             source: Some("panellive".into()),
             target: Some("chatbot".into()),
         };
-        let ok = dispatch_live_skill(&env).unwrap();
+        let ok = dispatch_live_skill(&env, None).unwrap();
         assert!(ok.accepted);
     }
 

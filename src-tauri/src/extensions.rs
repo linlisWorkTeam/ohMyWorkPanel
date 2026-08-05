@@ -10,9 +10,6 @@ use std::time::Duration;
 
 pub const PANELLIVE_ID: &str = "panellive";
 
-/// Fallback when `GET /v1/llm-prompt` is unreachable (must match WorkPanelLive docs).
-pub const PANELLIVE_LLM_PROMPT_FALLBACK: &str = "【PanelLive 语音模式 · 强制】你的最终回复将送给 CosyVoice TTS。每次最终输出必须严格少于 50 个汉字（含标点按字计；勿超过 50）。只说结论与必要动作，禁止长文、列表堆砌、代码块、多段解释。若信息较多，只保留最关键一句，其余留到下一轮语音。";
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExtensionManifest {
@@ -269,64 +266,6 @@ pub fn panellive_token() -> String {
     std::env::var("LINLIS_PANELLIVE_TOKEN").unwrap_or_else(|_| "panellive-dev-token".into())
 }
 
-/// Parse `GET /v1/llm-prompt` body (`{"prompt":"..."}` or plain text).
-pub fn parse_llm_prompt_response(body: &str) -> Option<String> {
-    let trimmed = body.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-    if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
-        if let Some(p) = v
-            .get("prompt")
-            .and_then(|x| x.as_str())
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-        {
-            return Some(p.to_string());
-        }
-        return None;
-    }
-    Some(trimmed.to_string())
-}
-
-pub fn fetch_panellive_llm_prompt(port: u16) -> String {
-    match http_get_local("127.0.0.1", port, "/v1/llm-prompt") {
-        Ok((200, body)) => parse_llm_prompt_response(&body)
-            .unwrap_or_else(|| PANELLIVE_LLM_PROMPT_FALLBACK.to_string()),
-        _ => PANELLIVE_LLM_PROMPT_FALLBACK.to_string(),
-    }
-}
-
-/// ChatBot or the group's admin member when Live is on.
-pub fn should_inject_live_short_reply(
-    agent_kind: &str,
-    agent_id: &str,
-    admin_member_id: Option<&str>,
-) -> bool {
-    agent_kind == "chatbot" || admin_member_id == Some(agent_id)
-}
-
-/// Non-empty suffix for prompts when PanelLive is enabled for the group.
-pub fn live_short_reply_block(
-    conn: &Connection,
-    group_id: &str,
-    agent_kind: &str,
-    agent_id: &str,
-    admin_member_id: Option<&str>,
-) -> String {
-    if !should_inject_live_short_reply(agent_kind, agent_id, admin_member_id) {
-        return String::new();
-    }
-    if !is_extension_enabled(conn, group_id, PANELLIVE_ID).unwrap_or(false) {
-        return String::new();
-    }
-    let port = load_panellive_manifest(&panellive_root())
-        .map(|m| panellive_upstream_port(&m))
-        .unwrap_or(8790);
-    let prompt = fetch_panellive_llm_prompt(port);
-    format!("\n\n{prompt}\n")
-}
-
 pub fn list_group_extensions(conn: &Connection, group_id: &str) -> AppResult<Vec<ExtensionStatus>> {
     ensure_extensions_table(conn)?;
     let root = panellive_root();
@@ -411,32 +350,4 @@ mod tests {
         assert!(!is_extension_enabled(&conn, "g1", PANELLIVE_ID).unwrap());
     }
 
-    #[test]
-    fn parse_llm_prompt_json_and_plain() {
-        let json = r#"{"mode":"panellive","prompt":"短回复强制","ttsMaxChars":50}"#;
-        assert_eq!(parse_llm_prompt_response(json).as_deref(), Some("短回复强制"));
-        assert_eq!(
-            parse_llm_prompt_response("  纯文本提示  ").as_deref(),
-            Some("纯文本提示")
-        );
-        assert!(parse_llm_prompt_response(r#"{"ttsMaxChars":50}"#).is_none());
-        assert!(should_inject_live_short_reply("chatbot", "c1", None));
-        assert!(should_inject_live_short_reply("agent", "a1", Some("a1")));
-        assert!(!should_inject_live_short_reply("agent", "a2", Some("a1")));
-    }
-
-    #[test]
-    fn live_block_empty_when_extension_off() {
-        let file = tempfile::NamedTempFile::new().unwrap();
-        init_db(file.path()).unwrap();
-        let conn = open_db(file.path()).unwrap();
-        ensure_extensions_table(&conn).unwrap();
-        let block = live_short_reply_block(&conn, "g1", "chatbot", "bot", None);
-        assert!(block.is_empty());
-        set_extension_enabled(&conn, "g1", PANELLIVE_ID, true).unwrap();
-        let block = live_short_reply_block(&conn, "g1", "chatbot", "bot", None);
-        assert!(block.contains("50") || block.contains("PanelLive"));
-        let skip = live_short_reply_block(&conn, "g1", "agent", "other", Some("admin"));
-        assert!(skip.is_empty());
-    }
 }

@@ -66,6 +66,7 @@ async fn main() {
         event_sender: EventSender::Web(tx.clone()),
         cancellations: Arc::new(Mutex::new(HashMap::new())),
         scheduling_groups: Arc::new(Mutex::new(HashSet::new())),
+        live_sessions: Arc::new(Mutex::new(HashMap::new())),
     };
 
     let state = Arc::new(web::AppState {

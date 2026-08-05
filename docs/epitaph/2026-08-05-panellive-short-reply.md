@@ -5,20 +5,22 @@
 
 ## What
 
-Live（`group_extensions.panellive=1`）时，平台向 ChatBot / 管理员 Agent 注入 <50 汉字约束：
+对齐 `docs/superpowers/plans/2026-08-05-live-short-reply-injection.md`：
 
-- 拉取 `GET http://127.0.0.1:8790/v1/llm-prompt`
-- 失败用 `PANELLIVE_LLM_PROMPT_FALLBACK`
-- ChatBot system + Agent 全量/续接 prompt
+- **T1** `SchedulerState.live_sessions`：`live.session.start/stop/cancel` 钩子
+- **T2** `live_prompt.rs`：1.5s 超时 + 60s 缓存 + fallback
+- **T3** 仅会话激活群 + chatbot/管理员 Agent 注入
+
+扩展 enable ≠ 会话激活；关 session 后恢复长回复。
 
 ## Files
 
-- `src-tauri/src/extensions.rs` — fetch/parse/inject helpers + tests
-- `src-tauri/src/scheduler.rs` — wire-up
+- `src-tauri/src/live_prompt.rs`
+- `src-tauri/src/a2a.rs` / `scheduler.rs` / `web.rs`
 - `docs/panellive-platform-requirements.md` §6
 
 ## Risks
 
-- 非管理员 CLI Agent 不注入（按契约）
-- TTS 侧截断在 PanelLive；平台只负责提示词
-- `COSYVOICE_VOICE` / Key 仍由 PanelLive 环境保管，勿入库
+- 内存态重启丢失（与 PanelLive 会话一致）
+- TTS 硬截断在 PanelLive；平台只注入提示词
+- Key / COSYVOICE_VOICE 勿入库

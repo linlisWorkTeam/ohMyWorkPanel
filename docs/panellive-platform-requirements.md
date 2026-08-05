@@ -61,7 +61,12 @@ Live 开启时，平台必须给 ChatBot / 管理员 Agent 注入短回复约束
 
 详见 `/AI/WorkPanelLive/docs/llm-prompt-panellive.md`。
 
-**平台实现（已落地）**：`extensions::live_short_reply_block` — 群 `panellive` 已 enable 时，对 `kind=chatbot` 或 `admin_member_id` 对应成员拉取 `GET :8790/v1/llm-prompt`（失败用文档 fallback），注入 Agent 任务提示 / ChatBot system；ChatBot Live 时 `max_tokens=128`。
+**平台实现（已落地，对齐方案 T1–T3）**：
+
+- **Live 会话态**：`SchedulerState.live_sessions` — `live.session.start` 置位 / `stop|cancel` 清除（内存；重启即清）
+- **提示词**：`live_prompt.rs` — `GET /v1/llm-prompt`（1.5s 超时、60s 缓存、内置 fallback；端口来自 manifest）
+- **注入条件**：仅 **会话激活** 的群 + chatbot / 群管理员 Agent；ChatBot Live 时 `max_tokens=128`
+- 方案：`docs/superpowers/plans/2026-08-05-live-short-reply-injection.md`
 
 ## 7. 非目标
 

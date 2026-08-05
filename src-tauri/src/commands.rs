@@ -36,6 +36,7 @@ fn to_scheduler(state: &AppState, app: &AppHandle) -> SchedulerState {
         event_sender: EventSender::Tauri(app.clone()),
         cancellations: state.cancellations.clone(),
         scheduling_groups: state.scheduling_groups.clone(),
+        live_sessions: state.live_sessions.clone(),
     }
 }
 

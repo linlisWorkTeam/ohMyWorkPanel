@@ -30,6 +30,29 @@ pub struct SchedulerState {
     pub event_sender: EventSender,
     pub cancellations: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
     pub scheduling_groups: Arc<Mutex<std::collections::HashSet<String>>>,
+    /// In-memory Live sessions: group_id → started_at (ms). Cleared on process restart.
+    pub live_sessions: Arc<Mutex<HashMap<String, i64>>>,
+}
+
+impl SchedulerState {
+    pub fn is_live_active(&self, group_id: &str) -> bool {
+        self.live_sessions
+            .lock()
+            .map(|m| m.contains_key(group_id))
+            .unwrap_or(false)
+    }
+
+    pub fn mark_live_started(&self, group_id: &str) {
+        if let Ok(mut m) = self.live_sessions.lock() {
+            m.insert(group_id.to_string(), now());
+        }
+    }
+
+    pub fn mark_live_stopped(&self, group_id: &str) {
+        if let Ok(mut m) = self.live_sessions.lock() {
+            m.remove(group_id);
+        }
+    }
 }
 
 static EVENT_SEQ: AtomicU64 = AtomicU64::new(1);
@@ -374,9 +397,8 @@ fn get_execution_context(state: &SchedulerState, run_id: &str) -> AppResult<Exec
     } else { None };
 
     let announcement_block = format_announcement_block(&group.announcement, 4096);
-    let live_block = crate::extensions::live_short_reply_block(
-        &conn,
-        &group.id,
+    let live_block = crate::live_prompt::live_prompt_suffix(
+        state.is_live_active(&group.id),
         &agent.kind,
         &agent.id,
         group.admin_member_id.as_deref(),
@@ -466,9 +488,8 @@ async fn run_agent(
             context.root_task.clone()
         };
         let ann = truncate_chars(context.group.announcement.trim(), 800);
-        let live_block = crate::extensions::live_short_reply_block(
-            &conn,
-            &context.group.id,
+        let live_block = crate::live_prompt::live_prompt_suffix(
+            state.is_live_active(&context.group.id),
             &context.agent.kind,
             &context.agent.id,
             context.group.admin_member_id.as_deref(),
@@ -719,7 +740,7 @@ fn short_resume_prompt(context: &ExecutionContext) -> String {
     let announcement_block = format_announcement_block(&context.group.announcement, 2048);
     // Resume sessions keep the Live constraint if the prepared prompt had it.
     let live_block = if context.prompt.contains("【PanelLive") {
-        format!("\n\n{}\n", crate::extensions::PANELLIVE_LLM_PROMPT_FALLBACK)
+        format!("\n\n{}", crate::live_prompt::PANELLIVE_LLM_PROMPT_FALLBACK)
     } else {
         String::new()
     };

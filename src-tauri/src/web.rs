@@ -1762,7 +1762,7 @@ async fn dispatch_a2a_web(
     if envelope.source.is_none() {
         envelope.source = Some(claims.username.clone());
     }
-    crate::a2a::dispatch_live_skill(&envelope)
+    crate::a2a::dispatch_live_skill(&envelope, Some(&state.sched))
         .map(Json)
         .map_err(|e| {
             let status = if e.contains("禁止") {

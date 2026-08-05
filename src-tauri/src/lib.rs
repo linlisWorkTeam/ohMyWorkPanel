@@ -10,6 +10,7 @@ mod context_policy;
 pub mod db;
 pub mod presence;
 pub mod extensions;
+pub mod live_prompt;
 pub mod fs_browse;
 pub mod keepalive;
 pub mod memory;
@@ -38,6 +39,7 @@ pub struct AppState {
     pub db_path: PathBuf,
     pub cancellations: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
     pub scheduling_groups: Arc<Mutex<HashSet<String>>>,
+    pub live_sessions: Arc<Mutex<HashMap<String, i64>>>,
 }
 
 #[cfg(feature = "gui")]
@@ -56,6 +58,7 @@ pub fn run() {
                 db_path,
                 cancellations: Arc::new(Mutex::new(HashMap::new())),
                 scheduling_groups: Arc::new(Mutex::new(HashSet::new())),
+                live_sessions: Arc::new(Mutex::new(HashMap::new())),
             });
             Ok(())
         })
