@@ -33,8 +33,9 @@ Web 服务（本仓库灰度/生产常用形态）：
 ```bash
 # 开发构建后由 systemd 槽位托管；见 scripts/deploy-canary.sh
 pnpm run test:gate
-./scripts/deploy-canary.sh   # :8081 + data-canary
-./scripts/promote-canary.sh  # 晋升 :8080，不覆盖生产 DB
+./scripts/deploy-canary.sh   # :8081 + data-canary（不动生产）
+./scripts/approve-prod-release.sh "who: why"  # root 一次性批准（15 分钟）
+./scripts/promote-canary.sh  # 晋升 :8080，不覆盖生产 DB（无批准则拒绝）
 ```
 
 Web API 路由索引：[`docs/api-web.md`](docs/api-web.md)。贡献约定：[`AGENTS.md`](AGENTS.md)。

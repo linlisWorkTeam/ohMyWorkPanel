@@ -22,22 +22,28 @@ description: >-
 ## Workflow
 
 ```bash
-# 灰度（低内存）
+# 灰度（低内存）— Agent 默认可做的上限
 export CARGO_BUILD_JOBS=1 NODE_OPTIONS=--max-old-space-size=1024
 ./scripts/deploy-canary.sh          # or: skip if already built
-# 测通 :8081 后
+# 测通 :8081 后 —— 以下两步必须人类 root 批准，Agent 不得自行执行 promote
+./scripts/approve-prod-release.sh "linli: promote after canary OK"
 ./scripts/promote-canary.sh         # bin+dist only; never touches prod DB
-# 紧急冻结
-./scripts/freeze-prod.sh from-running && systemctl restart linlis-work-panel
+# 紧急冻结（同样需要批准令牌）
+./scripts/approve-prod-release.sh "linli: emergency freeze"
+./scripts/freeze-prod.sh from-running
+# restart prod 也须人类明确授权
 ```
 
 ## Hard rules
 
+- **生产发版门禁**：无 `/opt/linlis-workpanel/PROD_APPROVE`（由 `approve-prod-release.sh` 写入，15 分钟一次性）则 `promote`/`freeze` 直接拒绝。Agent 不得创建该文件或设 `LINLIS_ALLOW_PROD_WITHOUT_APPROVAL`。
+- `deploy-canary` 只同步 canary unit、只重启 canary；禁止改写 prod unit、禁止杀死 `:18888`
+- Canary Codex `:18889`；prod Codex `:18888`（勿共用）
 - Prod must not serve workspace `dist/` or `target/release`
 - Never share data dirs between prod and canary
 - Promote never overwrites `/AI/LinlisWorkPanel/data`
 - Keep group **LinlisWorkPanel** + `root`/`root` on prod
-- Sync `deploy/systemd/*.service` after unit edits; use `/bin/cp -f`
+- Sync canary unit after edits with `/bin/cp -f`；prod unit 变更须单独批准
 
 ## Verify
 

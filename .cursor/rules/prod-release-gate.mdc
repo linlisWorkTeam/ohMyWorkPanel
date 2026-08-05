@@ -1,0 +1,31 @@
+---
+description: Production release gate — agents must not promote/freeze/restart prod without root approval
+alwaysApply: true
+---
+
+# 生产发版门禁（强制）
+
+测试/灰度（`:8081`）与生产（`:8080`）隔离。Agent **不得**在未获 root/管理员当轮明确授权时操控生产发版。
+
+## 禁止（无当轮人工批准时）
+
+- 运行 `./scripts/promote-canary.sh`、`./scripts/freeze-prod.sh`
+- `systemctl stop/restart` `linlis-work-panel.service` / `linlis-work-panel-proxy.service`
+- 改写 `/opt/linlis-workpanel/prod/**`、生产 data、`/etc/systemd/system/linlis-work-panel.service`
+- 创建 `/opt/linlis-workpanel/PROD_APPROVE` 或设置 `LINLIS_ALLOW_PROD_WITHOUT_APPROVAL=1` 来绕过门禁
+
+## 允许（无需生产批准）
+
+- `./scripts/deploy-canary.sh`（仅灰度；不得动生产 unit / `:18888`）
+- 读写工作区、canary 槽位、`data-canary`
+- 只读排查生产状态（`systemctl status` / `curl :8080`）
+
+## 合法生产晋升流程
+
+1. 灰度测通 `:8081`
+2. **人类 root** 执行：`./scripts/approve-prod-release.sh "<who>: <why>"`（15 分钟一次性）
+3. 再执行：`./scripts/promote-canary.sh`
+4. 确认输出含 `prod_http=200` / `proxy_http=200` 且生产 unit active
+
+用户只说「部署 / 发版 / 上线」而未写明 **promote 生产** → 只做 canary，并提醒需批准后才能晋升。
+用户明确说「批准 promote / 晋升生产」→ 仍须先有 `approve-prod-release.sh` 令牌（由用户本人或按其指示创建），Agent 不得伪造令牌。

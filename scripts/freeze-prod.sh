@@ -4,13 +4,17 @@
 #   from-running  — copy currently installed binary + live dist (default, safest freeze)
 #   from-workspace — copy workspace release build artifacts
 # Does NOT touch production SQLite data.
+# Requires root one-shot approval (see scripts/approve-prod-release.sh).
 set -euo pipefail
 source "$(dirname "$0")/release-layout.sh"
+# shellcheck source=lib/prod-approval.sh
+source "$(dirname "$0")/lib/prod-approval.sh"
 
 MODE="${1:-from-running}"
 RUNNING_BIN="${RUNNING_BIN:-/usr/local/bin/linlis-work-panel-server}"
 
 echo "==> freeze-prod: mode=${MODE} slot=${PROD_SLOT}"
+require_prod_approval "freeze-prod (write production slot artifacts)"
 mkdir -p "${PROD_SLOT}/bin" "${PROD_SLOT}/dist" "${PROD_SLOT}/meta"
 
 SRC_BIN=""
