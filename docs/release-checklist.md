@@ -71,7 +71,8 @@ curl -sS -o /dev/null -w "css=%{http_code}\n" "http://127.0.0.1:${PORT}${CSS}"
 
 | 现象 | 根因 | 检查 |
 |---|---|---|
-| 整站打不开 / 像前台崩了 | promote 时 `systemctl restart` 被中断，生产停在 dead | promote 后必须 `is-active`；用 stop+start |
+| 整站打不开 / 像前台崩了 | promote 时 `systemctl restart`/`stop` 后未及时 `start` 被中断，生产停在 dead | promote **全程勿中断**；用 stop→start；promote 后必须 `is-active`；看 journal 是否出现长间隔 Stopped→Started |
+| promote 后「挂了」几分钟 | Agent/SSH 会话在 `stop` 与 `start` 之间断开（本机仅 ~2G 内存时更易拖死） | 先拷贝产物再切服务；窗口内禁止并行重活；机器内存打满时先减负再 promote |
 | 页面在但 Agent 输出不实时 | HTTPS 页用了 `ws://`，被混合内容拦截 | 域名入口测 `wss`；见 commit `7d932c8` |
 | 发版后白屏 / chunk 404 | HTML 与 `/assets/*` 哈希不一致或 SW 旧缓存 | §F 校验 JS/CSS 200；SW 对 assets 为 network-first |
 | 单组件异常整页挂 | 无 ErrorBoundary 兜底 | Console 查堆栈；修 render 空指针后再发 |
