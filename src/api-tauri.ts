@@ -93,6 +93,8 @@ export const api = {
   clearLogs: () => invoke<void>("clear_logs"),
 
   listServerDir: (path: string) => invoke<DirListing>("list_server_dir", { path }),
+  createServerDir: (parent: string, name: string) =>
+    invoke<string>("create_server_dir", { parent, name }).then((path) => ({ path })),
   updateGroupWorkspace: (groupId: string, workspacePath: string) =>
     invoke<Group>("update_group_workspace_cmd", { groupId, workspacePath }),
   updateMemberWorkspace: (memberId: string, workspacePath: string) =>

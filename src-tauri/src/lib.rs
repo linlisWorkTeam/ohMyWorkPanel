@@ -99,6 +99,7 @@ pub fn run() {
             commands::count_logs,
             commands::clear_logs,
             commands::list_server_dir,
+            commands::create_server_dir,
             commands::update_group_workspace_cmd,
             commands::update_member_workspace_cmd,
             commands::get_group_announcement,

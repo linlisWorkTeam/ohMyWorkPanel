@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api } from "./api";
 import type { DirListing } from "./types";
 
@@ -12,6 +12,8 @@ export function ServerPathPicker({ value, onChange, onError }: Props) {
   const [listing, setListing] = useState<DirListing | null>(null);
   const [loading, setLoading] = useState(false);
   const [manual, setManual] = useState(value);
+  const [newFolder, setNewFolder] = useState("");
+  const [creating, setCreating] = useState(false);
 
   const load = useCallback(async (path: string) => {
     setLoading(true);
@@ -31,6 +33,31 @@ export function ServerPathPicker({ value, onChange, onError }: Props) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- initial browse only
 
   const crumbs = (listing?.path ?? "/").split("/").filter(Boolean);
+
+  const createFolder = async (event?: FormEvent) => {
+    event?.preventDefault();
+    const parent = (listing?.path ?? manual).trim();
+    const name = newFolder.trim();
+    if (!parent || parent === "/") {
+      onError?.("请先进入一个已有目录，再在其下新建文件夹。");
+      return;
+    }
+    if (!name) {
+      onError?.("请输入文件夹名称。");
+      return;
+    }
+    setCreating(true);
+    try {
+      const { path } = await api.createServerDir(parent, name);
+      setNewFolder("");
+      onChange(path);
+      await load(path);
+    } catch (e: unknown) {
+      onError?.(e instanceof Error ? e.message : String(e));
+    } finally {
+      setCreating(false);
+    }
+  };
 
   return (
     <div className="server-path-picker">
@@ -75,6 +102,22 @@ export function ServerPathPicker({ value, onChange, onError }: Props) {
           </button>
         ))}
       </div>
+      <form className="path-mkdir" onSubmit={(e) => void createFolder(e)}>
+        <input
+          value={newFolder}
+          onChange={(e) => setNewFolder(e.target.value)}
+          placeholder="新建文件夹名称"
+          disabled={creating || !listing?.path || listing.path === "/"}
+          maxLength={200}
+        />
+        <button
+          type="submit"
+          className="pm-btn sm"
+          disabled={creating || !newFolder.trim() || !listing?.path || listing.path === "/"}
+        >
+          {creating ? "创建中…" : "新建文件夹"}
+        </button>
+      </form>
       <div className="path-confirm">
         <code>{listing?.path ?? manual}</code>
         <button
@@ -85,7 +128,7 @@ export function ServerPathPicker({ value, onChange, onError }: Props) {
           使用此目录
         </button>
       </div>
-      <p className="form-hint">仅可选择服务器上已存在的目录（Agent 在该机器上执行）。</p>
+      <p className="form-hint">可浏览服务器目录，或在当前目录下新建文件夹后选用（Agent 在该机器上执行）。</p>
     </div>
   );
 }

@@ -38,6 +38,39 @@ pub struct DirListing {
     pub entries: Vec<DirEntryInfo>,
 }
 
+/// Validate a single path segment for a new folder (no separators / traversal).
+pub fn validate_folder_name(name: &str) -> Result<(), String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("文件夹名称不能为空。".into());
+    }
+    if name == "." || name == ".." {
+        return Err("非法的文件夹名称。".into());
+    }
+    if name.contains('/') || name.contains('\\') || name.contains('\0') {
+        return Err("文件夹名称不能包含路径分隔符。".into());
+    }
+    if name.len() > 200 {
+        return Err("文件夹名称过长。".into());
+    }
+    Ok(())
+}
+
+/// Create a new directory under an existing absolute server directory.
+/// Returns the canonical path of the created folder.
+pub fn create_server_dir(parent_raw: &str, name: &str) -> Result<PathBuf, String> {
+    let parent = resolve_server_dir(parent_raw)?;
+    validate_folder_name(name)?;
+    let name = name.trim();
+    let dest = parent.join(name);
+    if dest.exists() {
+        return Err(format!("已存在同名路径：{}", dest.display()));
+    }
+    std::fs::create_dir(&dest).map_err(|e| format!("创建文件夹失败：{e}"))?;
+    dest.canonicalize()
+        .map_err(|e| format!("创建成功但无法解析路径：{e}"))
+}
+
 /// List one level of a server directory. Empty/`/` starts at filesystem root.
 pub fn list_server_dir(raw: &str) -> Result<DirListing, String> {
     let trimmed = raw.trim();
@@ -132,5 +165,24 @@ mod tests {
         let listing = list_server_dir(dir.path().to_str().unwrap()).unwrap();
         assert!(listing.entries.iter().any(|e| e.name == "sub" && e.is_dir));
         assert!(listing.entries.iter().any(|e| e.name == "a.txt" && !e.is_dir));
+    }
+
+    #[test]
+    fn create_server_dir_makes_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let created =
+            create_server_dir(dir.path().to_str().unwrap(), "new-workspace").unwrap();
+        assert!(created.is_dir());
+        assert!(created.ends_with("new-workspace"));
+        let err = create_server_dir(dir.path().to_str().unwrap(), "new-workspace").unwrap_err();
+        assert!(err.contains("已存在"));
+    }
+
+    #[test]
+    fn rejects_unsafe_folder_names() {
+        assert!(validate_folder_name("").is_err());
+        assert!(validate_folder_name("..").is_err());
+        assert!(validate_folder_name("a/b").is_err());
+        assert!(validate_folder_name("ok-name").is_ok());
     }
 }

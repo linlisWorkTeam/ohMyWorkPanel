@@ -339,6 +339,11 @@ export const api = {
 
   listServerDir: (path: string) =>
     apiFetch<DirListing>(`/api/fs/list?path=${encodeURIComponent(path || "/")}`),
+  createServerDir: (parent: string, name: string) =>
+    apiFetch<{ path: string }>("/api/fs/mkdir", {
+      method: "POST",
+      body: JSON.stringify({ parent, name }),
+    }),
   updateGroupWorkspace: (groupId: string, workspacePath: string) =>
     apiFetch<Group>(`/api/groups/${groupId}/workspace`, {
       method: "PUT",

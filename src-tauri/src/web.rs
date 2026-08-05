@@ -1282,6 +1282,23 @@ async fn list_server_dir_web(
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct MkdirBody {
+    parent: String,
+    name: String,
+}
+
+async fn create_server_dir_web(
+    Json(body): Json<MkdirBody>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let path = fs_browse::create_server_dir(&body.parent, &body.name)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    Ok(Json(json!({
+        "path": path.to_string_lossy(),
+    })))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct AnnouncementBody {
     announcement: String,
 }
@@ -1437,6 +1454,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/api/groups/{id}/archive", put(put_group_archive_web))
         .route("/api/members/{member_id}/model", put(put_member_model_web))
         .route("/api/fs/list", get(list_server_dir_web))
+        .route("/api/fs/mkdir", post(create_server_dir_web))
         .route("/api/ops/release-status", get(ops_release_status_web))
         .route("/api/ops/job", get(ops_job_web))
         .route("/api/ops/test-gate", post(ops_test_gate_web))

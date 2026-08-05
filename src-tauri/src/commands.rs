@@ -817,6 +817,12 @@ pub fn list_server_dir(path: String) -> AppResult<crate::fs_browse::DirListing> 
 }
 
 #[tauri::command]
+pub fn create_server_dir(parent: String, name: String) -> AppResult<String> {
+    crate::fs_browse::create_server_dir(&parent, &name)
+        .map(|p| p.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
 pub fn update_group_workspace_cmd(
     group_id: String,
     workspace_path: String,
