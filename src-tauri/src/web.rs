@@ -625,6 +625,21 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, user_id: Opt
      login_username: Option<String>,
      login_password: Option<String>,
      existing_auth_user_id: Option<String>,
+     /// kind=user：创建待接受邀请占位成员 + 24h 链接
+     invite: Option<bool>,
+ }
+
+ #[derive(Debug, Serialize)]
+ #[serde(rename_all = "camelCase")]
+ struct MemberWithInvite {
+     #[serde(flatten)]
+     member: Member,
+     #[serde(skip_serializing_if = "Option::is_none")]
+     invite_token: Option<String>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+     invite_url: Option<String>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+     invite_expires_at: Option<i64>,
  }
 
  async fn list_joinable_users_web(
@@ -649,9 +664,13 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, user_id: Opt
      State(state): State<Arc<AppState>>,
      ClaimsExtractor(claims): ClaimsExtractor,
      Json(input): Json<AddMemberInputWeb>,
- ) -> Result<Json<Member>, (StatusCode, String)> {
+ ) -> Result<Json<MemberWithInvite>, (StatusCode, String)> {
      if !matches!(input.kind.as_str(), "user" | "agent" | "chatbot") || input.display_name.trim().is_empty() {
          return Err((StatusCode::BAD_REQUEST, "invalid member kind or name".into()));
+     }
+     let invite_mode = input.invite.unwrap_or(false);
+     if invite_mode && input.kind != "user" {
+         return Err((StatusCode::BAD_REQUEST, "仅用户成员支持邀请链接".into()));
      }
      let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
      require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
@@ -677,7 +696,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, user_id: Opt
          _ => "#5167f6".into(),
      });
      let mut auth_user_id: Option<String> = None;
-     if input.kind == "user" {
+     if input.kind == "user" && !invite_mode {
          auth_user_id = Some(
              crate::db::resolve_user_member_auth_id(
                  &conn,
@@ -772,15 +791,26 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, user_id: Opt
          )
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
      }
-     let member = conn
-         .query_row(
-             "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model,m.auth_user_id FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
-             params![member_id],
-             member_from_row,
-         )
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+     let member = crate::db::get_member(&conn, &member_id)
+         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     let mut invite_token = None;
+     let mut invite_url = None;
+     let mut invite_expires_at = None;
+     if invite_mode {
+         let inv = crate::db::create_group_invite(&conn, &input.group_id, &member_id, Some(&claims.sub))
+             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+         invite_url = Some(format!("/invite/{}", inv.token));
+         invite_token = Some(inv.token);
+         invite_expires_at = Some(inv.expires_at);
+     }
      logger::info(&conn, "member", &format!("member added: {} ({}) in group {}", input.display_name, input.kind, input.group_id), None);
-     Ok(Json(member))
+     web_emit(&state.tx, &input.group_id, "member_added", None, None, None, None);
+     Ok(Json(MemberWithInvite {
+         member,
+         invite_token,
+         invite_url,
+         invite_expires_at,
+     }))
  }
 
  async fn remove_member_web(
@@ -799,6 +829,63 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, user_id: Opt
      logger::warn(&conn, "member", &format!("member {} removed from group {}", member_id, group_id), None);
      web_emit(&state.tx, &group_id, "member_removed", None, None, None, None);
      Ok(Json(()))
+ }
+
+ async fn purge_member_web(
+     State(state): State<Arc<AppState>>,
+     ClaimsExtractor(claims): ClaimsExtractor,
+     Path((group_id, member_id)): Path<(String, String)>,
+ ) -> Result<Json<()>, (StatusCode, String)> {
+     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
+     crate::db::hard_delete_member(&conn, &group_id, &member_id).map_err(|e| {
+         let status = if e.contains("群主") {
+             StatusCode::FORBIDDEN
+         } else if e.contains("找不到") {
+             StatusCode::NOT_FOUND
+         } else {
+             StatusCode::BAD_REQUEST
+         };
+         (status, e)
+     })?;
+     logger::warn(
+         &conn,
+         "member",
+         &format!("member {} purged from group {}", member_id, group_id),
+         None,
+     );
+     web_emit(&state.tx, &group_id, "member_removed", None, None, None, None);
+     Ok(Json(()))
+ }
+
+ async fn preview_invite_web(
+     State(state): State<Arc<AppState>>,
+     Path(token): Path<String>,
+ ) -> Result<Json<crate::db::InvitePreview>, (StatusCode, String)> {
+     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     crate::db::preview_invite(&conn, &token)
+         .map(Json)
+         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+ }
+
+ async fn accept_invite_web(
+     State(state): State<Arc<AppState>>,
+     ClaimsExtractor(claims): ClaimsExtractor,
+     Path(token): Path<String>,
+ ) -> Result<Json<Member>, (StatusCode, String)> {
+     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     let member = crate::db::accept_invite(&conn, &token, &claims.sub).map_err(|e| {
+         let status = if e.contains("已是本群") {
+             StatusCode::CONFLICT
+         } else if e.contains("过期") || e.contains("无效") || e.contains("已使用") || e.contains("已移除") {
+             StatusCode::GONE
+         } else {
+             StatusCode::BAD_REQUEST
+         };
+         (status, e)
+     })?;
+     web_emit(&state.tx, &member.group_id, "member_updated", None, None, None, None);
+     Ok(Json(member))
  }
 
  async fn set_admin_web(
@@ -1779,7 +1866,8 @@ pub fn build_router(state: Arc<AppState>) -> Router {
     let auth_routes = Router::new()
         .route("/api/auth/register", post(register))
         .route("/api/auth/login", post(login))
-        .route("/api/health", get(health_web));
+        .route("/api/health", get(health_web))
+        .route("/api/invites/{token}", get(preview_invite_web));
 
     let protected = Router::new()
         .route("/api/auth/verify", get(verify))
@@ -1808,6 +1896,11 @@ pub fn build_router(state: Arc<AppState>) -> Router {
          // Members
          .route("/api/groups/{group_id}/members", post(add_member_web))
          .route("/api/groups/{group_id}/members/{member_id}", delete(remove_member_web))
+         .route(
+             "/api/groups/{group_id}/members/{member_id}/purge",
+             delete(purge_member_web),
+         )
+         .route("/api/invites/{token}/accept", post(accept_invite_web))
          .route("/api/users/joinable", get(list_joinable_users_web))
          .route("/api/members/{member_id}/workspace", put(put_member_workspace_web))
          .route("/api/groups/{group_id}/admin", put(set_admin_web))

@@ -84,6 +84,7 @@ status: active
 | 调度可见性 | 成员栏 **执行中 · 排队 N** + 展开取消 | `epitaph/2026-08-05-member-queue-visibility.md` |
 | 聊天 D0 | 默认响应者；chatbot 窗口 12 + 时间戳 + 滚动摘要 | `epitaph/2026-08-05-chat-default-responder-context.md` |
 | 未读/在线 | 左侧未读角标+排序+进群清零；用户 WS 在线绿点 | `docs/superpowers/specs/2026-08-05-presence-unread-design.md` |
+| 邀请/删除 | 邀请链接入群（24h）；移除 vs 永久删除（purge/roster_hidden） | `epitaph/2026-08-05-invite-hard-delete.md` |
 | 发布治理 | `approve-prod-release.sh`；promote trap；可选 prod watchdog；tag **v1.1.0** | scripts + GitHub |
 
 ---

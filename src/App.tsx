@@ -16,7 +16,8 @@ import {
   parseMessageContent,
 } from "./messageContent";
 import { defaultModelForAdapter, modelsForAdapter } from "./agentModels";
-import { canSubmitUserMember, chatbotSlotTaken, type UserAddMode } from "./memberForm";
+import { canSubmitUserMember, chatbotSlotTaken, memberRosterAction, type UserAddMode } from "./memberForm";
+import { InviteLanding, parseInviteTokenFromPath } from "./InviteLanding";
 import { markdownToHtml } from "./markdownLite";
 import { detectMemoryPressure, formatHeartbeatLabel } from "./heartbeatPolicy";
 import { agentBusyLabel, queueCounts, runsForAgentActive } from "./queueCounts";
@@ -87,6 +88,8 @@ const dayLabel = (value: number) => {
 };
 
 export function App() {
+  const inviteToken =
+    typeof window !== "undefined" ? parseInviteTokenFromPath(window.location.pathname) : null;
   // Web: never enter main UI until bootstrap succeeds; stale localStorage token → login.
   const [session, setSession] = useState<Session>(() => (requiresAuth ? "checking" : "ready"));
   const [groups, setGroups] = useState<Group[]>([]);
@@ -94,6 +97,7 @@ export function App() {
   const [current, setCurrent] = useState<GroupState | null>(null);
   const [composer, setComposer] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [inviteLinkFlash, setInviteLinkFlash] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showMembers, setShowMembers] = useState(() =>
     typeof window === "undefined" || window.matchMedia("(min-width: 1081px)").matches,
@@ -595,6 +599,18 @@ export function App() {
     })();
   };
 
+  if (inviteToken) {
+    return (
+      <InviteLanding
+        token={inviteToken}
+        onDone={() => {
+          setError(null);
+          setSession("checking");
+        }}
+      />
+    );
+  }
+
   if (requiresAuth && session === "checking") {
     return <main className="auth-screen"><div className="auth-card"><Brand /><p className="auth-hint">正在检查登录状态…</p></div></main>;
   }
@@ -767,11 +783,17 @@ export function App() {
       loginPassword: newMember.loginPassword,
       existingAuthUserId: newMember.existingAuthUserId,
     })) {
-      setError(newMember.userAddMode === "link" ? "请选择要加入的已有登录用户" : "请填写登录用户名和密码");
+      setError(
+        newMember.userAddMode === "link"
+          ? "请选择要加入的已有登录用户"
+          : newMember.userAddMode === "invite"
+            ? "请填写显示名称"
+            : "请填写登录用户名和密码",
+      );
       return;
     }
     try {
-      await api.addMember({
+      const created = await api.addMember({
         groupId: current.group.id,
         kind: newMember.kind,
         displayName: newMember.displayName,
@@ -796,12 +818,31 @@ export function App() {
         existingAuthUserId: newMember.kind === "user" && newMember.userAddMode === "link"
           ? newMember.existingAuthUserId.trim()
           : undefined,
+        invite: newMember.kind === "user" && newMember.userAddMode === "invite" ? true : undefined,
       });
+      if (created.inviteUrl) {
+        const absolute = `${window.location.origin}${created.inviteUrl}`;
+        setInviteLinkFlash(absolute);
+        try { await navigator.clipboard.writeText(absolute); } catch { /* ignore */ }
+      } else {
+        setInviteLinkFlash(null);
+      }
       setNewMember(emptyMember); setShowAddMember(false); setJoinableUsers([]); await refresh();
     } catch (reason) { setError(readError(reason)); }
   };
   const removeMember = async (member: Member) => {
-    if (!current || !confirm(`移除 ${member.displayName}？正在运行的任务会被取消。`)) return;
+    if (!current) return;
+    const action = memberRosterAction(member);
+    if (action === "delete") {
+      const label = member.invitePending ? "撤销邀请并删除" : "永久删除";
+      if (!confirm(`${label} ${member.displayName}？此操作不可恢复（历史消息仍保留）。`)) return;
+      try {
+        await api.purgeMember(current.group.id, member.id);
+        await refresh();
+      } catch (reason) { setError(readError(reason)); }
+      return;
+    }
+    if (!confirm(`移除 ${member.displayName}？成员将变为灰色，可再永久删除。`)) return;
     try { await api.removeMember(current.group.id, member.id); await refresh(); } catch (reason) { setError(readError(reason)); }
   };
   const setAdmin = async (memberId: string | null) => {
@@ -1036,6 +1077,14 @@ export function App() {
             onCancelRun={(run) => void changeRun(run, "cancel")}
           />
         ))}</div>
+        {inviteLinkFlash && (
+          <div className="invite-link-flash">
+            <p>邀请链接已生成（已尝试复制到剪贴板，24 小时有效）：</p>
+            <code>{inviteLinkFlash}</code>
+            <button type="button" onClick={() => void navigator.clipboard.writeText(inviteLinkFlash)}>再复制</button>
+            <button type="button" onClick={() => setInviteLinkFlash(null)}>关闭</button>
+          </div>
+        )}
         {showAddMember ? <form className="add-member-form" onSubmit={addMember}>
           <select
             value={addMemberKind}
@@ -1067,12 +1116,15 @@ export function App() {
             >
               <option value="create">创建新账号</option>
               <option value="link">加入已有账号</option>
+              <option value="invite">邀请链接（待接受）</option>
             </select>
             {newMember.userAddMode === "create" ? <>
               <input value={newMember.loginUsername} onChange={(event) => setNewMember((value) => ({ ...value, loginUsername: event.target.value }))} placeholder="登录用户名" required autoComplete="off" />
               <input type="password" value={newMember.loginPassword} onChange={(event) => setNewMember((value) => ({ ...value, loginPassword: event.target.value }))} placeholder="登录密码" required autoComplete="new-password" />
               <p className="form-hint">对方用该用户名/密码登录后，只能看到并进入本群对话。若用户名已存在，请改选「加入已有账号」。</p>
-            </> : <>
+            </> : newMember.userAddMode === "invite" ? (
+              <p className="form-hint">创建占位成员并生成 24 小时邀请链接；对方登录/注册后自动入群。接受前成员显示「链接中」。</p>
+            ) : <>
               <select
                 value={newMember.existingAuthUserId}
                 onChange={(event) => {
@@ -1521,9 +1573,12 @@ function MemberRow({ member, group, runs, detecting, online, onAdmin, onRemove, 
     ? `${member.adapter} · ${busyOrIdle}${member.keepAlive ? ` · 保活${member.warmStatus ? `(${member.warmStatus})` : ""}` : ""}`
     : member.kind === "chatbot"
       ? `${member.adapter ?? "chatbot"} · ${member.model || "deepseek-v4-flash"} · ${member.apiKeySet ? "已配置 Key" : "缺 Key"}`
-      : member.roleDescription || "本地成员";
+      : member.invitePending
+        ? "链接中 · 等待接受邀请"
+        : member.roleDescription || "本地成员";
+  const rosterAction = memberRosterAction(member);
   return (
-    <div className={`member-row ${member.isActive ? "" : "inactive"} ${responding ? "is-responding" : ""}`}>
+    <div className={`member-row ${member.isActive ? "" : "inactive"} ${member.invitePending ? "invite-pending" : ""} ${responding ? "is-responding" : ""}`}>
       <Avatar member={member} responding={responding} online={online} />
       <div className="member-details">
         <strong>
@@ -1533,6 +1588,7 @@ function MemberRow({ member, group, runs, detecting, online, onAdmin, onRemove, 
             <em className="admin-badge">{group.groupKind === "chat" ? "默认响应" : "管理员"}</em>
           )}
           {member.kind === "chatbot" && <em className="admin-badge">机器人</em>}
+          {member.invitePending && <em className="invite-badge">链接中</em>}
           {online && <em className="online-badge">在线</em>}
           {busy && <em className="responding-badge">{busy}</em>}
         </strong>
@@ -1584,7 +1640,13 @@ function MemberRow({ member, group, runs, detecting, online, onAdmin, onRemove, 
               : (group.groupKind === "chat" ? "设为默认响应" : "设管理")}
           </button>
         )}
-        {member.id !== group.ownerMemberId && <button className="danger" onClick={() => onRemove(member)}>移除</button>}
+        {member.id !== group.ownerMemberId && (
+          <button className="danger" onClick={() => onRemove(member)}>
+            {rosterAction === "delete"
+              ? (member.invitePending ? "撤销邀请" : "删除")
+              : "移除"}
+          </button>
+        )}
       </div>
     </div>
   );

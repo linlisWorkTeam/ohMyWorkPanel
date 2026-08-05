@@ -1,13 +1,14 @@
 ﻿// Web API layer - replaces api.ts when running in browser (non-Tauri mode).
 // Uses fetch() + WebSocket instead of Tauri invoke().
 import type {
-  GroupState, Member, MessageChannelPart, MessagePage, MetricsSample, PresetRole, RuntimeSettings, Message, TaskRun,
+  AddMemberResult, GroupState, Member, MessageChannelPart, MessagePage, MetricsSample, PresetRole, RuntimeSettings, Message, TaskRun,
   RoadmapItem, Feature, FeatureTask, RoadmapState, RoadmapOrchestration,
   CreateRoadmapItemInput, UpdateRoadmapItemInput,
   CreateFeatureInput, UpdateFeatureInput,
   CreateFeatureTaskInput, UpdateFeatureTaskInput,
   Experience, SaveExperienceInput, LogEntry, LogLevel, LogQueryFilter,
   DirListing, Group, ReleaseStatus, OpsJobState, ExtensionStatus, A2aDispatchResult,
+  InvitePreview,
 } from "./types";
 
 const API_BASE = "";
@@ -174,8 +175,9 @@ export const api = {
     loginUsername?: string;
     loginPassword?: string;
     existingAuthUserId?: string;
+    invite?: boolean;
   }) =>
-    apiFetch<Member>(`/api/groups/${input.groupId}/members`, {
+    apiFetch<AddMemberResult>(`/api/groups/${input.groupId}/members`, {
       method: "POST",
       body: JSON.stringify(input),
     }),
@@ -184,6 +186,18 @@ export const api = {
     apiFetch<{ id: string; username: string }[]>(
       `/api/users/joinable?groupId=${encodeURIComponent(groupId)}`,
     ),
+
+  getInvitePreview: async (token: string) => {
+    const res = await fetch(`${API_BASE}/api/invites/${encodeURIComponent(token)}`);
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<InvitePreview>;
+  },
+
+  acceptInvite: (token: string) =>
+    apiFetch<Member>(`/api/invites/${encodeURIComponent(token)}/accept`, {
+      method: "POST",
+      body: "{}",
+    }),
 
   setGroupArchived: (groupId: string, archived: boolean) =>
     apiFetch<Group>(`/api/groups/${groupId}/archive`, {
@@ -199,6 +213,11 @@ export const api = {
 
   removeMember: (groupId: string, memberId: string) =>
     apiFetch<void>(`/api/groups/${groupId}/members/${memberId}`, {
+      method: "DELETE",
+    }),
+
+  purgeMember: (groupId: string, memberId: string) =>
+    apiFetch<void>(`/api/groups/${groupId}/members/${memberId}/purge`, {
       method: "DELETE",
     }),
 

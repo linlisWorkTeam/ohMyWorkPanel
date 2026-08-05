@@ -157,10 +157,25 @@ pub fn init_db(path: &Path) -> AppResult<()> {
         "ALTER TABLE groups ADD COLUMN archived INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE groups ADD COLUMN is_system INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE members ADD COLUMN auth_user_id TEXT",
+        "ALTER TABLE members ADD COLUMN roster_hidden INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0",
     ] {
         let _ = connection.execute(col_sql, []);
     }
+    let _ = connection.execute_batch(
+        r#"
+        CREATE TABLE IF NOT EXISTS group_invites (
+          token TEXT PRIMARY KEY,
+          group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+          member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+          created_by_user_id TEXT,
+          expires_at INTEGER NOT NULL,
+          consumed_at INTEGER,
+          created_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_group_invites_member ON group_invites(member_id);
+        "#,
+    );
     let _ = connection.execute(
         "UPDATE users SET is_admin=1 WHERE username='root' OR id='seed-user-root'",
         [],
@@ -416,14 +431,18 @@ pub fn assert_group_deletable(connection: &Connection, group_id: &str) -> AppRes
 
 pub fn member_from_row(row: &Row<'_>) -> rusqlite::Result<Member> {
     let api_key: Option<String> = row.get(13)?;
+    let kind: String = row.get(2)?;
+    let is_active = row.get::<_, i64>(6)? != 0;
+    let auth_user_id: Option<String> = row.get(17).ok().flatten();
+    let invite_pending = kind == "user" && is_active && auth_user_id.is_none();
     Ok(Member {
         id: row.get(0)?,
         group_id: row.get(1)?,
-        kind: row.get(2)?,
+        kind,
         display_name: row.get(3)?,
         avatar_color: row.get(4)?,
         role_description: row.get(5)?,
-        is_active: row.get::<_, i64>(6)? != 0,
+        is_active,
         adapter: row.get(7)?,
         executable_path: row.get(8)?,
         runtime_status: row.get(9)?,
@@ -434,7 +453,8 @@ pub fn member_from_row(row: &Row<'_>) -> rusqlite::Result<Member> {
         keep_alive: row.get::<_, i64>(14)? != 0,
         warm_status: row.get(15)?,
         model: row.get(16).ok().flatten(),
-        auth_user_id: row.get(17).ok().flatten(),
+        auth_user_id,
+        invite_pending,
     })
 }
 
@@ -575,7 +595,7 @@ pub fn resolve_user_member_auth_id(
             .map_err(|_| "所选登录用户不存在".to_string())?;
         let n: i64 = connection
             .query_row(
-                "SELECT COUNT(*) FROM members WHERE group_id=?1 AND auth_user_id=?2 AND is_active=1 AND kind='user'",
+                "SELECT COUNT(*) FROM members WHERE group_id=?1 AND auth_user_id=?2 AND is_active=1 AND kind='user' AND COALESCE(roster_hidden,0)=0",
                 params![group_id, uid],
                 |r| r.get(0),
             )
@@ -627,7 +647,7 @@ pub fn get_groups_for_user(connection: &Connection, user_id: &str) -> AppResult<
             .prepare(&format!(
                 "{GROUP_SELECT} WHERE id IN (
                SELECT DISTINCT group_id FROM members
-               WHERE auth_user_id=?1 AND is_active=1 AND kind='user'
+               WHERE auth_user_id=?1 AND is_active=1 AND kind='user' AND COALESCE(roster_hidden,0)=0
              ) ORDER BY archived ASC, created_at DESC"
             ))
             .map_err(|e| e.to_string())?;
@@ -676,7 +696,7 @@ fn read_cursor_baseline(
     // Never opened: baseline = membership join time (not entire history).
     let joined: Option<i64> = connection
         .query_row(
-            "SELECT created_at FROM members WHERE group_id=?1 AND auth_user_id=?2 AND kind='user' AND is_active=1 ORDER BY created_at ASC LIMIT 1",
+            "SELECT created_at FROM members WHERE group_id=?1 AND auth_user_id=?2 AND kind='user' AND is_active=1 AND COALESCE(roster_hidden,0)=0 ORDER BY created_at ASC LIMIT 1",
             params![group_id, user_id],
             |r| r.get(0),
         )
@@ -731,7 +751,7 @@ pub fn user_can_access_group(connection: &Connection, user_id: &str, group_id: &
     }
     let n: i64 = connection
         .query_row(
-            "SELECT COUNT(*) FROM members WHERE group_id=?1 AND auth_user_id=?2 AND is_active=1 AND kind='user'",
+            "SELECT COUNT(*) FROM members WHERE group_id=?1 AND auth_user_id=?2 AND is_active=1 AND kind='user' AND COALESCE(roster_hidden,0)=0",
             params![group_id, user_id],
             |r| r.get(0),
         )
@@ -892,7 +912,7 @@ pub fn set_member_workspace(
 pub fn get_members(connection: &Connection, group_id: &str) -> AppResult<Vec<Member>> {
     let mut stmt = connection
         .prepare(&format!(
-            "{MEMBER_SELECT} WHERE m.group_id=?1 ORDER BY m.created_at"
+            "{MEMBER_SELECT} WHERE m.group_id=?1 AND COALESCE(m.roster_hidden,0)=0 ORDER BY m.created_at"
         ))
         .map_err(|e| e.to_string())?;
     let rows = stmt
@@ -901,6 +921,239 @@ pub fn get_members(connection: &Connection, group_id: &str) -> AppResult<Vec<Mem
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
     Ok(rows)
+}
+
+pub fn get_member(connection: &Connection, member_id: &str) -> AppResult<Member> {
+    connection
+        .query_row(
+            &format!("{MEMBER_SELECT} WHERE m.id=?1"),
+            params![member_id],
+            member_from_row,
+        )
+        .map_err(|_| format!("找不到成员：{member_id}"))
+}
+
+/// Invite link TTL: 24 hours.
+pub const INVITE_TTL_MS: i64 = 24 * 60 * 60 * 1000;
+
+#[derive(Debug, Clone)]
+pub struct GroupInvite {
+    pub token: String,
+    pub group_id: String,
+    pub member_id: String,
+    pub expires_at: i64,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InvitePreview {
+    pub group_name: String,
+    pub display_name: String,
+    pub expires_at: i64,
+    pub valid: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+pub fn create_group_invite(
+    connection: &Connection,
+    group_id: &str,
+    member_id: &str,
+    created_by_user_id: Option<&str>,
+) -> AppResult<GroupInvite> {
+    let token = id();
+    let created_at = now();
+    let expires_at = created_at + INVITE_TTL_MS;
+    connection
+        .execute(
+            "INSERT INTO group_invites(token,group_id,member_id,created_by_user_id,expires_at,consumed_at,created_at) VALUES(?1,?2,?3,?4,?5,NULL,?6)",
+            params![
+                token,
+                group_id,
+                member_id,
+                created_by_user_id,
+                expires_at,
+                created_at
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(GroupInvite {
+        token,
+        group_id: group_id.into(),
+        member_id: member_id.into(),
+        expires_at,
+    })
+}
+
+pub fn preview_invite(connection: &Connection, token: &str) -> AppResult<InvitePreview> {
+    let row = connection
+        .query_row(
+            "SELECT i.group_id, i.member_id, i.expires_at, i.consumed_at, g.name, m.display_name, m.is_active, COALESCE(m.roster_hidden,0), m.auth_user_id
+             FROM group_invites i
+             JOIN groups g ON g.id=i.group_id
+             JOIN members m ON m.id=i.member_id
+             WHERE i.token=?1",
+            params![token],
+            |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, i64>(2)?,
+                    r.get::<_, Option<i64>>(3)?,
+                    r.get::<_, String>(4)?,
+                    r.get::<_, String>(5)?,
+                    r.get::<_, i64>(6)?,
+                    r.get::<_, i64>(7)?,
+                    r.get::<_, Option<String>>(8)?,
+                ))
+            },
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    let Some((_gid, _mid, expires_at, consumed_at, group_name, display_name, is_active, hidden, auth_uid)) =
+        row
+    else {
+        return Ok(InvitePreview {
+            group_name: String::new(),
+            display_name: String::new(),
+            expires_at: 0,
+            valid: false,
+            reason: Some("邀请不存在或已失效".into()),
+        });
+    };
+    let mut reason = None;
+    let mut valid = true;
+    if consumed_at.is_some() || auth_uid.is_some() {
+        valid = false;
+        reason = Some("邀请已被使用".into());
+    } else if now() > expires_at {
+        valid = false;
+        reason = Some("邀请已过期".into());
+    } else if is_active == 0 || hidden != 0 {
+        valid = false;
+        reason = Some("邀请成员已移除".into());
+    }
+    Ok(InvitePreview {
+        group_name,
+        display_name,
+        expires_at,
+        valid,
+        reason,
+    })
+}
+
+pub fn accept_invite(connection: &Connection, token: &str, user_id: &str) -> AppResult<Member> {
+    let preview = preview_invite(connection, token)?;
+    if !preview.valid {
+        return Err(preview.reason.unwrap_or_else(|| "邀请无效".into()));
+    }
+    let (group_id, member_id, expires_at): (String, String, i64) = connection
+        .query_row(
+            "SELECT group_id, member_id, expires_at FROM group_invites WHERE token=?1",
+            params![token],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .map_err(|e| e.to_string())?;
+    if now() > expires_at {
+        return Err("邀请已过期".into());
+    }
+    let already: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM members WHERE group_id=?1 AND auth_user_id=?2 AND kind='user' AND is_active=1 AND COALESCE(roster_hidden,0)=0",
+            params![group_id, user_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if already > 0 {
+        return Err("你已是本群成员".into());
+    }
+    let user_exists: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM users WHERE id=?1",
+            params![user_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if user_exists == 0 {
+        return Err("用户不存在".into());
+    }
+    let ts = now();
+    connection
+        .execute(
+            "UPDATE members SET auth_user_id=?1 WHERE id=?2 AND group_id=?3 AND kind='user' AND auth_user_id IS NULL AND is_active=1 AND COALESCE(roster_hidden,0)=0",
+            params![user_id, member_id, group_id],
+        )
+        .map_err(|e| e.to_string())?;
+    let changed = connection.changes();
+    if changed == 0 {
+        return Err("邀请已被使用或成员不可用".into());
+    }
+    connection
+        .execute(
+            "UPDATE group_invites SET consumed_at=?1 WHERE token=?2 AND consumed_at IS NULL",
+            params![ts, token],
+        )
+        .map_err(|e| e.to_string())?;
+    get_member(connection, &member_id)
+}
+
+/// Permanently remove a member from the group roster.
+/// Real DELETE when no message/run refs; otherwise `roster_hidden=1` to preserve history FKs.
+pub fn hard_delete_member(connection: &Connection, group_id: &str, member_id: &str) -> AppResult<()> {
+    let group = get_group(connection, group_id)?;
+    if group.owner_member_id == member_id {
+        return Err("不能删除群主".into());
+    }
+    let exists: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM members WHERE id=?1 AND group_id=?2 AND COALESCE(roster_hidden,0)=0",
+            params![member_id, group_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if exists == 0 {
+        return Err("找不到成员".into());
+    }
+    let _ = connection.execute("DELETE FROM group_invites WHERE member_id=?1", params![member_id]);
+    if group.admin_member_id.as_deref() == Some(member_id) {
+        connection
+            .execute(
+                "UPDATE groups SET admin_member_id=NULL WHERE id=?1",
+                params![group_id],
+            )
+            .map_err(|e| e.to_string())?;
+    }
+    let msg_refs: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM messages WHERE sender_member_id=?1",
+            params![member_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    let run_refs: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM task_runs WHERE agent_member_id=?1 OR reviewer_member_id=?1",
+            params![member_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    let _ = connection.execute("DELETE FROM mentions WHERE member_id=?1", params![member_id]);
+    if msg_refs == 0 && run_refs == 0 {
+        connection
+            .execute(
+                "DELETE FROM members WHERE id=?1 AND group_id=?2",
+                params![member_id, group_id],
+            )
+            .map_err(|e| e.to_string())?;
+    } else {
+        connection
+            .execute(
+                "UPDATE members SET is_active=0, roster_hidden=1, auth_user_id=NULL WHERE id=?1 AND group_id=?2",
+                params![member_id, group_id],
+            )
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 /// Default hot window for group_state (older rows stay in DB, loaded via before-cursor).
@@ -1809,44 +2062,50 @@ mod tests {
         let file = tempfile::NamedTempFile::new().unwrap();
         init_db(file.path()).unwrap();
         let conn = open_db(file.path()).unwrap();
-        let ts = now();
+        // Fixed timeline (avoid wall-clock races with mark_group_read's now()).
+        let join_at = 1_000_000_i64;
         conn.execute(
             "INSERT INTO users(id,username,password_hash,created_at,is_admin) VALUES('u1','alice','x',?1,0)",
-            params![ts],
+            params![join_at],
         )
         .unwrap();
         conn.execute(
             "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at) VALUES('g','g','.','m1',NULL,?1)",
-            params![ts],
+            params![join_at],
         )
         .unwrap();
         conn.execute(
             "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,auth_user_id) VALUES('m1','g','user','Alice','#000','',1,?1,'u1')",
-            params![ts],
+            params![join_at],
         )
         .unwrap();
         conn.execute(
             "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at) VALUES('bot','g','chatbot','Bot','#000','',1,?1)",
-            params![ts],
+            params![join_at],
         )
         .unwrap();
         // before mark: baseline = member created_at → later messages count
         conn.execute(
             "INSERT INTO messages(id,group_id,sender_member_id,parent_run_id,content,status,created_at) VALUES('m-own','g','m1',NULL,'me','completed',?1)",
-            params![ts + 10],
+            params![join_at + 10],
         )
         .unwrap();
         conn.execute(
             "INSERT INTO messages(id,group_id,sender_member_id,parent_run_id,content,status,created_at) VALUES('m-bot','g','bot',NULL,'hi','completed',?1)",
-            params![ts + 20],
+            params![join_at + 20],
         )
         .unwrap();
         assert_eq!(count_group_unread(&conn, "u1", "g").unwrap(), 1);
-        mark_group_read(&conn, "u1", "g").unwrap();
+        // Pin cursor after existing messages (do not depend on wall clock).
+        conn.execute(
+            "INSERT INTO group_read_cursors(user_id, group_id, last_read_at) VALUES('u1','g',?1)",
+            params![join_at + 50],
+        )
+        .unwrap();
         assert_eq!(count_group_unread(&conn, "u1", "g").unwrap(), 0);
         conn.execute(
             "INSERT INTO messages(id,group_id,sender_member_id,parent_run_id,content,status,created_at) VALUES('m-bot2','g','bot',NULL,'again','completed',?1)",
-            params![now() + 1000],
+            params![join_at + 100],
         )
         .unwrap();
         assert_eq!(count_group_unread(&conn, "u1", "g").unwrap(), 1);
@@ -1899,5 +2158,77 @@ mod tests {
         )
         .unwrap();
         assert!(assert_group_deletable(&conn, "g2").is_ok());
+    }
+
+    #[test]
+    fn invite_create_preview_accept_and_hard_delete() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        init_db(file.path()).unwrap();
+        let conn = open_db(file.path()).unwrap();
+        let ts = now();
+        conn.execute(
+            "INSERT INTO users(id,username,password_hash,created_at,is_admin) VALUES('u2','bob','x',?1,0)",
+            params![ts],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at) VALUES('g1','InviteG','.','m-owner',NULL,?1)",
+            params![ts],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,auth_user_id) VALUES('m-owner','g1','user','Owner','#000','',1,?1,'seed-user-root')",
+            params![ts],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,auth_user_id) VALUES('m-pending','g1','user','Guest','#000','',1,?1,NULL)",
+            params![ts],
+        )
+        .unwrap();
+        let invite = create_group_invite(&conn, "g1", "m-pending", Some("seed-user-root")).unwrap();
+        let preview = preview_invite(&conn, &invite.token).unwrap();
+        assert!(preview.valid);
+        assert_eq!(preview.group_name, "InviteG");
+        let member = get_member(&conn, "m-pending").unwrap();
+        assert!(member.invite_pending);
+        let joined = accept_invite(&conn, &invite.token, "u2").unwrap();
+        assert_eq!(joined.auth_user_id.as_deref(), Some("u2"));
+        assert!(!joined.invite_pending);
+        assert!(user_can_access_group(&conn, "u2", "g1").unwrap());
+        assert!(!preview_invite(&conn, &invite.token).unwrap().valid);
+
+        // Pending-free hard delete with no history → row gone.
+        conn.execute(
+            "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at) VALUES('m-tmp','g1','user','Tmp','#000','',0,?1)",
+            params![ts],
+        )
+        .unwrap();
+        hard_delete_member(&conn, "g1", "m-tmp").unwrap();
+        let n: i64 = conn
+            .query_row("SELECT COUNT(*) FROM members WHERE id='m-tmp'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n, 0);
+
+        // With message history → roster_hidden.
+        conn.execute(
+            "INSERT INTO messages(id,group_id,sender_member_id,parent_run_id,content,status,created_at) VALUES('msg1','g1','m-pending',NULL,'hi','completed',?1)",
+            params![ts],
+        )
+        .unwrap();
+        hard_delete_member(&conn, "g1", "m-pending").unwrap();
+        let hidden: i64 = conn
+            .query_row(
+                "SELECT roster_hidden FROM members WHERE id='m-pending'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(hidden, 1);
+        assert!(get_members(&conn, "g1")
+            .unwrap()
+            .iter()
+            .all(|m| m.id != "m-pending"));
+        assert!(!user_can_access_group(&conn, "u2", "g1").unwrap());
     }
 }

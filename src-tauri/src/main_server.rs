@@ -7,7 +7,7 @@ use axum::middleware::{self, Next};
 use axum::response::Response;
 use tokio::sync::broadcast;
 use tower_http::cors::CorsLayer;
-use tower_http::services::ServeDir;
+use tower_http::services::{ServeDir, ServeFile};
 
 use linlis_work_panel_lib::db;
 use linlis_work_panel_lib::event_sender::EventSender;
@@ -91,9 +91,12 @@ async fn main() {
     let dist_dir = env::var("LINLIS_WEB_DIST").unwrap_or_else(|_| "../dist".to_string());
     println!("Static: {}", dist_dir);
 
+    let index = format!("{}/index.html", dist_dir.trim_end_matches('/'));
     let app = web::build_router(state)
         .layer(CorsLayer::permissive())
-        .fallback_service(ServeDir::new(&dist_dir))
+        // SPA: unknown paths (e.g. /invite/{token}) serve index.html with 200
+        // (not_found_service would force status 404 and break deep links)
+        .fallback_service(ServeDir::new(&dist_dir).fallback(ServeFile::new(index)))
         .layer(middleware::from_fn(html_no_cache));
 
     let port = env::var("LINLIS_PORT").unwrap_or_else(|_| "8080".into());

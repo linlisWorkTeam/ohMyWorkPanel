@@ -1,12 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
-  GroupState, Member, MessageChannelPart, MessagePage, PresetRole, RuntimeSettings,
+  AddMemberResult, GroupState, Member, MessageChannelPart, MessagePage, PresetRole, RuntimeSettings,
   RoadmapItem, Feature, FeatureTask, RoadmapState,
   CreateRoadmapItemInput, UpdateRoadmapItemInput,
   CreateFeatureInput, UpdateFeatureInput,
   CreateFeatureTaskInput, UpdateFeatureTaskInput,
   Experience, SaveExperienceInput, LogEntry, LogLevel, LogQueryFilter,
-  DirListing, Group, ReleaseStatus, OpsJobState,
+  DirListing, Group, ReleaseStatus, OpsJobState, InvitePreview,
 } from "./types";
 
 /** Desktop/Tauri builds do not require JWT login. */
@@ -42,15 +42,21 @@ export const api = {
     avatarColor?: string; adapter?: string; executablePath?: string;
     chatbotProvider?: "opencode-go" | "deepseek"; apiKey?: string; model?: string;
     loginUsername?: string; loginPassword?: string; existingAuthUserId?: string;
-  }) => invoke<Member>("add_member", { input }),
+    invite?: boolean;
+  }) => invoke<AddMemberResult>("add_member", { input }),
   listJoinableUsers: (groupId: string) =>
     invoke<{ id: string; username: string }[]>("list_joinable_users", { groupId }),
+  getInvitePreview: (_token: string) =>
+    Promise.reject(new Error("Invite links are web-only")) as Promise<InvitePreview>,
+  acceptInvite: (_token: string) =>
+    Promise.reject(new Error("Invite links are web-only")) as Promise<Member>,
   verify: async () => ({ sub: "desktop", username: "desktop", isAdmin: true }),
   setGroupArchived: (groupId: string, archived: boolean) =>
     invoke<Group>("set_group_archived_cmd", { groupId, archived }),
   updateMemberModel: (memberId: string, model: string | null) =>
     invoke<Member>("update_member_model_cmd", { memberId, model }),
   removeMember: (groupId: string, memberId: string) => invoke<void>("remove_member", { groupId, memberId }),
+  purgeMember: (groupId: string, memberId: string) => invoke<void>("remove_member", { groupId, memberId }),
   setAdmin: (groupId: string, memberId: string | null) => invoke<GroupState>("set_admin", { groupId, memberId }),
   sendMessage: (groupId: string, senderMemberId: string, content: string, mentionMemberIds: string[]) =>
     invoke("send_message", { groupId, senderMemberId, content, mentionMemberIds }),

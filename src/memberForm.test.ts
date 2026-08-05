@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { canSubmitUserMember, chatbotSlotTaken, groupHasActiveChatbot } from "./memberForm";
+import {
+  canSubmitUserMember,
+  chatbotSlotTaken,
+  groupHasActiveChatbot,
+  memberRosterAction,
+} from "./memberForm";
 import type { Group, Member } from "./types";
 
 function member(partial: Partial<Member> & Pick<Member, "id" | "kind" | "isActive">): Member {
@@ -56,10 +61,21 @@ describe("chatbotSlotTaken", () => {
 });
 
 describe("canSubmitUserMember", () => {
-  it("requires password for create and id for link", () => {
+  it("requires password for create and id for link; invite needs only display name", () => {
     expect(canSubmitUserMember("create", { loginUsername: "a", loginPassword: "p", existingAuthUserId: "" })).toBe(true);
     expect(canSubmitUserMember("create", { loginUsername: "a", loginPassword: "", existingAuthUserId: "" })).toBe(false);
     expect(canSubmitUserMember("link", { loginUsername: "", loginPassword: "", existingAuthUserId: "u1" })).toBe(true);
     expect(canSubmitUserMember("link", { loginUsername: "a", loginPassword: "p", existingAuthUserId: "" })).toBe(false);
+    expect(canSubmitUserMember("invite", { loginUsername: "", loginPassword: "", existingAuthUserId: "" })).toBe(true);
+  });
+});
+
+describe("memberRosterAction", () => {
+  it("uses delete for inactive or pending invite", () => {
+    expect(memberRosterAction(member({ id: "1", kind: "user", isActive: true }))).toBe("remove");
+    expect(memberRosterAction(member({ id: "1", kind: "user", isActive: false }))).toBe("delete");
+    expect(
+      memberRosterAction(member({ id: "1", kind: "user", isActive: true, invitePending: true })),
+    ).toBe("delete");
   });
 });

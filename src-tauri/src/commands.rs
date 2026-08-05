@@ -191,6 +191,10 @@ pub fn add_member(input: AddMemberInput, state: State<'_, AppState>) -> AppResul
     if !matches!(input.kind.as_str(), "user" | "agent" | "chatbot") || input.display_name.trim().is_empty() {
         return Err("成员类型或名称无效。".into());
     }
+    let invite_mode = input.invite.unwrap_or(false);
+    if invite_mode && input.kind != "user" {
+        return Err("仅用户成员支持邀请链接。".into());
+    }
     let conn = open_db(&state.db_path)?;
     let group = get_group(&conn, &input.group_id)?;
     if input.kind == "chatbot" && group.group_kind != "chat" {
@@ -213,7 +217,7 @@ pub fn add_member(input: AddMemberInput, state: State<'_, AppState>) -> AppResul
         _ => "#5167f6".into(),
     });
     let mut auth_user_id: Option<String> = None;
-    if input.kind == "user" {
+    if input.kind == "user" && !invite_mode {
         auth_user_id = Some(crate::db::resolve_user_member_auth_id(
             &conn,
             &input.group_id,
@@ -293,12 +297,10 @@ pub fn add_member(input: AddMemberInput, state: State<'_, AppState>) -> AppResul
         )
         .map_err(|e| e.to_string())?;
     }
-    conn.query_row(
-        "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model,m.auth_user_id FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
-        params![member_id],
-        member_from_row,
-    )
-    .map_err(|e| e.to_string())
+    if invite_mode {
+        let _ = crate::db::create_group_invite(&conn, &input.group_id, &member_id, None)?;
+    }
+    crate::db::get_member(&conn, &member_id)
 }
 
 #[tauri::command]

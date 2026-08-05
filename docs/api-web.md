@@ -31,8 +31,11 @@
 | GET/PUT | `/api/groups/{id}/announcement` |
 | PUT | `/api/groups/{id}/workspace` |
 | PUT | `/api/groups/{id}/archive` |
-| POST | `/api/groups/{group_id}/members` |
-| DELETE | `/api/groups/{group_id}/members/{member_id}` |
+| POST | `/api/groups/{group_id}/members`（`invite:true` → 待接受用户 + `inviteUrl`） |
+| DELETE | `/api/groups/{group_id}/members/{member_id}`（软移除 `is_active=0`） |
+| DELETE | `/api/groups/{group_id}/members/{member_id}/purge`（永久删除/隐藏 roster） |
+| GET | `/api/invites/{token}`（无鉴权；邀请预览） |
+| POST | `/api/invites/{token}/accept`（JWT；绑定当前用户） |
 | GET | `/api/users/joinable?groupId=`（管理员；尚未加入该群的登录用户） |
 | GET | `/api/groups/{id}/extensions`（Extend 列表 + health；`baseUrl` 为同源代理前缀） |
 | PUT | `/api/groups/{id}/extensions/panellive` body `{ enabled }`（未就绪 → 409） |
@@ -47,6 +50,7 @@
 
 - **创建新账号**：`loginUsername` + `loginPassword`（用户名冲突返回占用错误）
 - **加入已有账号**：`existingAuthUserId`（`users.id`）；无需密码；已在本群则 409
+- **邀请链接**：`invite: true`（无需登录字段）；返回 `inviteUrl`/`inviteToken`/`inviteExpiresAt`（24h）；成员 `invitePending` 直至接受
 
 ## 消息 / 任务
 

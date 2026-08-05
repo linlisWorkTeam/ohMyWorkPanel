@@ -422,6 +422,14 @@
   border-radius:50%; background:#3bb273; border:2px solid #fff; box-sizing:content-box;
 }
 .online-badge { background:#e7f7ee !important; color:#2f8f5b !important; }
+.invite-badge { background:#fff4e5 !important; color:#b76a00 !important; }
+.member-row.invite-pending { outline:1px dashed #e0c090; }
+.invite-link-flash { margin:8px 9px; padding:10px; border-radius:8px; background:#f5f8fb; border:1px solid #dbe2eb; font-size:12px; display:grid; gap:6px; }
+.invite-link-flash code { word-break:break-all; font-size:11px; color:#253349; }
+.invite-landing .auth-tabs { display:flex; gap:8px; margin:12px 0; }
+.invite-landing .auth-tabs button { flex:1; border:1px solid #dbe2eb; background:#f5f8fb; border-radius:7px; padding:8px; font-size:12px; }
+.invite-landing .auth-tabs button.active { background:#4a7fd4; color:#fff; border-color:#4a7fd4; }
+.invite-landing .muted { color:#8b97a5; font-size:12px; }
 .group-archive-btn { border:0; background:transparent; color:#8a96a5; width:28px; height:28px; border-radius:7px; font-size:18px; line-height:1; flex-shrink:0; }
 .group-archive-btn:hover { background:#344155; color:#fff; }
 .archived-section { margin-top:10px; padding-top:8px; border-top:1px solid #344155; }

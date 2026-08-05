@@ -86,6 +86,23 @@ export interface Member {
   model?: string | null;
   /** Linked login users.id for kind=user */
   authUserId?: string | null;
+  /** Pending invite (user with no authUserId yet) */
+  invitePending?: boolean;
+}
+
+/** addMember response may include invite link fields (web). */
+export type AddMemberResult = Member & {
+  inviteToken?: string | null;
+  inviteUrl?: string | null;
+  inviteExpiresAt?: number | null;
+};
+
+export interface InvitePreview {
+  groupName: string;
+  displayName: string;
+  expiresAt: number;
+  valid: boolean;
+  reason?: string | null;
 }
 
 export interface Message {

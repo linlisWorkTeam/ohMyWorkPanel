@@ -9,6 +9,7 @@ Active handoff notes for future agents.
 | Date | Topic | Status |
 |------|-------|--------|
 | 2026-08-05 | [版本流水线 SSOT](../version-pipeline.md) | active（非 epitaph，索引挂此） |
+| 2026-08-05 | [邀请入群 + 成员永久删除](./2026-08-05-invite-hard-delete.md) | active |
 | 2026-08-05 | [群未读角标 + 用户在线](./2026-08-05-presence-unread.md) | active |
 | 2026-08-05 | [聊天群默认响应 + chatbot 40 条上下文](./2026-08-05-chat-default-responder-context.md) | active |
 | 2026-08-05 | [成员面板同 Agent 排队数可见](./2026-08-05-member-queue-visibility.md) | active |

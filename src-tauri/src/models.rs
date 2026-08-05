@@ -70,6 +70,9 @@ pub struct Member {
     /// Linked login account (`users.id`) for kind=user members.
     #[serde(default)]
     pub auth_user_id: Option<String>,
+    /// User placeholder awaiting invite accept (`auth_user_id` still null).
+    #[serde(default)]
+    pub invite_pending: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -181,6 +184,9 @@ pub struct AddMemberInput {
     pub login_password: Option<String>,
     /// Link an existing `users.id` into the group instead of creating a new login
     pub existing_auth_user_id: Option<String>,
+    /// Create a pending user + 24h invite link (kind=user only; no login fields).
+    #[serde(default)]
+    pub invite: Option<bool>,
 }
 
 /// Login account that can be linked as a group user member.
