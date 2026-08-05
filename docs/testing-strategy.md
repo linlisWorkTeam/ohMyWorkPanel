@@ -1,5 +1,5 @@
 ---
-date: 2026-08-03
+date: 2026-08-05
 topic: automated-testing-strategy
 status: active
 ---
@@ -14,93 +14,90 @@ status: active
 |---|---|
 | 金字塔 | 单测为主 → 少量集成 → 极少手工/冒烟 |
 | 门禁绑 canary | `deploy-canary.sh` **构建前**强制跑 `scripts/test-gate.sh` |
-| 内存受限 | `CARGO_BUILD_JOBS=1`、`NODE_OPTIONS=--max-old-space-size=1024`、`ulimit -v` 约 1.8GB |
+| 内存受限 | `CARGO_BUILD_JOBS=1`、门禁内 `NODE_OPTIONS=--max-old-space-size=768`、cargo 子 shell `ulimit -v` ≈1.8GB |
 | 不测真 CLI | Codex/Claude/Cursor 真机调用走尽力 smoke，**不进门禁** |
 | 数据隔离 | 测试只用 tempfile / `data-canary`；永不写 `/AI/LinlisWorkPanel/data` |
 
-## 当前基线（脚手架落地后）
+## 当前基线（2026-08-05 复核）
 
-| 层 | 工具 | 现状 |
+| 层 | 工具 | 现状（门禁实测） |
 |---|---|---|
-| 前端单测 | Vitest | `mentions` / `messageContent` |
-| Rust 单测 | `cargo test --lib` | `message_content` / `adapters` / `parse` / `db` / `scheduler::plan_queued_starts` / `auth` |
-| 集成测 | 规划中 | Web API / 全链路 mock run（Phase 2） |
-| E2E | 规划中 | Playwright 对 canary（Phase 3，可选） |
+| 前端单测 | Vitest | **14** 文件 / **45** 用例（见下表） |
+| Rust 单测 | `cargo test --lib` | **57** 用例（adapters/a2a/db/extensions/memory/metrics/…） |
+| 集成测 | 规划中 | Web API / 全链路 mock run（Phase 2）— **仍未落地** |
+| E2E | 规划中 | Playwright 对 canary（Phase 3）；本机偶发手工用 headless shell，**未进门禁** |
 | 适配器 smoke | `scripts/smoke-adapters.ps1` | 尽力、不阻塞交付 |
+| 发布脚本 | canary announce / promote 门禁 | 行为靠脚本+清单；无自动化契约测 |
 | CI | 无 GitHub Actions | 门禁在本机 canary 部署路径 |
 | 产品内 Ops | 项目视图「质量与发布」 | `POST /api/ops/test-gate` / `deploy-canary`；Promote 不进 UI |
+
+### 前端 Vitest 清单（门禁）
+
+| 文件 | 覆盖重点 | 是否仍贴合代码 |
+|---|---|---|
+| `mentions.test.ts` | @ 解析、长名优先 | ✅ |
+| `messageContent.test.ts` | parts / legacy / 列表投影 | ✅ |
+| `messageHistory.test.ts` | 热窗合并、上滑加载 | ✅ |
+| `realtimeWs.test.ts` | heartbeat 忽略、`ws_reconnected` resync、退避 | ✅ 基本；未断言 `run_heartbeat` / link pubsub |
+| `releasingState.test.ts` | 60s 窗口、**30s 静默横幅** | ✅（2026-08-05 已改） |
+| `heartbeatPolicy.test.ts` | Auto 聚焦/后台/内存降档 | ✅ |
+| `extensions.test.ts` | PanelLive entry / 同源 baseUrl / 缺 tabs 容错 | ✅ |
+| `memberForm.test.ts` | chatbot 槽位、加入已有用户 | ✅ |
+| `authSession.test.ts` | 发送者成员解析 | ✅ |
+| `agentModels.test.ts` | 模型目录（含 cursor grok/kimi） | ✅ |
+| `sendKey` / `chatUi` / `markdownLite` / `roadmapUi` | 发送键、折叠、MD、路线图 UI 纯函数 | ✅ |
+
+**结论（前端用例）**：无发现「断言错误实现」的过时用例；`docs` 旧基线（只写 mentions/messageContent）**已过时**，以本表为准。
+
+### Rust `#[cfg(test)]` 清单（门禁）
+
+| 模块 | 覆盖重点 | 是否仍贴合 |
+|---|---|---|
+| `adapters::*` / `parse` | build_args、Cursor 候选、JSONL | ✅ |
+| `a2a` | Live skills、禁 PCM | ✅ |
+| `extensions` | manifest、enable、proxy path sanitize | ✅ |
+| `db` | interrupted runs、joinable user、seed `is_system`、scoped user | ✅ |
+| `memory` | 群内锁定 + **种子群跨 workspace** | ✅ |
+| `metrics` | classify + latest 缓存 | ✅ 未锁 `PERF_SAMPLE_SECS=20` |
+| `scheduler` | 同 Agent 串行、announcement | ✅ 无 `run_heartbeat` / seq 单测 |
+| `fs_browse` / `orchestrator` / `auth` / `codex_proxy` | 路径、编排、JWT、shim | ✅ |
+
+**结论（Rust 用例）**：现有断言未与当前行为冲突；缺口主要在「新能力无测」，不是「旧测撒谎」。
 
 ## 测试金字塔
 
 ```text
         ┌─────────────┐
-        │  手工 / 冒烟 │  canary 登录 + mock @；真 CLI 可选
+        │  手工 / 冒烟 │  canary 登录 + mock @；§F 前端壳；真 CLI 可选
         ├─────────────┤
-        │ 集成 (少)    │  Web auth+API、scheduler+mock 执行（Phase 2）
+        │ 集成 (少)    │  Web auth+API、scheduler+mock 执行（Phase 2，未做）
         ├─────────────┤
         │ 单测 (多)    │  Rust 纯逻辑 + Vitest 纯函数  ← 门禁必须绿
         └─────────────┘
 ```
 
-### L1 — 单元测试（门禁必跑）
+新增纯函数优先同目录 `*.test.ts` / `#[cfg(test)]`，不引入重型 UI 测试库（除非 Phase 2 明确需要）。  
+**已知例外**：React hooks 顺序（login→ready / #310）目前靠代码注释 + 手工/Playwright 冒烟，门禁无 RTL 用例。
 
-**Rust**（`cd src-tauri && cargo test --no-default-features --lib`）
-
-| 模块 | 覆盖重点 | Do not regress |
-|---|---|---|
-| `message_content` | parts 追加 / legacy 升级 / replace | content JSON 兼容 |
-| `adapters::parse` | channel、session_id 启发式 | CLI JSON 漂移默认 final |
-| `adapters` | build_args 快照、Cursor 路径候选 | 不改 command 签名 |
-| `db` | 中断 run → interrupted；`cli_session_id` helpers | schema 仅加法迁移 |
-| `scheduler::plan_queued_starts` | 同 Agent 串行、跨 Agent 可并行、available=0 | 同 Agent 串行语义 |
-| `auth` | password / JWT roundtrip | 登录链路基础 |
-
-**前端**（`pnpm test` / Vitest）
-
-| 模块 | 覆盖重点 |
-|---|---|
-| `mentions.ts` | @ 解析、长名优先 |
-| `messageContent.ts` | 与 Rust 对称的 parts 工具 |
-
-新增纯函数优先同目录 `*.test.ts` / `#[cfg(test)]`，不引入重型 UI 测试库（除非 Phase 2 明确需要）。
-
-### L2 — 集成测试（Phase 2，骨架预留）
-
-| 场景 | 建议做法 | 备注 |
-|---|---|---|
-| Web 登录 + 建群读消息 | `axum` + tempfile DB + `tower::ServiceExt` | 不启真实端口 |
-| mock Agent 跑通一轮 | `SchedulerState` + `EventSender::Web` + mock adapter | 短超时；取消 token |
-| WS `chat-event` channel | 订阅 broadcast，断言 thinking/final | 跟 v1.4 流式契约 |
-
-放置建议：`src-tauri/tests/` 或模块内 `#[tokio::test]`；仍走 `--no-default-features`。
-
-### L3 — Canary 冒烟（部署后，非门禁编译测）
-
-部署成功后人工或脚本：
-
-```bash
-curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8081/
-# 登录 root/root；mock 成员连续 @ → 串行 + 气泡分区
-```
-
-真 CLI smoke：`powershell -File scripts/smoke-adapters.ps1`（缺 CLI → SKIP，exit 0）。
-
-### L4 — E2E（Phase 3，可选）
-
-仅当 Web UI 回归成本明显上升时再上 Playwright，目标环境 **仅 canary `:8081`**，禁止指向生产 `:8080`。
-
-## 覆盖矩阵（优先级）
+## 覆盖矩阵（优先级 · 2026-08-05）
 
 | ID | 风险点 | 层 | 状态 |
 |---|---|---|---|
-| R1 | 同 Agent 并行抢跑 | L1 `plan_queued_starts` | 已有骨架 |
-| R2 | parts / legacy content 破坏 | L1 message_content 双侧 | 已有 |
+| R1 | 同 Agent 并行抢跑 | L1 `plan_queued_starts` | ✅ |
+| R2 | parts / legacy content 破坏 | L1 message_content 双侧 | ✅ |
 | R3 | Cursor `--resume` / session 清空重试 | L1 parse + adapter args | 部分；契约测 Phase 2 |
-| R4 | workspace_path=`/` 拒跑 | L1/L2 scheduler/execute | Phase 2 |
-| R5 | JWT / 登录失败放开 API | L1 auth + L2 web | L1 已有 |
-| R6 | promote 覆盖生产 DB | 发布脚本评审 + 手工清单 | 脚本约束，非单测 |
-| R7 | 生产读 workspace `dist` | systemd unit / epitaph | 运维约束 |
-| R8 | 适配器 CLI 参数漂移 | L1 快照 + 尽力 smoke | 已有部分 |
+| R4 | workspace_path=`/` 拒跑 | L1/L2 | Phase 2 |
+| R5 | JWT / 登录失败放开 API | L1 auth | L1 ✅；L2 Web 未做 |
+| R6 | promote 覆盖生产 DB | 脚本+清单 | 非单测 |
+| R7 | 生产读 workspace `dist` | systemd / epitaph | 运维约束 |
+| R8 | 适配器 CLI 参数漂移 | L1 快照 + smoke | 部分 |
+| R9 | 种子群 `is_system` / 跨 workspace | L1 db + memory | ✅ |
+| R10 | PanelLive 同源 proxy / A2A 禁 PCM | L1 extensions + a2a | ✅；proxy HTTP 集成未做 |
+| R11 | 发布断连 60s + **30s 静默横幅** | L1 releasingState | ✅；stub 探活/时序未测 |
+| R12 | run_heartbeat / 设置心跳 | L1 heartbeatPolicy | 前端 ✅；后端 emit 未测 |
+| R13 | metrics 20s + `/api/metrics/latest` | L1 metrics | 部分；路由集成未做 |
+| R14 | React #310（hooks after early return） | 手工 / 未来 RTL | **缺口** |
+| R15 | promote stop→start 中断留 dead | 清单+经验 | 非单测（2026-08-05 已踩） |
 
 ## 门禁：绑 `deploy-canary.sh`
 
@@ -108,46 +105,39 @@ curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8081/
 deploy-canary.sh
   │
   ├─ scripts/test-gate.sh     ← 失败则中止，不构建、不重启 canary
-  │    ├─ pnpm test
+  │    ├─ pnpm exec vitest run --pool=forks --maxWorkers=1
   │    └─ cargo test --no-default-features --lib
   ├─ pnpm build:web
   ├─ cargo build --release ...
-  └─ 安装到 canary 槽 + systemctl restart
+  └─ 安装到 canary 槽 + systemctl restart canary
 ```
 
 | 项 | 约定 |
 |---|---|
 | 入口 | [`scripts/test-gate.sh`](../scripts/test-gate.sh) |
 | 调用点 | [`scripts/deploy-canary.sh`](../scripts/deploy-canary.sh) 构建之前 |
-| 跳过 | 仅破窗：`LINLIS_SKIP_TEST_GATE=1`（打印醒目警告；日常禁止） |
-| `BUILD=skip` | **仍跑门禁**（产物可跳过编译，质量门禁不跳） |
-| 本地等价 | `pnpm run test:gate` 或直接跑 `scripts/test-gate.sh` |
+| 跳过 | 仅破窗：`LINLIS_SKIP_TEST_GATE=1`（日常禁止） |
+| `BUILD=skip` | **仍跑门禁** |
+| 本地等价 | `pnpm run test:gate` |
 
-`promote-canary.sh` / `freeze-prod.sh` **不**重复跑完整编译测（假定 canary 已门禁通过）；晋升前仍做 HTTP 冒烟。
+`promote-canary.sh` / `freeze-prod.sh` **不**重复跑完整编译测；晋升前做 HTTP 冒烟，且 **promote 全程勿中断**（见 `docs/release-checklist.md`）。
+
+灰度推包后另跑：`./scripts/canary-announce-a2a.sh`（流程约定，非门禁）。
 
 ## 命令速查
 
 ```bash
-# 前端
 pnpm test
-
-# Rust（与 epitaph / 门禁一致）
 cd src-tauri && CARGO_BUILD_JOBS=1 cargo test --no-default-features --lib
-
-# 一键门禁（部署前）
-./scripts/test-gate.sh
-# 或
-pnpm run test:gate
-
-# 灰度（含门禁）
+./scripts/test-gate.sh   # 或 pnpm run test:gate
 ./scripts/deploy-canary.sh
 ```
 
 ## 内存与并发
 
-- 门禁与 canary 构建均：`CARGO_BUILD_JOBS=1`、`NODE_OPTIONS=--max-old-space-size=1024`
-- `test-gate.sh` 仅对 **cargo** 子 shell 设 `ulimit -v 1800000`（Vitest/Wasm 需要更大虚拟地址空间，不套同一限制）
-- 禁止在门禁里拉起全量 release 构建或并行大型套件
+- canary 构建：`CARGO_BUILD_JOBS=1`、`NODE_OPTIONS=--max-old-space-size=1024`（deploy 脚本）
+- `test-gate.sh`：Vitest 用 `max-old-space-size=768`；仅对 **cargo** 子 shell `ulimit -v 1800000`
+- 禁止在门禁里拉起全量并行大型套件
 
 ## 目录与命名
 
@@ -163,14 +153,22 @@ pnpm run test:gate
 
 | 阶段 | 内容 | 完成定义 |
 |---|---|---|
-| **Phase 1（本次）** | 策略文档 + `test-gate.sh` + canary 绑定 + scheduler/auth 骨架 | 门禁绿；`deploy-canary` 失败会阻断 |
-| **Phase 2** | Web API 集成、mock 全链路、`/` workspace 拒跑、session 契约 | 关键路径有集成断言 |
-| **Phase 3** | 可选 Playwright canary E2E；若上云再补 GHA 镜像同一脚本 | UI 回归可自动捕 |
+| **Phase 1** | 策略 + `test-gate` + canary 绑定 + 核心 L1 | ✅ 门禁绿；deploy 失败会阻断 |
+| **Phase 2** | Web API 集成、mock 全链路、`/` workspace 拒跑、session 契约、health/metrics 路由 | 关键路径有集成断言 |
+| **Phase 3** | 可选 Playwright canary E2E（登录白屏/#310、releasing 30s 静默） | UI 回归可自动捕 |
+
+## 下次补测建议（按性价比）
+
+1. **高**：`metrics::PERF_SAMPLE_SECS == 20` 常量锁；`ChatEvent` emit 带 `seq` 的纯函数/单测。  
+2. **高**：Phase 2 最小集成：`GET /api/health`（无鉴权）+ `GET /api/metrics/latest`（鉴权）。  
+3. **中**：Playwright canary：登录后 `#root` 非空（防 #310）；断 WS 前 30s 无横幅文案。  
+4. **低**：`canary-announce-a2a.sh` dry-run（mock HTTP）。
 
 ## Do not regress（测试也要守）
 
 - 不改 `tauri::command` 签名；`ChatEvent` 仅加可选字段
-- promote 永不覆盖生产 DB
+- promote 永不覆盖生产 DB；promote 勿在 stop/start 间中断
 - 生产不读 workspace `dist/`
 - 同 Agent 串行语义
 - 门禁与测试不得依赖或写入生产数据目录
+- 重连横幅：60s 窗口内 **前 30s 静默**

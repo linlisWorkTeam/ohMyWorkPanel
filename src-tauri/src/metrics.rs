@@ -188,4 +188,9 @@ mod tests {
         assert_eq!(s.ts, 42);
         assert!((s.rss_mib - 12.0).abs() < 0.01);
     }
+
+    #[test]
+    fn perf_sample_interval_is_20s() {
+        assert_eq!(PERF_SAMPLE_SECS, 20);
+    }
 }
