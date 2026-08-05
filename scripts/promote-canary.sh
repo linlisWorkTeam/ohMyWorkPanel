@@ -47,6 +47,18 @@ EOF
 systemctl restart linlis-work-panel.service
 sleep 1
 systemctl is-active linlis-work-panel.service
+# Proxy Requires=prod: restarting prod stops the proxy and does NOT bring it back.
+if systemctl list-unit-files linlis-work-panel-proxy.service >/dev/null 2>&1; then
+  systemctl restart linlis-work-panel-proxy.service
+  sleep 1
+  systemctl is-active linlis-work-panel-proxy.service
+fi
+# Public edge (nginx → :9090 → :8080); keep enabled so domain stays up after reboots.
+if systemctl list-unit-files nginx.service >/dev/null 2>&1; then
+  systemctl enable nginx.service >/dev/null 2>&1 || true
+  systemctl start nginx.service >/dev/null 2>&1 || true
+fi
 curl -sS -o /dev/null -w "prod_http=%{http_code}\n" "http://127.0.0.1:${PROD_PORT}/" || true
+curl -sS -o /dev/null -w "proxy_http=%{http_code}\n" "http://127.0.0.1:9090/" || true
 echo "Promoted. Prod UI/binary updated; data still at ${PROD_DATA}"
 echo "Login + LinlisWorkPanel group should remain intact."
