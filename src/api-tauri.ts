@@ -25,8 +25,10 @@ export const api = {
     groupId: string; kind: "user" | "agent" | "chatbot"; displayName: string; roleDescription: string;
     avatarColor?: string; adapter?: string; executablePath?: string;
     chatbotProvider?: "opencode-go" | "deepseek"; apiKey?: string; model?: string;
-    loginUsername?: string; loginPassword?: string;
+    loginUsername?: string; loginPassword?: string; existingAuthUserId?: string;
   }) => invoke<Member>("add_member", { input }),
+  listJoinableUsers: (groupId: string) =>
+    invoke<{ id: string; username: string }[]>("list_joinable_users", { groupId }),
   verify: async () => ({ sub: "desktop", username: "desktop", isAdmin: true }),
   setGroupArchived: (groupId: string, archived: boolean) =>
     invoke<Group>("set_group_archived_cmd", { groupId, archived }),

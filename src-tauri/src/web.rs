@@ -547,6 +547,25 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
      model: Option<String>,
      login_username: Option<String>,
      login_password: Option<String>,
+     existing_auth_user_id: Option<String>,
+ }
+
+ async fn list_joinable_users_web(
+     State(state): State<Arc<AppState>>,
+     ClaimsExtractor(claims): ClaimsExtractor,
+     axum::extract::Query(q): axum::extract::Query<std::collections::HashMap<String, String>>,
+ ) -> Result<Json<Vec<crate::models::JoinableUser>>, (StatusCode, String)> {
+     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
+     let group_id = q
+         .get("groupId")
+         .map(|s| s.as_str())
+         .filter(|s| !s.is_empty())
+         .ok_or_else(|| (StatusCode::BAD_REQUEST, "缺少 groupId".into()))?;
+     db_get_group(&conn, group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+     crate::db::list_joinable_users(&conn, group_id)
+         .map(Json)
+         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
  }
 
  async fn add_member_web(
@@ -582,39 +601,25 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
      });
      let mut auth_user_id: Option<String> = None;
      if input.kind == "user" {
-         let login_user = input
-             .login_username
-             .as_deref()
-             .map(str::trim)
-             .filter(|s| !s.is_empty())
-             .ok_or_else(|| (StatusCode::BAD_REQUEST, "添加用户需填写登录用户名".into()))?;
-         let login_pass = input
-             .login_password
-             .as_deref()
-             .filter(|s| !s.is_empty())
-             .ok_or_else(|| (StatusCode::BAD_REQUEST, "添加用户需填写登录密码".into()))?;
-         if login_user.eq_ignore_ascii_case("root") {
-             return Err((StatusCode::BAD_REQUEST, "不能使用保留用户名 root".into()));
-         }
-         if conn
-             .query_row(
-                 "SELECT id FROM users WHERE username=?1",
-                 params![login_user],
-                 |_| Ok(()),
+         auth_user_id = Some(
+             crate::db::resolve_user_member_auth_id(
+                 &conn,
+                 &input.group_id,
+                 input.existing_auth_user_id.as_deref(),
+                 input.login_username.as_deref(),
+                 input.login_password.as_deref(),
              )
-             .is_ok()
-         {
-             return Err((StatusCode::CONFLICT, "登录用户名已被占用".into()));
-         }
-         let uid = id();
-         let password_hash = crate::auth::hash_password(login_pass)
-             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-         conn.execute(
-             "INSERT INTO users(id,username,password_hash,created_at,is_admin) VALUES(?1,?2,?3,?4,0)",
-             params![uid, login_user, password_hash, created_at],
-         )
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-         auth_user_id = Some(uid);
+             .map_err(|e| {
+                 let status = if e.contains("已被占用") || e.contains("已是本群") {
+                     StatusCode::CONFLICT
+                 } else if e.contains("不存在") {
+                     StatusCode::NOT_FOUND
+                 } else {
+                     StatusCode::BAD_REQUEST
+                 };
+                 (status, e)
+             })?,
+         );
      }
      conn.execute(
          "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,auth_user_id) VALUES(?1,?2,?3,?4,?5,?6,1,?7,?8)",
@@ -1462,6 +1467,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
          // Members
          .route("/api/groups/{group_id}/members", post(add_member_web))
          .route("/api/groups/{group_id}/members/{member_id}", delete(remove_member_web))
+         .route("/api/users/joinable", get(list_joinable_users_web))
          .route("/api/members/{member_id}/workspace", put(put_member_workspace_web))
          .route("/api/groups/{group_id}/admin", put(set_admin_web))
          // Messages

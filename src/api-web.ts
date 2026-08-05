@@ -169,11 +169,17 @@ export const api = {
     model?: string;
     loginUsername?: string;
     loginPassword?: string;
+    existingAuthUserId?: string;
   }) =>
     apiFetch<Member>(`/api/groups/${input.groupId}/members`, {
       method: "POST",
       body: JSON.stringify(input),
     }),
+
+  listJoinableUsers: (groupId: string) =>
+    apiFetch<{ id: string; username: string }[]>(
+      `/api/users/joinable?groupId=${encodeURIComponent(groupId)}`,
+    ),
 
   setGroupArchived: (groupId: string, archived: boolean) =>
     apiFetch<Group>(`/api/groups/${groupId}/archive`, {

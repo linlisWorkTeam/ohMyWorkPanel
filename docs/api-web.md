@@ -31,9 +31,15 @@
 | PUT | `/api/groups/{id}/archive` |
 | POST | `/api/groups/{group_id}/members` |
 | DELETE | `/api/groups/{group_id}/members/{member_id}` |
+| GET | `/api/users/joinable?groupId=`（管理员；尚未加入该群的登录用户） |
 | PUT | `/api/members/{member_id}/model` |
 | PUT | `/api/members/{member_id}/workspace` |
 | PUT | `/api/groups/{group_id}/admin` |
+
+添加 `kind=user` 成员时：
+
+- **创建新账号**：`loginUsername` + `loginPassword`（用户名冲突返回占用错误）
+- **加入已有账号**：`existingAuthUserId`（`users.id`）；无需密码；已在本群则 409
 
 ## 消息 / 任务
 

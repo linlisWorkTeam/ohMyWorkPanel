@@ -173,6 +173,16 @@ pub struct AddMemberInput {
     pub login_username: Option<String>,
     /// Login password for kind=user
     pub login_password: Option<String>,
+    /// Link an existing `users.id` into the group instead of creating a new login
+    pub existing_auth_user_id: Option<String>,
+}
+
+/// Login account that can be linked as a group user member.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JoinableUser {
+    pub id: String,
+    pub username: String,
 }
 
 #[derive(Debug, Serialize)]

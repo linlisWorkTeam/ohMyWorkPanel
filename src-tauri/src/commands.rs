@@ -195,38 +195,13 @@ pub fn add_member(input: AddMemberInput, state: State<'_, AppState>) -> AppResul
     });
     let mut auth_user_id: Option<String> = None;
     if input.kind == "user" {
-        let login_user = input
-            .login_username
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .ok_or_else(|| "添加用户需填写登录用户名".to_string())?;
-        let login_pass = input
-            .login_password
-            .as_deref()
-            .filter(|s| !s.is_empty())
-            .ok_or_else(|| "添加用户需填写登录密码".to_string())?;
-        if login_user.eq_ignore_ascii_case("root") {
-            return Err("不能使用保留用户名 root".into());
-        }
-        if conn
-            .query_row(
-                "SELECT id FROM users WHERE username=?1",
-                params![login_user],
-                |_| Ok(()),
-            )
-            .is_ok()
-        {
-            return Err("登录用户名已被占用".into());
-        }
-        let uid = id();
-        let password_hash = crate::auth::hash_password(login_pass)?;
-        conn.execute(
-            "INSERT INTO users(id,username,password_hash,created_at,is_admin) VALUES(?1,?2,?3,?4,0)",
-            params![uid, login_user, password_hash, created_at],
-        )
-        .map_err(|e| e.to_string())?;
-        auth_user_id = Some(uid);
+        auth_user_id = Some(crate::db::resolve_user_member_auth_id(
+            &conn,
+            &input.group_id,
+            input.existing_auth_user_id.as_deref(),
+            input.login_username.as_deref(),
+            input.login_password.as_deref(),
+        )?);
     }
     conn.execute(
         "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,auth_user_id) VALUES(?1,?2,?3,?4,?5,?6,1,?7,?8)",
@@ -305,6 +280,13 @@ pub fn add_member(input: AddMemberInput, state: State<'_, AppState>) -> AppResul
         member_from_row,
     )
     .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn list_joinable_users(group_id: String, state: State<'_, AppState>) -> AppResult<Vec<crate::models::JoinableUser>> {
+    let conn = open_db(&state.db_path)?;
+    get_group(&conn, &group_id)?;
+    crate::db::list_joinable_users(&conn, &group_id)
 }
 
 #[tauri::command]

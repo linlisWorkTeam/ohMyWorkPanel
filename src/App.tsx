@@ -16,7 +16,7 @@ import {
   parseMessageContent,
 } from "./messageContent";
 import { defaultModelForAdapter, modelsForAdapter } from "./agentModels";
-import { chatbotSlotTaken } from "./memberForm";
+import { canSubmitUserMember, chatbotSlotTaken, type UserAddMode } from "./memberForm";
 import { markdownToHtml } from "./markdownLite";
 import { isIgnorableWsKind, shouldResyncAfterWsEvent } from "./realtimeWs";
 import {
@@ -48,12 +48,15 @@ type NewMember = {
   model: string;
   loginUsername: string;
   loginPassword: string;
+  userAddMode: UserAddMode;
+  existingAuthUserId: string;
 };
 type Session = "checking" | "login" | "ready";
 const emptyMember: NewMember = {
   kind: "agent", displayName: "", roleDescription: "", adapter: "mock", executablePath: "",
   chatbotProvider: "opencode-go", apiKey: "", model: "",
   loginUsername: "", loginPassword: "",
+  userAddMode: "create", existingAuthUserId: "",
 };
 const PHASE_LABEL: Record<string, string> = {
   queued: "排队", starting: "启动", preparing: "准备", cli_spawn: "拉起 CLI",
@@ -91,6 +94,7 @@ export function App() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => loadAuthUser());
   const [showAddMember, setShowAddMember] = useState(false);
   const [newMember, setNewMember] = useState<NewMember>(emptyMember);
+  const [joinableUsers, setJoinableUsers] = useState<{ id: string; username: string }[]>([]);
   const [ocrRunning, setOcrRunning] = useState(false);
   const [ocrPasting, setOcrPasting] = useState(false);
   const [presetRoles, setPresetRoles] = useState<PresetRole[]>([]);
@@ -584,8 +588,29 @@ export function App() {
     }
   };
   const selectMention = (member: Member) => setComposer((value) => value.replace(/@([^\s@]*)$/u, `@${member.displayName} `));
+  useEffect(() => {
+    if (!showAddMember || !current || newMember.kind !== "user" || newMember.userAddMode !== "link") {
+      return;
+    }
+    let cancelled = false;
+    void api.listJoinableUsers(current.group.id).then((users) => {
+      if (!cancelled) setJoinableUsers(users);
+    }).catch((reason) => {
+      if (!cancelled) setError(readError(reason));
+    });
+    return () => { cancelled = true; };
+  }, [showAddMember, current?.group.id, newMember.kind, newMember.userAddMode]);
+
   const addMember = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); if (!current) return;
+    if (newMember.kind === "user" && !canSubmitUserMember(newMember.userAddMode, {
+      loginUsername: newMember.loginUsername,
+      loginPassword: newMember.loginPassword,
+      existingAuthUserId: newMember.existingAuthUserId,
+    })) {
+      setError(newMember.userAddMode === "link" ? "请选择要加入的已有登录用户" : "请填写登录用户名和密码");
+      return;
+    }
     try {
       await api.addMember({
         groupId: current.group.id,
@@ -603,10 +628,17 @@ export function App() {
                 : newMember.adapter,
             ) || undefined)
           : undefined,
-        loginUsername: newMember.kind === "user" ? newMember.loginUsername.trim() : undefined,
-        loginPassword: newMember.kind === "user" ? newMember.loginPassword : undefined,
+        loginUsername: newMember.kind === "user" && newMember.userAddMode === "create"
+          ? newMember.loginUsername.trim()
+          : undefined,
+        loginPassword: newMember.kind === "user" && newMember.userAddMode === "create"
+          ? newMember.loginPassword
+          : undefined,
+        existingAuthUserId: newMember.kind === "user" && newMember.userAddMode === "link"
+          ? newMember.existingAuthUserId.trim()
+          : undefined,
       });
-      setNewMember(emptyMember); setShowAddMember(false); await refresh();
+      setNewMember(emptyMember); setShowAddMember(false); setJoinableUsers([]); await refresh();
     } catch (reason) { setError(readError(reason)); }
   };
   const removeMember = async (member: Member) => {
@@ -841,9 +873,42 @@ export function App() {
           <input autoFocus value={newMember.displayName} onChange={(event) => setNewMember((value) => ({ ...value, displayName: event.target.value }))} placeholder="成员显示名称" required />
           <input value={newMember.roleDescription} onChange={(event) => setNewMember((value) => ({ ...value, roleDescription: event.target.value }))} placeholder={addMemberKind === "agent" ? "职责，例如：代码审查" : addMemberKind === "chatbot" ? "机器人说明（可选）" : "成员说明（可选）"} />
           {addMemberKind === "user" && <>
-            <input value={newMember.loginUsername} onChange={(event) => setNewMember((value) => ({ ...value, loginUsername: event.target.value }))} placeholder="登录用户名" required autoComplete="off" />
-            <input type="password" value={newMember.loginPassword} onChange={(event) => setNewMember((value) => ({ ...value, loginPassword: event.target.value }))} placeholder="登录密码" required autoComplete="new-password" />
-            <p className="form-hint">对方用该用户名/密码登录后，只能看到并进入本群对话。</p>
+            <select
+              value={newMember.userAddMode}
+              onChange={(event) => setNewMember((value) => ({
+                ...value,
+                userAddMode: event.target.value as UserAddMode,
+                existingAuthUserId: "",
+              }))}
+            >
+              <option value="create">创建新账号</option>
+              <option value="link">加入已有账号</option>
+            </select>
+            {newMember.userAddMode === "create" ? <>
+              <input value={newMember.loginUsername} onChange={(event) => setNewMember((value) => ({ ...value, loginUsername: event.target.value }))} placeholder="登录用户名" required autoComplete="off" />
+              <input type="password" value={newMember.loginPassword} onChange={(event) => setNewMember((value) => ({ ...value, loginPassword: event.target.value }))} placeholder="登录密码" required autoComplete="new-password" />
+              <p className="form-hint">对方用该用户名/密码登录后，只能看到并进入本群对话。若用户名已存在，请改选「加入已有账号」。</p>
+            </> : <>
+              <select
+                value={newMember.existingAuthUserId}
+                onChange={(event) => {
+                  const id = event.target.value;
+                  const picked = joinableUsers.find((u) => u.id === id);
+                  setNewMember((value) => ({
+                    ...value,
+                    existingAuthUserId: id,
+                    displayName: value.displayName.trim() || picked?.username || value.displayName,
+                  }));
+                }}
+                required
+              >
+                <option value="">选择已有登录用户…</option>
+                {joinableUsers.map((u) => (
+                  <option key={u.id} value={u.id}>{u.username}</option>
+                ))}
+              </select>
+              <p className="form-hint">将已有登录用户拉入本群（无需再设密码）；列表不含已在本群的用户。</p>
+            </>}
           </>}
           {addMemberKind === "agent" && <>
             <select value={newMember.adapter} onChange={(event) => {

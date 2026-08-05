@@ -64,6 +64,7 @@ pub fn run() {
             commands::update_runtime_settings,
             commands::create_group,
             commands::add_member,
+            commands::list_joinable_users,
             commands::remove_member,
             commands::set_admin,
             commands::send_message,

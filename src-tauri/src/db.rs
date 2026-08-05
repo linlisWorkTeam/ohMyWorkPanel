@@ -1,5 +1,6 @@
 use crate::models::{
-    Experience, Feature, FeatureTask, Group, GroupState, Member, Message, RoadmapItem, RuntimeSettings, TaskRun,
+    Experience, Feature, FeatureTask, Group, GroupState, JoinableUser, Member, Message, RoadmapItem,
+    RuntimeSettings, TaskRun,
 };
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension, Row};
@@ -490,6 +491,92 @@ pub fn is_admin_user(connection: &Connection, user_id: &str) -> AppResult<bool> 
         .map_err(|e| e.to_string())?
         .unwrap_or(0);
     Ok(flag != 0 || user_id == "seed-user-root")
+}
+
+/// Users not already an active `kind=user` member of `group_id`.
+pub fn list_joinable_users(connection: &Connection, group_id: &str) -> AppResult<Vec<JoinableUser>> {
+    let mut stmt = connection
+        .prepare(
+            "SELECT id, username FROM users
+             WHERE id NOT IN (
+               SELECT auth_user_id FROM members
+               WHERE group_id=?1 AND kind='user' AND is_active=1 AND auth_user_id IS NOT NULL
+             )
+             ORDER BY username COLLATE NOCASE ASC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![group_id], |r| {
+            Ok(JoinableUser {
+                id: r.get(0)?,
+                username: r.get(1)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(rows)
+}
+
+/// Resolve `auth_user_id` when adding a kind=user member: link existing or create login.
+pub fn resolve_user_member_auth_id(
+    connection: &Connection,
+    group_id: &str,
+    existing_auth_user_id: Option<&str>,
+    login_username: Option<&str>,
+    login_password: Option<&str>,
+) -> AppResult<String> {
+    if let Some(uid) = existing_auth_user_id.map(str::trim).filter(|s| !s.is_empty()) {
+        let username: String = connection
+            .query_row(
+                "SELECT username FROM users WHERE id=?1",
+                params![uid],
+                |r| r.get(0),
+            )
+            .map_err(|_| "所选登录用户不存在".to_string())?;
+        let n: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM members WHERE group_id=?1 AND auth_user_id=?2 AND is_active=1 AND kind='user'",
+                params![group_id, uid],
+                |r| r.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        if n > 0 {
+            return Err(format!("用户 {username} 已是本群成员"));
+        }
+        return Ok(uid.to_string());
+    }
+
+    let login_user = login_username
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "添加用户需填写登录用户名".to_string())?;
+    let login_pass = login_password
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "添加用户需填写登录密码".to_string())?;
+    if login_user.eq_ignore_ascii_case("root") {
+        return Err("不能使用保留用户名 root".into());
+    }
+    if connection
+        .query_row(
+            "SELECT id FROM users WHERE username=?1",
+            params![login_user],
+            |_| Ok(()),
+        )
+        .is_ok()
+    {
+        return Err("登录用户名已被占用".into());
+    }
+    let uid = id();
+    let password_hash = crate::auth::hash_password(login_pass)?;
+    let created_at = now();
+    connection
+        .execute(
+            "INSERT INTO users(id,username,password_hash,created_at,is_admin) VALUES(?1,?2,?3,?4,0)",
+            params![uid, login_user, password_hash, created_at],
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(uid)
 }
 
 /// Groups visible to a login user. Admins see all; others only groups linked via members.auth_user_id.
@@ -1336,6 +1423,45 @@ mod tests {
         assert_eq!(visible.len(), 1);
         assert_eq!(visible[0].id, "g1");
         assert!(is_admin_user(&conn, "seed-user-root").unwrap());
+    }
+
+    #[test]
+    fn list_joinable_and_link_existing_user() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        init_db(file.path()).unwrap();
+        let conn = open_db(file.path()).unwrap();
+        let ts = now();
+        conn.execute(
+            "INSERT INTO users(id,username,password_hash,created_at,is_admin) VALUES('u1','alice','x',?1,0)",
+            params![ts],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO users(id,username,password_hash,created_at,is_admin) VALUES('u2','bob','x',?1,0)",
+            params![ts],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at) VALUES('g1','G1','.','m-owner',NULL,?1)",
+            params![ts],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,auth_user_id) VALUES('m1','g1','user','Alice','#000','',1,?1,'u1')",
+            params![ts],
+        )
+        .unwrap();
+
+        let joinable = list_joinable_users(&conn, "g1").unwrap();
+        assert!(joinable.iter().any(|u| u.username == "bob"));
+        assert!(!joinable.iter().any(|u| u.username == "alice"));
+
+        let linked = resolve_user_member_auth_id(&conn, "g1", Some("u2"), None, None).unwrap();
+        assert_eq!(linked, "u2");
+        let err = resolve_user_member_auth_id(&conn, "g1", Some("u1"), None, None).unwrap_err();
+        assert!(err.contains("已是本群"));
+        let taken = resolve_user_member_auth_id(&conn, "g1", None, Some("alice"), Some("pw")).unwrap_err();
+        assert!(taken.contains("已被占用"));
     }
 
     #[test]
