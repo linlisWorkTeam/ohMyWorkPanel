@@ -28,6 +28,17 @@ pnpm tauri dev
 pnpm dev
 ```
 
+Web 服务（本仓库灰度/生产常用形态）：
+
+```bash
+# 开发构建后由 systemd 槽位托管；见 scripts/deploy-canary.sh
+pnpm run test:gate
+./scripts/deploy-canary.sh   # :8081 + data-canary
+./scripts/promote-canary.sh  # 晋升 :8080，不覆盖生产 DB
+```
+
+Web API 路由索引：[`docs/api-web.md`](docs/api-web.md)。贡献约定：[`AGENTS.md`](AGENTS.md)。
+
 ## 脚本
 
 | 命令 | 说明 |
@@ -36,7 +47,10 @@ pnpm dev
 | `pnpm build` | 前端生产构建 |
 | `pnpm tauri dev` | 启动桌面应用（开发） |
 | `pnpm test` | 前端 Vitest |
+| `pnpm run test:gate` | 部署前门禁（Vitest + `cargo test --lib`） |
 | `cd src-tauri && cargo test` | Rust 单测 |
+| `./scripts/deploy-canary.sh` | 构建并部署灰度（`:8081`） |
+| `./scripts/promote-canary.sh` | 灰度 → 生产（`:8080`，不覆盖 DB） |
 | `powershell -File scripts/smoke-adapters.ps1` | 本机适配器 smoke（尽力，失败不挡合并） |
 
 ## Agent 适配器
