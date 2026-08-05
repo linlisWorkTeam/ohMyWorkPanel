@@ -7,6 +7,7 @@ Active handoff notes for future agents.
 | Date | Topic | Status |
 |------|-------|--------|
 | 2026-08-05 | [PanelLive Mock MVP + 平台路线图 A2A](./2026-08-05-panellive-mock-mvp.md) | active |
+| 2026-08-05 | [PanelLive 同源代理 + events（T3）](./2026-08-05-panellive-platform-side.md) | active |
 | 2026-08-05 | [Extension Host + PanelLive / A2A](./2026-08-05-extension-host-panellive.md) | active |
 | 2026-08-05 | [前台「崩掉」经验 + 发版检查](./2026-08-05-frontend-outage-lessons.md) | active |
 | 2026-08-05 | [添加用户：加入已有账号](./2026-08-05-link-existing-user-member.md) | active |

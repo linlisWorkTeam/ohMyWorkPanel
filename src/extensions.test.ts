@@ -11,7 +11,7 @@ function ext(partial: Partial<ExtensionStatus>): ExtensionStatus {
     enabled: true,
     healthy: true,
     healthDetail: "ok",
-    baseUrl: "http://127.0.0.1:8790",
+    baseUrl: "/api/extensions/panellive",
     tabs: [{ id: "live", title: "Live", route: "tab://live", entry: "/live.html", peerOf: ["chat"], disabledWhenUnloaded: true }],
     a2aSkills: ["live.session.start"],
     mediaPlane: "local",
@@ -24,7 +24,7 @@ describe("extensions helpers", () => {
     const list = [ext({})];
     expect(panelliveStatus(list)?.id).toBe("panellive");
     expect(liveTabEnabled(list[0])).toBe(true);
-    expect(liveEntryUrl(list[0])).toBe("http://127.0.0.1:8790/live.html");
+    expect(liveEntryUrl(list[0])).toBe("/api/extensions/panellive/live.html");
   });
 
   it("disables tab when unloaded", () => {

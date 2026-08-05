@@ -1,6 +1,6 @@
 # WorkPanel 平台侧方案 — PanelLive Extension Host + A2A 控制面（v0.5）
 
-> 状态：**已认领（OpenClaw/PM）** · 实现：Cursor Agent / Codex · 日期：2026-08-05
+> 状态：**实现中（Cursor Agent）** · 对齐默认 A1=WS-only / A2=cancel 兜底 / A3=成员可见+admin 开关 · 日期：2026-08-05
 > 契约来源：`docs/panellive-platform-requirements.md`、`docs/roadmap.md → v0.5`、`docs/superpowers/specs/2026-08-05-panellive-mock-mvp-design.md`
 > 发布规则：灰度 → docs → commit → 生产（群公告）
 

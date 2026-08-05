@@ -7,7 +7,8 @@ export const WS_CLIENT_HEARTBEAT_MS = 20_000;
 export const WS_RECONNECT_MAX_MS = 30_000;
 
 export function isIgnorableWsKind(kind: string | null | undefined): boolean {
-  return kind === WS_HEARTBEAT_KIND;
+  // live_event: A2A control-plane (A1 — not applied to chat message list)
+  return kind === WS_HEARTBEAT_KIND || kind === "live_event";
 }
 
 export function shouldResyncAfterWsEvent(kind: string | null | undefined): boolean {

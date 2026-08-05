@@ -8,6 +8,7 @@ import {
 describe("realtimeWs", () => {
   it("ignores heartbeat frames in chat UI handlers", () => {
     expect(isIgnorableWsKind("heartbeat")).toBe(true);
+    expect(isIgnorableWsKind("live_event")).toBe(true);
     expect(isIgnorableWsKind("message_delta")).toBe(false);
   });
 

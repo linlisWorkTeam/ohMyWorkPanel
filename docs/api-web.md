@@ -32,9 +32,11 @@
 | POST | `/api/groups/{group_id}/members` |
 | DELETE | `/api/groups/{group_id}/members/{member_id}` |
 | GET | `/api/users/joinable?groupId=`（管理员；尚未加入该群的登录用户） |
-| GET | `/api/groups/{id}/extensions`（Extend 列表 + health） |
-| PUT | `/api/groups/{id}/extensions/panellive` body `{ enabled }` |
-| POST | `/api/a2a/dispatch`（Live skills；禁 PCM） |
+| GET | `/api/groups/{id}/extensions`（Extend 列表 + health；`baseUrl` 为同源代理前缀） |
+| PUT | `/api/groups/{id}/extensions/panellive` body `{ enabled }`（未就绪 → 409） |
+| GET/POST | `/api/extensions/panellive/{*path}`（同源反代 PanelLive `:8790`，无 JWT） |
+| POST | `/api/extensions/panellive/events`（`X-Panellive-Token`；禁 PCM；仅 WS，不写群消息） |
+| POST | `/api/a2a/dispatch`（Live skills；禁 PCM；stop→cancel） |
 | PUT | `/api/members/{member_id}/model` |
 | PUT | `/api/members/{member_id}/workspace` |
 | PUT | `/api/groups/{group_id}/admin` |

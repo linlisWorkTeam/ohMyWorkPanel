@@ -4,7 +4,7 @@ use axum::{
     http::{Request, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::{delete, get, post, put},
+    routing::{any, delete, get, post, put},
     Json, Router,
 };
 use rusqlite::params;
@@ -37,19 +37,32 @@ use crate::models::{
 };
 // Helper to emit events to WebSocket clients
 fn web_emit(tx: &broadcast::Sender<String>, group_id: &str, kind: &str, message_id: Option<&str>, run_id: Option<&str>, status: Option<&str>, error: Option<&str>) {
+    web_emit_delta(tx, group_id, kind, message_id, run_id, status, error, None);
+}
+
+fn web_emit_delta(
+    tx: &broadcast::Sender<String>,
+    group_id: &str,
+    kind: &str,
+    message_id: Option<&str>,
+    run_id: Option<&str>,
+    status: Option<&str>,
+    error: Option<&str>,
+    delta: Option<&str>,
+) {
     let event = crate::models::ChatEvent {
         kind: kind.into(),
         group_id: group_id.into(),
         run_id: run_id.map(str::to_string),
         message_id: message_id.map(str::to_string),
-        delta: None,
+        delta: delta.map(str::to_string),
         status: status.map(str::to_string),
         error: error.map(str::to_string),
         channel: None,
         replace: None,
-                        phase: None,
-                        elapsed_ms: None,
-                        total_ms: None,
+        phase: None,
+        elapsed_ms: None,
+        total_ms: None,
     };
     if let Ok(payload) = serde_json::to_string(&event) {
         let _ = tx.send(payload);
@@ -1385,7 +1398,131 @@ async fn put_panellive_extension_web(
     db_get_group(&conn, &group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     crate::extensions::set_panellive_enabled(&conn, &group_id, body.enabled)
         .map(Json)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+        .map_err(|e| {
+            if e.starts_with("CONFLICT:") {
+                (StatusCode::CONFLICT, e.trim_start_matches("CONFLICT:").to_string())
+            } else {
+                (StatusCode::BAD_REQUEST, e)
+            }
+        })
+}
+
+async fn proxy_panellive(
+    method: axum::http::Method,
+    Path(path): Path<String>,
+    headers: axum::http::HeaderMap,
+    body: axum::body::Bytes,
+) -> Result<Response, (StatusCode, String)> {
+    let upstream_path = crate::extensions::sanitize_proxy_path(&path)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    let root = crate::extensions::panellive_root();
+    let manifest = crate::extensions::load_panellive_manifest(&root)
+        .map_err(|e| (StatusCode::BAD_GATEWAY, e))?;
+    let port = crate::extensions::panellive_upstream_port(&manifest);
+    let ct = headers
+        .get(axum::http::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+    let method_s = method.as_str();
+    if method_s != "GET" && method_s != "POST" && method_s != "OPTIONS" {
+        return Err((StatusCode::METHOD_NOT_ALLOWED, "仅支持 GET/POST".into()));
+    }
+    if method_s == "OPTIONS" {
+        return Ok((
+            StatusCode::NO_CONTENT,
+            [
+                (axum::http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"),
+                (axum::http::header::ACCESS_CONTROL_ALLOW_METHODS, "GET,POST,OPTIONS"),
+                (axum::http::header::ACCESS_CONTROL_ALLOW_HEADERS, "Content-Type,X-Panellive-Token"),
+            ],
+            Vec::new(),
+        )
+            .into_response());
+    }
+    let body_opt = if method_s == "GET" {
+        None
+    } else {
+        Some(body.as_ref())
+    };
+    let ex = crate::extensions::http_exchange_local(
+        method_s,
+        "127.0.0.1",
+        port,
+        &upstream_path,
+        body_opt,
+        ct.as_deref(),
+    )
+    .map_err(|e| (StatusCode::BAD_GATEWAY, e))?;
+    let status = StatusCode::from_u16(ex.status).unwrap_or(StatusCode::BAD_GATEWAY);
+    Ok((
+        status,
+        [(axum::http::header::CONTENT_TYPE, ex.content_type)],
+        ex.body,
+    )
+        .into_response())
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PanelliveEventBody {
+    #[serde(default)]
+    task_id: Option<String>,
+    skill: String,
+    #[serde(default)]
+    session_id: Option<String>,
+    #[serde(default)]
+    group_id: Option<String>,
+    #[serde(default)]
+    payload: serde_json::Value,
+    #[serde(default)]
+    ts: Option<i64>,
+}
+
+async fn panellive_events_web(
+    State(state): State<Arc<AppState>>,
+    headers: axum::http::HeaderMap,
+    Json(body): Json<PanelliveEventBody>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let expected = crate::extensions::panellive_token();
+    let got = headers
+        .get("X-Panellive-Token")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    if got != expected {
+        return Err((StatusCode::UNAUTHORIZED, "invalid X-Panellive-Token".into()));
+    }
+    crate::a2a::validate_live_skill(&body.skill).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    // Events whitelist: transcribe + session signals (A1: no chat persistence).
+    if !matches!(
+        body.skill.as_str(),
+        "live.transcribe.result" | "live.session.start" | "live.session.stop" | "live.session.cancel"
+    ) {
+        return Err((StatusCode::BAD_REQUEST, "events 入口不接受此 skill".into()));
+    }
+    crate::a2a::validate_events_payload(&body.payload).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    let group_id = body.group_id.unwrap_or_default();
+    let text = body
+        .payload
+        .get("text")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    web_emit_delta(
+        &state.tx,
+        &group_id,
+        "live_event",
+        body.task_id.as_deref(),
+        body.session_id.as_deref(),
+        Some(&body.skill),
+        None,
+        if text.is_empty() { None } else { Some(text) },
+    );
+    Ok(Json(json!({
+        "ok": true,
+        "skill": body.skill,
+        "sessionId": body.session_id,
+        "note": "broadcast via WS; not written to group messages",
+        "ts": body.ts,
+    })))
 }
 
 async fn dispatch_a2a_web(
@@ -1602,5 +1739,15 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/ws", get(ws_handler))
         .route_layer(middleware::from_fn(auth_middleware));
 
-    Router::new().merge(auth_routes).merge(protected).with_state(state)
+    // Same-origin PanelLive proxy + events (no JWT — iframe cannot send Bearer).
+    // Events use X-Panellive-Token. Media/API proxied to 127.0.0.1:8790 server-side.
+    let panellive_public = Router::new()
+        .route("/api/extensions/panellive/events", post(panellive_events_web))
+        .route("/api/extensions/panellive/{*path}", any(proxy_panellive));
+
+    Router::new()
+        .merge(auth_routes)
+        .merge(panellive_public)
+        .merge(protected)
+        .with_state(state)
 }

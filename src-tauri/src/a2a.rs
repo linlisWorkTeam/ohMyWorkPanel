@@ -85,25 +85,107 @@ pub fn validate_live_skill(skill: &str) -> Result<(), String> {
     }
 }
 
+/// Events entry payload: only text-ish keys (A1: not written into group chat).
+pub fn validate_events_payload(payload: &Value) -> Result<(), String> {
+    if let Some(reason) = payload_contains_forbidden_media(payload) {
+        return Err(reason.into());
+    }
+    let obj = payload
+        .as_object()
+        .ok_or_else(|| "payload 必须是对象".to_string())?;
+    const ALLOWED: &[&str] = &["text", "isFinal", "final", "lang", "sessionId", "chunks"];
+    for key in obj.keys() {
+        if !ALLOWED.iter().any(|a| a.eq_ignore_ascii_case(key)) {
+            return Err(format!("payload 含非白名单字段：{key}"));
+        }
+    }
+    let raw = serde_json::to_vec(payload).unwrap_or_default();
+    if raw.len() > 8 * 1024 {
+        return Err("payload 超过 8KB".into());
+    }
+    Ok(())
+}
+
+/// Dispatch control-plane skill; may call PanelLive upstream (server-side 127.0.0.1).
 pub fn dispatch_live_skill(envelope: &A2aEnvelope) -> Result<A2aDispatchResult, String> {
     validate_live_skill(&envelope.skill)?;
     if let Some(reason) = payload_contains_forbidden_media(&envelope.payload) {
         return Err(reason.into());
     }
-    // MVP: accept + acknowledge. Downstream ChatBot/Agent routing hooks later.
-    let msg = match envelope.skill.as_str() {
-        "live.session.start" => "Live session start accepted",
-        "live.session.stop" => "Live session stop accepted",
-        "live.session.cancel" => "Live session cancel accepted (stop LLM/TTS on PanelLive side)",
-        "live.transcribe.result" => "Transcript text accepted (no media)",
-        "live.synthesize.request" => "TTS text request accepted (PanelLive synthesizes)",
+
+    let root = crate::extensions::panellive_root();
+    let manifest = crate::extensions::load_panellive_manifest(&root)?;
+    let port = crate::extensions::panellive_upstream_port(&manifest);
+    let host = "127.0.0.1";
+
+    let (msg, session_id) = match envelope.skill.as_str() {
+        "live.session.start" => {
+            let (code, body) = crate::extensions::http_post_json_local(host, port, "/v1/session/start", "{}")?;
+            if code != 200 {
+                return Err(format!("PanelLive session/start HTTP {code}: {body}"));
+            }
+            let v: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
+            let sid = v
+                .get("sessionId")
+                .and_then(|x| x.as_str())
+                .map(|s| s.to_string())
+                .or_else(|| envelope.session_id.clone());
+            ("Live session started via PanelLive".into(), sid)
+        }
+        "live.session.stop" | "live.session.cancel" => {
+            // A2: PanelLive has cancel only — stop maps to cancel.
+            let sid = envelope
+                .session_id
+                .clone()
+                .ok_or_else(|| "sessionId 必填".to_string())?;
+            let body = serde_json::json!({ "sessionId": sid }).to_string();
+            let (code, resp) =
+                crate::extensions::http_post_json_local(host, port, "/v1/session/cancel", &body)?;
+            if code != 200 {
+                return Err(format!("PanelLive session/cancel HTTP {code}: {resp}"));
+            }
+            ("Live session cancel accepted (stop→cancel)".into(), Some(sid))
+        }
+        "live.transcribe.result" => {
+            validate_events_payload(&envelope.payload)?;
+            (
+                "Transcript text accepted (WS only; not written to chat)".into(),
+                envelope.session_id.clone(),
+            )
+        }
+        "live.synthesize.request" => {
+            let text = envelope
+                .payload
+                .get("text")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| "synthesize 需要 payload.text".to_string())?;
+            let mut body = serde_json::json!({ "text": text });
+            if let Some(sid) = &envelope.session_id {
+                body["sessionId"] = Value::String(sid.clone());
+            }
+            let (code, resp) = crate::extensions::http_post_json_local(
+                host,
+                port,
+                "/v1/tts/mock?format=json",
+                &body.to_string(),
+            )?;
+            if code != 200 {
+                return Err(format!("PanelLive tts/mock HTTP {code}: {resp}"));
+            }
+            // Do not echo audioBase64 back on A2A control plane.
+            (
+                "TTS request forwarded to PanelLive (audio stays on media plane)".into(),
+                envelope.session_id.clone(),
+            )
+        }
         other => return Err(format!("未处理 skill：{other}")),
     };
+
     Ok(A2aDispatchResult {
         accepted: true,
         skill: envelope.skill.clone(),
-        session_id: envelope.session_id.clone(),
-        message: msg.into(),
+        session_id,
+        message: msg,
     })
 }
 

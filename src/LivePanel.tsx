@@ -26,7 +26,7 @@ export function LivePanel({ extension, onOpenSettings }: Props) {
     return (
       <div className="live-panel empty-chat">
         <strong>PanelLive 未就绪</strong>
-        <span>{extension.healthDetail || "请在服务器上启动 /AI/WorkPanelLive（npm start :8790）"}</span>
+        <span>{extension.healthDetail || "请在服务器上启动 /AI/WorkPanelLive（npm start :8790）。Live UI 经同源代理加载，勿直连 127.0.0.1。"}</span>
       </div>
     );
   }

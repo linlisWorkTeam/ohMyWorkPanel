@@ -136,30 +136,109 @@ pub fn set_extension_enabled(
     Ok(())
 }
 
-/// Minimal HTTP/1.0 GET — avoids adding reqwest on 2GB hosts.
-pub fn http_get_local(host: &str, port: u16, path: &str) -> AppResult<(u16, String)> {
+#[derive(Debug, Clone)]
+pub struct HttpExchange {
+    pub status: u16,
+    pub content_type: String,
+    pub body: Vec<u8>,
+}
+
+/// Minimal HTTP/1.0 exchange — avoids adding reqwest on 2GB hosts.
+pub fn http_exchange_local(
+    method: &str,
+    host: &str,
+    port: u16,
+    path: &str,
+    body: Option<&[u8]>,
+    content_type: Option<&str>,
+) -> AppResult<HttpExchange> {
     let addr = format!("{host}:{port}");
     let mut stream = TcpStream::connect(&addr).map_err(|e| format!("连接 {addr} 失败：{e}"))?;
     stream
-        .set_read_timeout(Some(Duration::from_secs(2)))
+        .set_read_timeout(Some(Duration::from_secs(15)))
         .map_err(|e| e.to_string())?;
     stream
-        .set_write_timeout(Some(Duration::from_secs(2)))
+        .set_write_timeout(Some(Duration::from_secs(5)))
         .map_err(|e| e.to_string())?;
-    let req = format!(
-        "GET {path} HTTP/1.0\r\nHost: {host}:{port}\r\nConnection: close\r\n\r\n"
-    );
-    stream.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
-    let mut buf = String::new();
-    stream.read_to_string(&mut buf).map_err(|e| e.to_string())?;
-    let status = buf
+    let mut req = format!("{method} {path} HTTP/1.0\r\nHost: {host}:{port}\r\nConnection: close\r\n");
+    if let Some(bytes) = body {
+        let ct = content_type.unwrap_or("application/octet-stream");
+        req.push_str(&format!("Content-Type: {ct}\r\nContent-Length: {}\r\n", bytes.len()));
+        req.push_str("\r\n");
+        stream.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
+        stream.write_all(bytes).map_err(|e| e.to_string())?;
+    } else {
+        req.push_str("\r\n");
+        stream.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
+    }
+    let mut buf = Vec::new();
+    stream.read_to_end(&mut buf).map_err(|e| e.to_string())?;
+    let sep = buf
+        .windows(4)
+        .position(|w| w == b"\r\n\r\n")
+        .ok_or_else(|| "PanelLive 响应无头部结束标记".to_string())?;
+    let header = String::from_utf8_lossy(&buf[..sep]);
+    let status = header
         .lines()
         .next()
         .and_then(|l| l.split_whitespace().nth(1))
         .and_then(|s| s.parse::<u16>().ok())
         .unwrap_or(0);
-    let body = buf.split("\r\n\r\n").nth(1).unwrap_or("").to_string();
-    Ok((status, body))
+    let mut content_type = "application/octet-stream".to_string();
+    for line in header.lines().skip(1) {
+        if let Some(rest) = line.to_ascii_lowercase().strip_prefix("content-type:") {
+            content_type = rest.trim().to_string();
+            // restore original casing from header line
+            if let Some((_, v)) = line.split_once(':') {
+                content_type = v.trim().to_string();
+            }
+            break;
+        }
+    }
+    Ok(HttpExchange {
+        status,
+        content_type,
+        body: buf[sep + 4..].to_vec(),
+    })
+}
+
+pub fn http_get_local(host: &str, port: u16, path: &str) -> AppResult<(u16, String)> {
+    let ex = http_exchange_local("GET", host, port, path, None, None)?;
+    Ok((
+        ex.status,
+        String::from_utf8_lossy(&ex.body).into_owned(),
+    ))
+}
+
+pub fn http_post_json_local(host: &str, port: u16, path: &str, json_body: &str) -> AppResult<(u16, String)> {
+    let ex = http_exchange_local(
+        "POST",
+        host,
+        port,
+        path,
+        Some(json_body.as_bytes()),
+        Some("application/json"),
+    )?;
+    Ok((
+        ex.status,
+        String::from_utf8_lossy(&ex.body).into_owned(),
+    ))
+}
+
+pub fn sanitize_proxy_path(raw: &str) -> AppResult<String> {
+    let trimmed = raw.trim().trim_start_matches('/');
+    if trimmed.is_empty() {
+        return Ok("/live.html".into());
+    }
+    if trimmed.contains("..") || trimmed.contains('\\') || trimmed.contains('\0') {
+        return Err("非法代理路径".into());
+    }
+    Ok(format!("/{trimmed}"))
+}
+
+/// Same-origin base for browser iframe (never expose 127.0.0.1 to clients).
+pub fn panellive_public_base() -> &'static str {
+    "/api/extensions/panellive"
 }
 
 pub fn check_panellive_health(manifest: &ExtensionManifest) -> (bool, String) {
@@ -175,8 +254,16 @@ pub fn check_panellive_health(manifest: &ExtensionManifest) -> (bool, String) {
     }
 }
 
-pub fn panellive_base_url(manifest: &ExtensionManifest) -> String {
-    format!("http://127.0.0.1:{}", manifest.runtime.default_port)
+pub fn panellive_upstream_port(manifest: &ExtensionManifest) -> u16 {
+    manifest.runtime.default_port
+}
+
+pub fn panellive_base_url(_manifest: &ExtensionManifest) -> String {
+    panellive_public_base().into()
+}
+
+pub fn panellive_token() -> String {
+    std::env::var("LINLIS_PANELLIVE_TOKEN").unwrap_or_else(|_| "panellive-dev-token".into())
 }
 
 pub fn list_group_extensions(conn: &Connection, group_id: &str) -> AppResult<Vec<ExtensionStatus>> {
@@ -213,7 +300,7 @@ pub fn set_panellive_enabled(conn: &Connection, group_id: &str, enabled: bool) -
         let (ok, detail) = check_panellive_health(&manifest);
         if !ok {
             return Err(format!(
-                "PanelLive 未就绪，无法 load。请先在 {} 执行 npm start（默认 :{}）。详情：{detail}",
+                "CONFLICT:PanelLive 未就绪，无法 load。请先在 {} 执行 npm start（默认 :{}）。详情：{detail}",
                 root.display(),
                 manifest.runtime.default_port
             ));
@@ -241,6 +328,13 @@ mod tests {
         assert_eq!(m.id, "panellive");
         assert!(m.contributes.a2a_skills.iter().any(|s| s == "live.session.start"));
         assert!(m.contributes.tabs.iter().any(|t| t.route == "tab://live"));
+    }
+
+    #[test]
+    fn sanitize_proxy_rejects_dotdot() {
+        assert!(sanitize_proxy_path("../etc/passwd").is_err());
+        assert_eq!(sanitize_proxy_path("live.html").unwrap(), "/live.html");
+        assert_eq!(sanitize_proxy_path("v1/session/start").unwrap(), "/v1/session/start");
     }
 
     #[test]
