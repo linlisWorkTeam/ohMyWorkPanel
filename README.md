@@ -2,7 +2,8 @@
 
 本地优先的多 Agent 协作面板：工作群绑定服务器工作区、`@` 触发本机 CLI Agent；也支持**聊天群** + 轻量 **chatbot**（默认响应者、原生窗口上下文与滚动摘要）。桌面（Tauri）与 Web 双模；本机灰度/生产以 Web + systemd 双槽位为主。
 
-当前发布标签：**[`v1.1.0`](https://github.com/linli0/LinlisWorkPanel/releases/tag/v1.1.0)**（相对 Base V1.0.0 的增量见下）。发展方向 SSOT：[`docs/version-pipeline.md`](docs/version-pipeline.md)。
+当前发布标签：**[`v1.1.0`](https://github.com/linlisWorkTeam/workPanel/releases/tag/v1.1.0)**（相对 Base V1.0.0 的增量见下）。发展方向 SSOT：[`docs/version-pipeline.md`](docs/version-pipeline.md)。  
+远端仓库：`https://github.com/linlisWorkTeam/workPanel`（`origin`）。
 
 ## 技术栈
 
