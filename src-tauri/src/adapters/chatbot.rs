@@ -31,18 +31,22 @@ pub fn normalize_adapter(provider: &str) -> Result<&'static str, String> {
     }
 }
 
-/// Native window context for chatbot (Doubao-style): dump recent group lines + current turn.
-/// No RAG — short chats rely on full recent window only.
+/// Native window (+ optional rolling summary) for chatbot. No vector RAG.
 pub fn build_chatbot_user_message(recent_chat: &str, root_message: &str) -> String {
     let recent = recent_chat.trim();
     let root = root_message.trim();
     if recent.is_empty() {
         return root.to_string();
     }
+    let window_label = if recent.contains("【历史摘要】") {
+        "群聊上下文"
+    } else {
+        "最近群聊（从旧到新）"
+    };
     if root.is_empty() {
-        return format!("最近群聊（从旧到新）：\n{recent}\n\n请结合上文回复。");
+        return format!("{window_label}：\n{recent}\n\n请结合上文回复。");
     }
-    format!("最近群聊（从旧到新）：\n{recent}\n\n当前消息：{root}")
+    format!("{window_label}：\n{recent}\n\n当前消息：{root}")
 }
 
 /// Non-streaming chat via system `curl` (avoids heavy HTTP crate compile/OOM on 2GB hosts).

@@ -1,8 +1,9 @@
 use crate::adapters::{self, chatbot, AdapterKind};
 use crate::db::{
-    create_task_run, get_agent_api_key, get_cli_session_id, get_group, get_members, get_settings_from,
-    id, insert_run_event, member_from_row, message_from_row, now, open_db, run_from_row,
-    set_cli_session_id, set_run_phase, AppResult,
+    create_task_run, get_agent_api_key, get_chat_context_summary, get_cli_session_id, get_group,
+    get_members, get_messages_after_created_at, get_settings_from, id, insert_run_event,
+    member_from_row, message_from_row, now, open_db, run_from_row, set_cli_session_id, set_run_phase,
+    upsert_chat_context_summary, AppResult,
 };
 use crate::event_sender::EventSender;
 use crate::logger;
@@ -458,7 +459,7 @@ async fn run_agent(
         };
         let ann = truncate_chars(context.group.announcement.trim(), 800);
         let system = format!(
-            "你是群聊机器人「{}」。只做轻量对话，不要调用工具、不要改代码/文件。回答简洁。结合下方最近群聊上下文理解指代与话题（原生窗口上下文，非向量长期记忆）。{}",
+            "你是群聊机器人「{}」。只做轻量对话，不要调用工具、不要改代码/文件。回答简洁。结合下方群聊上下文（最近原文 + 必要时的历史摘要）理解指代与话题；不要编造摘要里没有的事实。{}",
             context.agent.display_name,
             if ann.is_empty() {
                 String::new()
@@ -466,8 +467,23 @@ async fn run_agent(
                 format!("\n群公告：{ann}")
             }
         );
-        let user = chatbot::build_chatbot_user_message(&context.recent_chat, &root);
         let model = context.agent.model.as_deref();
+        let keep = context
+            .settings
+            .chat_context_message_limit
+            .clamp(5, 40) as usize;
+        let window = build_chatbot_rolling_window(
+            state,
+            &context.group.id,
+            keep,
+            adapter_name,
+            &api_key,
+            model,
+            token,
+        )
+        .await
+        .unwrap_or_else(|_| context.recent_chat.clone());
+        let user = chatbot::build_chatbot_user_message(&window, &root);
         let text = chatbot::run_chatbot_completion(
             adapter_name,
             &api_key,
@@ -704,6 +720,88 @@ fn extract_root_from_prompt(prompt: &str) -> String {
         return rest.lines().next().unwrap_or("").to_string();
     }
     "请继续处理群聊中刚 @ 你的最新任务。".into()
+}
+
+/// Rolling summary for chatbot: when unsummarized messages exceed `keep_limit`, fold the
+/// overflow into `chat_context_summaries` (LLM, extractive fallback), then accumulate recent lines.
+async fn build_chatbot_rolling_window(
+    state: &SchedulerState,
+    group_id: &str,
+    keep_limit: usize,
+    provider: &str,
+    api_key: &str,
+    model: Option<&str>,
+    token: &Arc<AtomicBool>,
+) -> AppResult<String> {
+    use crate::context_policy::{
+        build_fold_summary_prompt, compose_window_with_summary, extractive_fold_summary,
+        format_history_line, split_rolling_window, CHAT_FOLD_BATCH,
+    };
+
+    let conn = open_db(&state.db_path)?;
+    let existing = get_chat_context_summary(&conn, group_id)?;
+    let after = existing
+        .as_ref()
+        .map(|s| s.through_created_at)
+        .unwrap_or(0);
+    let mut summary_text = existing
+        .as_ref()
+        .map(|s| s.summary_text.clone())
+        .unwrap_or_default();
+    let load_n = (keep_limit.saturating_add(CHAT_FOLD_BATCH)) as i64;
+    let mut msgs = get_messages_after_created_at(&conn, group_id, after, load_n)?;
+    msgs.retain(|m| {
+        m.status != "streaming" && !parts_to_plain_text(&m.content).trim().is_empty()
+    });
+    let members = get_members(&conn, group_id)?;
+    let display: HashMap<_, _> = members
+        .iter()
+        .map(|m| (m.id.clone(), m.display_name.clone()))
+        .collect();
+    let line_of = |m: &crate::models::Message| {
+        format_history_line(
+            display
+                .get(&m.sender_member_id)
+                .map(String::as_str)
+                .unwrap_or("成员"),
+            &truncate_chars(&parts_to_plain_text(&m.content), 2_000),
+            m.created_at,
+        )
+    };
+
+    let (to_fold, keep) = split_rolling_window(&msgs, keep_limit);
+    if !to_fold.is_empty() {
+        let folded = to_fold.iter().map(line_of).collect::<Vec<_>>().join("\n");
+        let prompt = build_fold_summary_prompt(&summary_text, &folded);
+        let new_summary = match chatbot::run_chatbot_completion(
+            provider,
+            api_key,
+            "你是会话摘要助手，只输出压缩后的中文摘要正文。",
+            &prompt,
+            256,
+            token,
+            model,
+        )
+        .await
+        {
+            Ok(s) if !s.trim().is_empty() => s.trim().to_string(),
+            _ => extractive_fold_summary(&summary_text, &folded, 600),
+        };
+        let through = to_fold.last().map(|m| m.created_at).unwrap_or(after);
+        let conn = open_db(&state.db_path)?;
+        upsert_chat_context_summary(&conn, group_id, &new_summary, through)?;
+        summary_text = new_summary;
+    }
+
+    let mut recent = keep.iter().map(line_of).collect::<Vec<_>>().join("\n");
+    let budget = crate::context_policy::effective_history_char_budget("chat", "chatbot");
+    if recent.chars().count() > budget {
+        recent = format!(
+            "…(前文已截断)\n{}",
+            truncate_chars_end(&recent, budget)
+        );
+    }
+    Ok(compose_window_with_summary(&summary_text, &recent))
 }
 
 fn truncate_chars(input: &str, max_chars: usize) -> String {

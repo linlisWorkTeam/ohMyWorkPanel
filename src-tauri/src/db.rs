@@ -183,6 +183,12 @@ pub fn init_db(path: &Path) -> AppResult<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_orch_group ON roadmap_orchestrations(group_id, updated_at);
         CREATE INDEX IF NOT EXISTS idx_orch_item_status ON roadmap_orchestrations(roadmap_item_id, status);
+        CREATE TABLE IF NOT EXISTS chat_context_summaries (
+          group_id TEXT PRIMARY KEY REFERENCES groups(id) ON DELETE CASCADE,
+          summary_text TEXT NOT NULL,
+          through_created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
         "#,
     );
     for (key, value) in [
@@ -840,6 +846,81 @@ pub fn get_messages_recent(
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
     Ok(rows)
+}
+
+/// Messages with created_at strictly greater than `after_created_at`, oldest first, capped.
+pub fn get_messages_after_created_at(
+    connection: &Connection,
+    group_id: &str,
+    after_created_at: i64,
+    limit: i64,
+) -> AppResult<Vec<Message>> {
+    let limit = limit.clamp(1, 5_000);
+    let mut stmt = connection
+        .prepare(
+            "SELECT id,group_id,sender_member_id,parent_run_id,content,status,created_at
+             FROM messages
+             WHERE group_id=?1 AND created_at > ?2
+             ORDER BY created_at ASC, id ASC
+             LIMIT ?3",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![group_id, after_created_at, limit], message_from_row)
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(rows)
+}
+
+#[derive(Debug, Clone)]
+pub struct ChatContextSummary {
+    pub group_id: String,
+    pub summary_text: String,
+    pub through_created_at: i64,
+    pub updated_at: i64,
+}
+
+pub fn get_chat_context_summary(
+    connection: &Connection,
+    group_id: &str,
+) -> AppResult<Option<ChatContextSummary>> {
+    connection
+        .query_row(
+            "SELECT group_id, summary_text, through_created_at, updated_at FROM chat_context_summaries WHERE group_id=?1",
+            params![group_id],
+            |r| {
+                Ok(ChatContextSummary {
+                    group_id: r.get(0)?,
+                    summary_text: r.get(1)?,
+                    through_created_at: r.get(2)?,
+                    updated_at: r.get(3)?,
+                })
+            },
+        )
+        .optional()
+        .map_err(|e| e.to_string())
+}
+
+pub fn upsert_chat_context_summary(
+    connection: &Connection,
+    group_id: &str,
+    summary_text: &str,
+    through_created_at: i64,
+) -> AppResult<()> {
+    let ts = now();
+    connection
+        .execute(
+            "INSERT INTO chat_context_summaries(group_id, summary_text, through_created_at, updated_at)
+             VALUES(?1,?2,?3,?4)
+             ON CONFLICT(group_id) DO UPDATE SET
+               summary_text=excluded.summary_text,
+               through_created_at=excluded.through_created_at,
+               updated_at=excluded.updated_at",
+            params![group_id, summary_text, through_created_at, ts],
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// Messages strictly older than (before_created_at, before_id), ascending, up to limit.
@@ -1628,6 +1709,38 @@ mod tests {
         // user cannot be default responder even if listed as admin
         let skip_user = resolve_target_agent_ids(&conn, "g", Some("u"), &[]).unwrap();
         assert!(skip_user.is_empty());
+    }
+
+    #[test]
+    fn chat_context_summary_roundtrip_and_messages_after() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        init_db(file.path()).unwrap();
+        let conn = open_db(file.path()).unwrap();
+        let ts = now();
+        conn.execute(
+            "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at,group_kind) VALUES('g','g','.','u',NULL,?1,'chat')",
+            params![ts],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at) VALUES('u','g','user','u','#000','',1,?1)",
+            params![ts],
+        )
+        .unwrap();
+        for i in 1..=5 {
+            conn.execute(
+                "INSERT INTO messages(id,group_id,sender_member_id,parent_run_id,content,status,created_at) VALUES(?1,'g','u',NULL,?2,'completed',?3)",
+                params![format!("m{i}"), format!("c{i}"), i * 10],
+            )
+            .unwrap();
+        }
+        upsert_chat_context_summary(&conn, "g", "摘要A", 30).unwrap();
+        let s = get_chat_context_summary(&conn, "g").unwrap().unwrap();
+        assert_eq!(s.summary_text, "摘要A");
+        assert_eq!(s.through_created_at, 30);
+        let after = get_messages_after_created_at(&conn, "g", 30, 10).unwrap();
+        assert_eq!(after.len(), 2);
+        assert_eq!(after[0].id, "m4");
     }
 
     #[test]
