@@ -7,7 +7,7 @@ import type {
   CreateFeatureInput, UpdateFeatureInput,
   CreateFeatureTaskInput, UpdateFeatureTaskInput,
   Experience, SaveExperienceInput, LogEntry, LogLevel, LogQueryFilter,
-  DirListing, Group, ReleaseStatus, OpsJobState,
+  DirListing, Group, ReleaseStatus, OpsJobState, ExtensionStatus, A2aDispatchResult,
 } from "./types";
 
 const API_BASE = "";
@@ -349,6 +349,26 @@ export const api = {
     apiFetch<{ path: string }>("/api/fs/mkdir", {
       method: "POST",
       body: JSON.stringify({ parent, name }),
+    }),
+
+  listGroupExtensions: (groupId: string) =>
+    apiFetch<ExtensionStatus[]>(`/api/groups/${groupId}/extensions`),
+  setPanelliveEnabled: (groupId: string, enabled: boolean) =>
+    apiFetch<ExtensionStatus>(`/api/groups/${groupId}/extensions/panellive`, {
+      method: "PUT",
+      body: JSON.stringify({ enabled }),
+    }),
+  dispatchA2a: (envelope: {
+    skill: string;
+    groupId: string;
+    sessionId?: string;
+    payload?: unknown;
+    source?: string;
+    target?: string;
+  }) =>
+    apiFetch<A2aDispatchResult>("/api/a2a/dispatch", {
+      method: "POST",
+      body: JSON.stringify(envelope),
     }),
   updateGroupWorkspace: (groupId: string, workspacePath: string) =>
     apiFetch<Group>(`/api/groups/${groupId}/workspace`, {

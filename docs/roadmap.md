@@ -42,3 +42,13 @@
 - [ ] 跨群 Agent 引用（Agent 可同时加入多群）
 - [ ] 可选云端备份
 - [ ] Agent 角色社区模板
+
+## v0.5 — Extension Host + PanelLive 对接（平台侧）
+
+> 来源：PanelLive Mock MVP（`/AI/WorkPanelLive`）。详细契约见 [`docs/panellive-platform-requirements.md`](panellive-platform-requirements.md)。
+
+- [x] **Extension Host**：运行设置支持 PanelLive load/unload；清单读 `/AI/WorkPanelLive/extension.manifest.json`
+- [x] **Live 开关 + 页签**：与「聊天/项目」平级；开启后 iframe 至 PanelLive entry；关闭置灰
+- [x] **A2A 控制面 skills**：`POST /api/a2a/dispatch` 支持 `live.session.*` / `live.transcribe.result` / `live.synthesize.request`（**禁 PCM**）
+- [x] **边界**：云 STT/TTS 由 PanelLive 直连；平台不转音频
+- [x] **API**：`GET /api/groups/{id}/extensions`、`PUT .../extensions/panellive`

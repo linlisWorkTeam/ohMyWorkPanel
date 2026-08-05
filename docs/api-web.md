@@ -32,6 +32,9 @@
 | POST | `/api/groups/{group_id}/members` |
 | DELETE | `/api/groups/{group_id}/members/{member_id}` |
 | GET | `/api/users/joinable?groupId=`（管理员；尚未加入该群的登录用户） |
+| GET | `/api/groups/{id}/extensions`（Extend 列表 + health） |
+| PUT | `/api/groups/{id}/extensions/panellive` body `{ enabled }` |
+| POST | `/api/a2a/dispatch`（Live skills；禁 PCM） |
 | PUT | `/api/members/{member_id}/model` |
 | PUT | `/api/members/{member_id}/workspace` |
 | PUT | `/api/groups/{group_id}/admin` |

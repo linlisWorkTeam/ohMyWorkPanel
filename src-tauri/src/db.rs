@@ -165,6 +165,7 @@ pub fn init_db(path: &Path) -> AppResult<()> {
         [],
     );
     migrate_members_allow_chatbot(&connection)?;
+    let _ = crate::extensions::ensure_extensions_table(&connection);
     let _ = connection.execute_batch(
         r#"
         CREATE TABLE IF NOT EXISTS roadmap_orchestrations (

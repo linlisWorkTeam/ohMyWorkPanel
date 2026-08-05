@@ -168,6 +168,36 @@ export interface RuntimeSettings {
   contextMessageLimit: number;
   maxDelegationDepth: number;
 }
+
+export interface ExtensionTab {
+  id: string;
+  title: string;
+  route: string;
+  entry: string;
+  peerOf?: string[];
+  disabledWhenUnloaded?: boolean;
+}
+
+export interface ExtensionStatus {
+  id: string;
+  name: string;
+  version: string;
+  kind: string;
+  enabled: boolean;
+  healthy: boolean;
+  healthDetail: string;
+  baseUrl: string;
+  tabs: ExtensionTab[];
+  a2aSkills: string[];
+  mediaPlane: string;
+}
+
+export interface A2aDispatchResult {
+  accepted: boolean;
+  skill: string;
+  sessionId?: string | null;
+  message: string;
+}
  
  // === Project Management ===
  

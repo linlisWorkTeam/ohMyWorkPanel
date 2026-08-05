@@ -1355,6 +1355,79 @@ async fn put_workspace_web(
     Ok(Json(g))
 }
 
+async fn list_group_extensions_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(group_id): Path<String>,
+) -> Result<Json<Vec<crate::extensions::ExtensionStatus>>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
+    db_get_group(&conn, &group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    crate::extensions::list_group_extensions(&conn, &group_id)
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ExtensionToggleBody {
+    enabled: bool,
+}
+
+async fn put_panellive_extension_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(group_id): Path<String>,
+    Json(body): Json<ExtensionToggleBody>,
+) -> Result<Json<crate::extensions::ExtensionStatus>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
+    db_get_group(&conn, &group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    crate::extensions::set_panellive_enabled(&conn, &group_id, body.enabled)
+        .map(Json)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+}
+
+async fn dispatch_a2a_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Json(mut envelope): Json<crate::a2a::A2aEnvelope>,
+) -> Result<Json<crate::a2a::A2aDispatchResult>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_group_access(&conn, &claims.sub, &envelope.group_id).map_err(map_acl_err)?;
+    if envelope.group_id.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "groupId 必填".into()));
+    }
+    // Live skills require extension loaded for the group.
+    if envelope.skill.starts_with("live.") {
+        let enabled = crate::extensions::is_extension_enabled(
+            &conn,
+            &envelope.group_id,
+            crate::extensions::PANELLIVE_ID,
+        )
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+        if !enabled {
+            return Err((
+                StatusCode::CONFLICT,
+                "PanelLive 未 load：请在运行设置中开启 Live 扩展".into(),
+            ));
+        }
+    }
+    if envelope.source.is_none() {
+        envelope.source = Some(claims.username.clone());
+    }
+    crate::a2a::dispatch_live_skill(&envelope)
+        .map(Json)
+        .map_err(|e| {
+            let status = if e.contains("禁止") {
+                StatusCode::BAD_REQUEST
+            } else {
+                StatusCode::BAD_REQUEST
+            };
+            (status, e)
+        })
+}
+
 async fn ops_release_status_web(
     State(state): State<Arc<AppState>>,
     ClaimsExtractor(claims): ClaimsExtractor,
@@ -1457,6 +1530,12 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/api/groups/{id}/announcement", get(get_announcement_web).put(put_announcement_web))
         .route("/api/groups/{id}/workspace", put(put_workspace_web))
         .route("/api/groups/{id}/archive", put(put_group_archive_web))
+        .route("/api/groups/{id}/extensions", get(list_group_extensions_web))
+        .route(
+            "/api/groups/{id}/extensions/panellive",
+            put(put_panellive_extension_web),
+        )
+        .route("/api/a2a/dispatch", post(dispatch_a2a_web))
         .route("/api/members/{member_id}/model", put(put_member_model_web))
         .route("/api/fs/list", get(list_server_dir_web))
         .route("/api/fs/mkdir", post(create_server_dir_web))

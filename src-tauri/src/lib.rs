@@ -1,11 +1,13 @@
 ﻿pub mod auth;
 mod adapters;
+pub mod a2a;
 
 #[cfg(feature = "gui")]
 mod commands;
 mod ocr;
 pub mod codex_proxy;
 pub mod db;
+pub mod extensions;
 pub mod fs_browse;
 pub mod keepalive;
 pub mod memory;
