@@ -38,7 +38,7 @@ pnpm run test:gate
 ./scripts/promote-canary.sh  # 晋升 :8080，不覆盖生产 DB（无批准则拒绝）
 ```
 
-Web API 路由索引：[`docs/api-web.md`](docs/api-web.md)。贡献约定：[`AGENTS.md`](AGENTS.md)。
+Web API 路由索引：[`docs/api-web.md`](docs/api-web.md)。版本流水线：[`docs/version-pipeline.md`](docs/version-pipeline.md)。贡献约定：[`AGENTS.md`](AGENTS.md)。
 
 ## 脚本
 

@@ -84,6 +84,7 @@ scripts/
 ## Handoff notes
 
 This project uses `docs/epitaph/` for session handoff notes. New agents:
-1. Read `docs/epitaph/README.md` for index.
-2. Read the latest active epitaph before modifying related code.
-3. Follow the epitaph skill workflow to write new handoffs.
+1. Read `docs/version-pipeline.md`（版本流水线 / 发展方向 SSOT；先占位再改码）.
+2. Read `docs/epitaph/README.md` for index.
+3. Read the latest active epitaph before modifying related code.
+4. Follow the epitaph skill workflow to write new handoffs.

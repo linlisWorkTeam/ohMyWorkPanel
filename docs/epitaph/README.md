@@ -2,10 +2,13 @@
 
 Active handoff notes for future agents.
 
+**版本流水线（做什么 / 下一步）**：[`docs/version-pipeline.md`](../version-pipeline.md) — 先占位再改码。
+
 ## Active
 
 | Date | Topic | Status |
 |------|-------|--------|
+| 2026-08-05 | [版本流水线 SSOT](../version-pipeline.md) | active（非 epitaph，索引挂此） |
 | 2026-08-05 | [成员面板同 Agent 排队数可见](./2026-08-05-member-queue-visibility.md) | active |
 | 2026-08-05 | [发版优化 P1–P4（种子群/重连/心跳/指标）](./2026-08-05-release-hardening.md) | active |
 | 2026-08-05 | [PanelLive Mock MVP + 平台路线图 A2A](./2026-08-05-panellive-mock-mvp.md) | active |

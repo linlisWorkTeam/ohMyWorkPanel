@@ -1,5 +1,8 @@
 # Roadmap
 
+> **发展方向与版本流水线（SSOT）**：[`docs/version-pipeline.md`](version-pipeline.md)  
+> 本文保留早期 v0.x 勾选与 PanelLive v0.5 条目；**新功能立项、轨道划分、下一站顺序以 version-pipeline 为准**，避免东改西改。
+
 ## v0.1 — MVP（已完成）
 
 - [x] 群聊 CRUD、绑定本地工作目录
