@@ -2,6 +2,18 @@
 
 > PanelLive 是 WorkPanel 上的 **Extend** 服务。本文件列出平台侧需提供的能力；实现代码在 `/AI/WorkPanelLive`，不在平台仓内完成 PanelLive 业务。
 
+## 0. 工作区 / 仓边界（强制）
+
+| 仓 | 路径 | 只改这些 |
+|---|---|---|
+| Host | `/AI/LinlisWorkPanel` | 代理、`LivePanel`、短回复注入、A2A、群配置 API |
+| Extend | `/AI/WorkPanelLive`（独立 git） | `:8790`、`live.html`、STT/TTS、DashScope |
+
+- 清单路径：`LINLIS_PANELLIVE_ROOT`（默认 `/AI/WorkPanelLive`）— **耦合路径，不是混源码**。
+- **正式 Live 协作群**：`WorkPanelLive` → workspace `/AI/WorkPanelLive`。
+- **禁止**：错名群 `WorPanelLive（废弃·错名）` 已归档；勿解档；勿把 Live 名绑到 `/AI/LinlisWorkPanel`。
+- 拍板记录：`docs/superpowers/specs/2026-08-05-workspace-boundary-live-host.md`
+
 ## 1. Extension Host（加卸载）
 
 | 能力 | 说明 |

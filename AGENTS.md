@@ -73,6 +73,7 @@ scripts/
 - **Commit 前**：遵守 `.cursor/rules/pre-commit-test-gate.mdc`——复核自动化测试设计，并跑通 `pnpm run test:gate`；与上条群公告一并满足。
 - **工作区路径**：建群/改工作区选**服务器绝对路径**（`ServerPathPicker` / `GET /api/fs/list`），不是浏览器本机路径；可在当前目录下 `POST /api/fs/mkdir` 新建文件夹后再选用（不可在 `/` 下直接建）。路由索引见 `docs/api-web.md`。
 - **Extend 页签入口**：PanelLive 等扩展 UI 必须走平台同源代理（如 `/api/extensions/panellive/...`），**禁止** iframe 直连 `http://127.0.0.1:端口`（浏览器会打到用户本机，且 HTTPS 会混合内容拦截）。
+- **Live / Host 仓边界**：STT/TTS/`live.html` **只改** `/AI/WorkPanelLive`（独立 git）；代理/`LivePanel`/短回复/A2A **只改**本仓。正式 Live 群 workspace=`/AI/WorkPanelLive`；错名群 `WorPanelLive（废弃·错名）` 已归档勿解档。见 `docs/superpowers/specs/2026-08-05-workspace-boundary-live-host.md`。
 - **群公告**：等同全员项目级 rule，写入后注入 Agent prompt，并尝试同步工作区 `.cursor/rules/group-announcement.mdc`。
 - 本机需 Node 20+、Rust stable、WebView2（Windows）。
 - Agent 运行依赖本机已登录的 CLI（codex/claude/opencode/agent）。
