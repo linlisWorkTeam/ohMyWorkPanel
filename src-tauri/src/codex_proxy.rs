@@ -170,9 +170,23 @@ pub fn responses_to_chat(input: &serde_json::Value) -> Vec<serde_json::Value> {
     }
     if let Some(arr) = input.as_array() {
         let mut messages = Vec::new();
+        let mut pending_tool_calls: Vec<serde_json::Value> = Vec::new();
+        let flush_assistant = |messages: &mut Vec<serde_json::Value>,
+                               pending: &mut Vec<serde_json::Value>| {
+            if pending.is_empty() {
+                return;
+            }
+            messages.push(serde_json::json!({
+                "role": "assistant",
+                "content": null,
+                "tool_calls": pending.clone(),
+            }));
+            pending.clear();
+        };
         for item in arr {
             let ty = item.get("type").and_then(|t| t.as_str()).unwrap_or("");
             if ty == "message" {
+                flush_assistant(&mut messages, &mut pending_tool_calls);
                 if let (Some(role), Some(content)) = (item.get("role"), item.get("content")) {
                     let mut role = role.as_str().unwrap_or("user").to_string();
                     if role == "developer" {
@@ -184,14 +198,64 @@ pub fn responses_to_chat(input: &serde_json::Value) -> Vec<serde_json::Value> {
                     }));
                 }
             } else if ty == "input_item" {
+                flush_assistant(&mut messages, &mut pending_tool_calls);
                 if let Some(content) = item.get("content") {
                     messages.push(serde_json::json!({
                         "role": "user",
                         "content": extract_text(content),
                     }));
                 }
+            } else if ty == "function_call" {
+                let call_id = item
+                    .get("call_id")
+                    .or_else(|| item.get("id"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("call_unknown");
+                let name = item
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown");
+                let args = item
+                    .get("arguments")
+                    .map(|v| {
+                        if v.is_string() {
+                            v.as_str().unwrap_or("{}").to_string()
+                        } else {
+                            v.to_string()
+                        }
+                    })
+                    .unwrap_or_else(|| "{}".into());
+                pending_tool_calls.push(serde_json::json!({
+                    "id": call_id,
+                    "type": "function",
+                    "function": { "name": name, "arguments": args },
+                }));
+            } else if ty == "function_call_output" || ty == "tool_result" {
+                flush_assistant(&mut messages, &mut pending_tool_calls);
+                let call_id = item
+                    .get("call_id")
+                    .or_else(|| item.get("tool_call_id"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let output = item
+                    .get("output")
+                    .or_else(|| item.get("content"))
+                    .map(|v| {
+                        if v.is_string() {
+                            v.as_str().unwrap_or("").to_string()
+                        } else {
+                            v.to_string()
+                        }
+                    })
+                    .unwrap_or_default();
+                messages.push(serde_json::json!({
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "content": output,
+                }));
             }
         }
+        flush_assistant(&mut messages, &mut pending_tool_calls);
         if messages.is_empty() {
             return vec![serde_json::json!({"role":"user","content":"hello"})];
         }
@@ -201,6 +265,47 @@ pub fn responses_to_chat(input: &serde_json::Value) -> Vec<serde_json::Value> {
         return responses_to_chat(inner);
     }
     vec![serde_json::json!({"role":"user","content":"hello"})]
+}
+
+/// Responses flat tools → Chat Completions `tools` (mirrors Node shim).
+pub fn map_tools(tools: &serde_json::Value) -> Option<Vec<serde_json::Value>> {
+    let arr = tools.as_array()?;
+    let mapped: Vec<_> = arr
+        .iter()
+        .filter_map(|t| {
+            if t.get("type").and_then(|x| x.as_str()) == Some("function") {
+                if let Some(func) = t.get("function") {
+                    return Some(serde_json::json!({
+                        "type": "function",
+                        "function": {
+                            "name": func.get("name"),
+                            "description": func.get("description").cloned().unwrap_or_else(|| serde_json::json!("")),
+                            "parameters": func.get("parameters").cloned().unwrap_or_else(|| serde_json::json!({"type":"object","properties":{}})),
+                        }
+                    }));
+                }
+                if let Some(name) = t.get("name") {
+                    return Some(serde_json::json!({
+                        "type": "function",
+                        "function": {
+                            "name": name,
+                            "description": t.get("description").cloned().unwrap_or_else(|| serde_json::json!("")),
+                            "parameters": t.get("parameters")
+                                .or_else(|| t.get("input_schema"))
+                                .cloned()
+                                .unwrap_or_else(|| serde_json::json!({"type":"object","properties":{}})),
+                        }
+                    }));
+                }
+            }
+            None
+        })
+        .collect();
+    if mapped.is_empty() {
+        None
+    } else {
+        Some(mapped)
+    }
 }
 
 #[cfg(test)]
@@ -234,5 +339,49 @@ mod tests {
     fn string_input_becomes_user_message() {
         let msgs = responses_to_chat(&json!("ping"));
         assert_eq!(msgs[0]["content"], "ping");
+    }
+
+    #[test]
+    fn maps_function_call_and_output_roundtrip() {
+        let input = json!([
+            {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": "run"}]
+            },
+            {
+                "type": "function_call",
+                "call_id": "c1",
+                "name": "shell",
+                "arguments": "{\"cmd\":\"pwd\"}"
+            },
+            {
+                "type": "function_call_output",
+                "call_id": "c1",
+                "output": "/tmp"
+            }
+        ]);
+        let msgs = responses_to_chat(&input);
+        assert_eq!(msgs.len(), 3);
+        assert_eq!(msgs[1]["role"], "assistant");
+        assert_eq!(msgs[1]["tool_calls"][0]["id"], "c1");
+        assert_eq!(msgs[1]["tool_calls"][0]["function"]["name"], "shell");
+        assert_eq!(msgs[2]["role"], "tool");
+        assert_eq!(msgs[2]["tool_call_id"], "c1");
+        assert_eq!(msgs[2]["content"], "/tmp");
+    }
+
+    #[test]
+    fn map_tools_flattens_responses_function() {
+        let tools = json!([
+            {
+                "type": "function",
+                "name": "shell",
+                "description": "run",
+                "parameters": {"type": "object", "properties": {}}
+            }
+        ]);
+        let mapped = map_tools(&tools).expect("mapped");
+        assert_eq!(mapped[0]["function"]["name"], "shell");
     }
 }
