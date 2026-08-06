@@ -105,6 +105,42 @@ export const api = {
   listServerDir: (path: string) => invoke<DirListing>("list_server_dir", { path }),
   createServerDir: (parent: string, name: string) =>
     invoke<string>("create_server_dir", { parent, name }).then((path) => ({ path })),
+  getVersionBoard: async () => {
+    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
+  },
+  createProjectVersion: async () => {
+    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
+  },
+  updateVersionRoadmap: async () => {
+    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
+  },
+  startVersionAsk: async () => {
+    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
+  },
+  cancelVersionAsk: async () => {
+    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
+  },
+  approveVersionWaves: async () => {
+    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
+  },
+  playWave: async () => {
+    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
+  },
+  pauseWave: async () => {
+    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
+  },
+  advanceWave: async () => {
+    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
+  },
+  playVersion: async () => {
+    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
+  },
+  pauseVersion: async () => {
+    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
+  },
+  releaseVersion: async () => {
+    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
+  },
   listGroupExtensions: async (_groupId: string) => [] as import("./types").ExtensionStatus[],
   setPanelliveEnabled: async (_groupId: string, _enabled: boolean) => {
     throw new Error("Desktop mode: PanelLive Extension Host 仅 Web 服务可用");

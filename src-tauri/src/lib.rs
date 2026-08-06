@@ -22,6 +22,8 @@ pub mod event_sender;
 pub mod ops;
 pub mod orchestrator;
 pub mod scheduler;
+pub mod git_inspect;
+pub mod workflow;
 pub mod web;
 
 use db::init_db;

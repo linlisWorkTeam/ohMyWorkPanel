@@ -99,16 +99,16 @@ status: active
 | 工作区边界 | Live Extend ↔ Host 仓/群拍板（文档） | `specs/2026-08-05-workspace-boundary-live-host.md` |
 | 发布 | promote 已完成；**git tag `v1.2.0` 待补**；不碰 prod DB | 本阶段 |
 
-### 阶段 5 — **WorkPanel V1.3.0（工作流）**（设计审稿中，2026-08-06）
+### 阶段 5 — **WorkPanel V1.3.0（工作流）**（实现中 → 灰度，2026-08-06）
 
-> 与历史 epitaph「v1.3 双槽位」不同名不同义。全量设计：[`specs/2026-08-06-workpanel-v1.3.0-workflow-era-design.md`](superpowers/specs/2026-08-06-workpanel-v1.3.0-workflow-era-design.md)。实现 **S1→S4** 分批。
+> 与历史 epitaph「v1.3 双槽位」不同名不同义。全量设计：[`specs/2026-08-06-workpanel-v1.3.0-workflow-era-design.md`](superpowers/specs/2026-08-06-workpanel-v1.3.0-workflow-era-design.md)。
 
 | 切片 | 内容 | 状态 |
 |---|---|---|
-| S1 | 版本页签 + Tag 时间线；去掉项目看板/Roadmap 进度 | 待开工（设计通过后） |
-| S2 | 新建/导入版本；Roadmap What/Who/How；虚拟 Tag | 待 S1 |
-| S3 | Ask 模式；Wave 生成；`/roadmap` `/wave` | 待 S2 |
-| S4 | Wave 六阶段执行；▶/⏸；Codex loop；发布前 awaiting_release | 待 S3 |
+| S1 | 版本页签 + Tag 时间线；去掉顶栏「项目」 | ✅ 代码 |
+| S2 | 新建/导入版本；Roadmap What/Who/How；虚拟 Tag | ✅ 代码 |
+| S3 | Ask 模式 + 头像 Ask 徽标；默认 Waves 确认；ask_gate | ✅ 代码（slash 补全后续） |
+| S4 | Wave ▶/⏸/推进阶段；Roadmap 播放；awaiting_release 标记发布 | ✅ 代码（无独立 Codex loop 引擎，走管理员 kickoff） |
 
 ---
 

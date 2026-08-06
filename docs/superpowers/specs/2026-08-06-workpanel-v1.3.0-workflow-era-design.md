@@ -1,8 +1,8 @@
 ---
 date: 2026-08-06
 topic: workpanel-v1.3.0-workflow-era
-status: draft-for-review
-decider: pending user review
+status: approved-implementing
+decider: user 2026-08-06「设计通过开工」
 choice: C — full design; implement S1→S4
 ---
 

@@ -236,7 +236,67 @@ export interface A2aDispatchResult {
   sessionId?: string | null;
   message: string;
 }
- 
+
+/** V1.3.0 Version / Wave board */
+export interface GitTagInfo {
+  name: string;
+  sha: string;
+  date?: string | null;
+  subject?: string | null;
+  isVirtual: boolean;
+}
+
+export interface GitSnapshot {
+  isGitRepo: boolean;
+  headSha?: string | null;
+  headMatchesLatestTag: boolean;
+  finishLastRound: boolean;
+  tags: GitTagInfo[];
+  recentCommits: { sha: string; subject: string }[];
+  error?: string | null;
+}
+
+export interface ProjectVersion {
+  id: string;
+  groupId: string;
+  name: string;
+  gitTag?: string | null;
+  gitSha?: string | null;
+  kind: string;
+  status: string;
+  what: string;
+  who: string;
+  how: string;
+  oneLiner: string;
+  requesterMemberId?: string | null;
+  createdAt: number;
+  updatedAt: number;
+  releasedAt?: number | null;
+}
+
+export interface Wave {
+  id: string;
+  versionId: string;
+  groupId: string;
+  idx: number;
+  title: string;
+  status: string;
+  phase: string;
+  phaseCursor: string;
+  playState: string;
+  summary: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface VersionBoard {
+  git: GitSnapshot;
+  versions: ProjectVersion[];
+  waves: Wave[];
+  askingVersionId?: string | null;
+  adminMemberId?: string | null;
+}
+
  // === Project Management ===
  
  export interface RoadmapItem {

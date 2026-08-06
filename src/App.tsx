@@ -47,6 +47,7 @@ import { LogsPanel } from "./LogsPanel";
 import { ProjectWorkflowView } from "./ProjectWorkflowView";
 import { ServerPathPicker } from "./ServerPathPicker";
 import { LivePanel } from "./LivePanel";
+import { VersionView } from "./VersionView";
 import { liveTabEnabled, panelliveStatus } from "./extensions";
 import {
   buildLiveMentionMessage,
@@ -118,7 +119,8 @@ export function App() {
     typeof window === "undefined" || window.matchMedia("(min-width: 1081px)").matches,
   );
   const [rightPanelTab, setRightPanelTab] = useState<"members" | "experiences" | "logs">("members");
-  const [mainView, setMainView] = useState<"chat" | "project" | "live">("chat");
+  const [mainView, setMainView] = useState<"chat" | "versions" | "live" | "project">("chat");
+  const [adminInAsk, setAdminInAsk] = useState(false);
   const [extensions, setExtensions] = useState<ExtensionStatus[]>([]);
   const [liveToggling, setLiveToggling] = useState(false);
   const [workspacePath, setWorkspacePath] = useState("/AI/LinlisWorkPanel");
@@ -900,6 +902,20 @@ export function App() {
   const liveExt = panelliveStatus(extensions);
   const liveReady = liveTabEnabled(liveExt);
 
+  useEffect(() => {
+    if (!current || isChatGroup) {
+      setAdminInAsk(false);
+      return;
+    }
+    let cancelled = false;
+    void api.getVersionBoard(current.group.id).then((board) => {
+      if (!cancelled) setAdminInAsk(Boolean(board.askingVersionId));
+    }).catch(() => {
+      if (!cancelled) setAdminInAsk(false);
+    });
+    return () => { cancelled = true; };
+  }, [current?.group.id, isChatGroup, mainView]);
+
   const addMember = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); if (!current) return;
     if (newMember.kind === "user" && !canSubmitUserMember(newMember.userAddMode, {
@@ -1051,7 +1067,7 @@ export function App() {
                 <div className="view-toggle" role="group" aria-label="主视图">
                   <button type="button" className={mainView === "chat" ? "active" : ""} onClick={() => setMainView("chat")}>聊天</button>
                   {!isChatGroup && (
-                    <button type="button" className={mainView === "project" ? "active" : ""} onClick={() => setMainView("project")}>项目</button>
+                    <button type="button" className={mainView === "versions" ? "active" : ""} onClick={() => setMainView("versions")}>版本</button>
                   )}
                   <button
                     type="button"
@@ -1078,6 +1094,15 @@ export function App() {
             senderMemberId={senderMemberId}
             onOpenSettings={() => setShowSettings(true)}
             onError={(msg) => setError(msg)}
+          />
+        ) : !isChatGroup && mainView === "versions" ? (
+          <VersionView
+            group={current.group}
+            members={members}
+            senderMemberId={senderMemberId}
+            canManage={isAdmin || Boolean(senderMemberId && current.group.ownerMemberId === senderMemberId)}
+            onError={(msg) => setError(msg)}
+            onGotoChat={() => setMainView("chat")}
           />
         ) : !isChatGroup && mainView === "project" ? (
           <ProjectWorkflowView
@@ -1205,7 +1230,7 @@ export function App() {
       <header>
         <div className="pm-tab-bar">
           <button className={`pm-tab-btn ${rightPanelTab === "members" ? "active" : ""}`} onClick={() => setRightPanelTab("members")}>群成员</button>
-          {!isChatGroup && isAdmin && <button className={`pm-tab-btn`} onClick={() => { setMainView("project"); }}>项目管理</button>}
+          {!isChatGroup && isAdmin && <button className={`pm-tab-btn`} onClick={() => { setMainView("versions"); }}>版本管理</button>}
           {isAdmin && <button className={`pm-tab-btn ${rightPanelTab === "experiences" ? "active" : ""}`} onClick={() => setRightPanelTab("experiences")}>经验</button>}
           {isAdmin && <button className={`pm-tab-btn ${rightPanelTab === "logs" ? "active" : ""}`} onClick={() => setRightPanelTab("logs")}>日志</button>}
         </div>
@@ -1222,6 +1247,7 @@ export function App() {
             key={member.id}
             member={member}
             group={current.group}
+            askMode={adminInAsk && member.id === current.group.adminMemberId}
             runs={current.runs}
             online={member.kind === "user" && !!member.authUserId && onlineUserIds.has(member.authUserId)}
             detecting={detecting === member.id}
@@ -1736,8 +1762,8 @@ function TypingIndicator({ label }: { label: string }) {
   );
 }
 
-function MemberRow({ member, group, runs, detecting, online, onAdmin, onRemove, onDetect, onModel, onCancelRun }: {
-  member: Member; group: Group; runs: TaskRun[]; detecting?: boolean; online?: boolean;
+function MemberRow({ member, group, runs, detecting, online, askMode, onAdmin, onRemove, onDetect, onModel, onCancelRun }: {
+  member: Member; group: Group; runs: TaskRun[]; detecting?: boolean; online?: boolean; askMode?: boolean;
   onAdmin: (id: string | null) => void; onRemove: (member: Member) => void; onDetect: (member: Member) => void;
   onModel: (member: Member, model: string) => void;
   onCancelRun: (run: TaskRun) => void;
@@ -1773,6 +1799,7 @@ function MemberRow({ member, group, runs, detecting, online, onAdmin, onRemove, 
           {isAdmin && (
             <em className="admin-badge">{group.groupKind === "chat" ? "默认响应" : "管理员"}</em>
           )}
+          {askMode && <em className="ask-badge">Ask</em>}
           {member.kind === "chatbot" && <em className="admin-badge">机器人</em>}
           {member.invitePending && <em className="invite-badge">链接中</em>}
           {online && <em className="online-badge">在线</em>}

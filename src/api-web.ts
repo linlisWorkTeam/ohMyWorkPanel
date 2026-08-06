@@ -396,6 +396,70 @@ export const api = {
       method: "POST",
       body: JSON.stringify(envelope),
     }),
+
+  getVersionBoard: (groupId: string) =>
+    apiFetch<import("./types").VersionBoard>(`/api/groups/${groupId}/version-board`),
+  createProjectVersion: (input: {
+    groupId: string;
+    name?: string;
+    what?: string;
+    who?: string;
+    how?: string;
+    oneLiner?: string;
+    requesterMemberId?: string;
+    mode?: "create" | "import";
+  }) =>
+    apiFetch<import("./types").ProjectVersion>("/api/project-versions", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  updateVersionRoadmap: (
+    versionId: string,
+    input: { what?: string; who?: string; how?: string; oneLiner?: string; name?: string; requesterMemberId?: string },
+  ) =>
+    apiFetch<import("./types").ProjectVersion>(`/api/project-versions/${versionId}/roadmap`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }),
+  startVersionAsk: (versionId: string, senderMemberId: string) =>
+    apiFetch<{ version: import("./types").ProjectVersion; runId: string }>(
+      `/api/project-versions/${versionId}/ask`,
+      { method: "POST", body: JSON.stringify({ senderMemberId }) },
+    ),
+  cancelVersionAsk: (versionId: string) =>
+    apiFetch<import("./types").ProjectVersion>(`/api/project-versions/${versionId}/ask/cancel`, {
+      method: "POST",
+      body: "{}",
+    }),
+  approveVersionWaves: (versionId: string, waves?: { title: string }[]) =>
+    apiFetch<{ version: import("./types").ProjectVersion; waves: import("./types").Wave[] }>(
+      `/api/project-versions/${versionId}/waves/approve`,
+      { method: "POST", body: JSON.stringify({ waves: waves ?? [] }) },
+    ),
+  playWave: (waveId: string, senderMemberId: string) =>
+    apiFetch<{ wave: import("./types").Wave; runId: string }>(`/api/waves/${waveId}/play`, {
+      method: "POST",
+      body: JSON.stringify({ senderMemberId }),
+    }),
+  pauseWave: (waveId: string) =>
+    apiFetch<import("./types").Wave>(`/api/waves/${waveId}/pause`, { method: "POST", body: "{}" }),
+  advanceWave: (waveId: string) =>
+    apiFetch<import("./types").Wave>(`/api/waves/${waveId}/advance`, { method: "POST", body: "{}" }),
+  playVersion: (versionId: string, senderMemberId: string) =>
+    apiFetch<{ wave: import("./types").Wave | null; runId?: string; status?: string }>(
+      `/api/project-versions/${versionId}/play`,
+      { method: "POST", body: JSON.stringify({ senderMemberId }) },
+    ),
+  pauseVersion: (versionId: string) =>
+    apiFetch<{ ok: boolean }>(`/api/project-versions/${versionId}/pause`, {
+      method: "POST",
+      body: "{}",
+    }),
+  releaseVersion: (versionId: string, gitTag?: string) =>
+    apiFetch<import("./types").ProjectVersion>(`/api/project-versions/${versionId}/release`, {
+      method: "POST",
+      body: JSON.stringify({ gitTag }),
+    }),
   updateGroupWorkspace: (groupId: string, workspacePath: string) =>
     apiFetch<Group>(`/api/groups/${groupId}/workspace`, {
       method: "PUT",

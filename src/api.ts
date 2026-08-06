@@ -128,6 +128,42 @@ export const api = {
   dispatchA2a: async () => {
     throw new Error("Desktop mode: A2A dispatch 仅 Web 服务可用");
   },
+  getVersionBoard: async () => {
+    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
+  },
+  createProjectVersion: async () => {
+    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
+  },
+  updateVersionRoadmap: async () => {
+    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
+  },
+  startVersionAsk: async () => {
+    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
+  },
+  cancelVersionAsk: async () => {
+    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
+  },
+  approveVersionWaves: async () => {
+    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
+  },
+  playWave: async () => {
+    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
+  },
+  pauseWave: async () => {
+    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
+  },
+  advanceWave: async () => {
+    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
+  },
+  playVersion: async () => {
+    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
+  },
+  pauseVersion: async () => {
+    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
+  },
+  releaseVersion: async () => {
+    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
+  },
   updateGroupWorkspace: (groupId: string, workspacePath: string) =>
     invoke<Group>("update_group_workspace_cmd", { groupId, workspacePath }),
   updateMemberWorkspace: (memberId: string, workspacePath: string) =>

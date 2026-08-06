@@ -467,9 +467,21 @@ async fn send_message_web(
      )
      .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
-     // Create task runs for target agents
+     // Create task runs for target agents (Ask-gate: ignore idle chatter toward admin)
      let mut run_ids: Vec<String> = Vec::new();
      for agent_id in target_agents {
+         let allowed = crate::workflow::ask_allows_agent_run(
+             &conn,
+             &input.group_id,
+             &msg.sender_member_id,
+             &agent_id,
+             &input.mention_member_ids,
+             false,
+         )
+         .unwrap_or(true);
+         if !allowed {
+             continue;
+         }
          match create_task_run(&conn, &input.group_id, &msg.id, &agent_id, None, 0) {
              Ok(rid) => run_ids.push(rid),
              Err(_) => {}
@@ -1807,6 +1819,356 @@ async fn ops_release_status_web(
     Ok(Json(ops::release_status().await))
 }
 
+fn require_version_manager(
+    conn: &rusqlite::Connection,
+    user_id: &str,
+    group: &Group,
+) -> Result<(), (StatusCode, String)> {
+    if is_admin_user(conn, user_id).unwrap_or(false) {
+        return Ok(());
+    }
+    let linked: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM members WHERE id=?1 AND auth_user_id=?2 AND is_active=1",
+            params![group.owner_member_id, user_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if linked == 1 {
+        Ok(())
+    } else {
+        Err((StatusCode::FORBIDDEN, "仅群主或平台管理员可管理版本".into()))
+    }
+}
+
+fn kickoff_admin_run(
+    conn: &rusqlite::Connection,
+    state: &AppState,
+    group: &Group,
+    sender_member_id: &str,
+    content: String,
+) -> Result<String, (StatusCode, String)> {
+    let admin = group
+        .admin_member_id
+        .clone()
+        .ok_or((StatusCode::CONFLICT, "未设置管理员 Agent".into()))?;
+    let msg = Message {
+        id: id(),
+        group_id: group.id.clone(),
+        sender_member_id: sender_member_id.to_string(),
+        parent_run_id: None,
+        content: content.clone(),
+        status: "completed".into(),
+        created_at: now(),
+        has_thinking: false,
+        has_artifact: false,
+    };
+    conn.execute(
+        "INSERT INTO messages(id,group_id,sender_member_id,parent_run_id,content,status,created_at) VALUES(?1,?2,?3,NULL,?4,?5,?6)",
+        params![
+            msg.id,
+            msg.group_id,
+            msg.sender_member_id,
+            msg.content,
+            msg.status,
+            msg.created_at
+        ],
+    )
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let _ = conn.execute(
+        "INSERT OR IGNORE INTO mentions(message_id,member_id) VALUES(?1,?2)",
+        params![msg.id, admin],
+    );
+    let rid = create_task_run(conn, &group.id, &msg.id, &admin, None, 0)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    web_emit(
+        &state.tx,
+        &group.id,
+        "message_created",
+        Some(&msg.id),
+        None,
+        Some("completed"),
+        None,
+    );
+    scheduler::schedule_group(state.sched.clone(), group.id.clone());
+    Ok(rid)
+}
+
+async fn version_board_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(group_id): Path<String>,
+) -> Result<Json<crate::workflow::VersionBoard>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
+    let group = db_get_group(&conn, &group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    crate::workflow::board_for_group(&state.db_path, &group)
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
+
+async fn create_version_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Json(input): Json<crate::workflow::CreateVersionInput>,
+) -> Result<Json<crate::workflow::ProjectVersion>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_group_access(&conn, &claims.sub, &input.group_id).map_err(map_acl_err)?;
+    let group = db_get_group(&conn, &input.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    require_version_manager(&conn, &claims.sub, &group)?;
+    crate::workflow::create_version(&conn, &group, &input)
+        .map(Json)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+}
+
+async fn update_version_roadmap_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(version_id): Path<String>,
+    Json(input): Json<crate::workflow::UpdateRoadmapInput>,
+) -> Result<Json<crate::workflow::ProjectVersion>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let v = crate::workflow::get_version(&conn, &version_id)
+        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    require_group_access(&conn, &claims.sub, &v.group_id).map_err(map_acl_err)?;
+    let group = db_get_group(&conn, &v.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    require_version_manager(&conn, &claims.sub, &group)?;
+    crate::workflow::update_roadmap(&conn, &version_id, &input)
+        .map(Json)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StartAskBody {
+    sender_member_id: String,
+}
+
+async fn start_ask_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(version_id): Path<String>,
+    Json(body): Json<StartAskBody>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let v0 = crate::workflow::get_version(&conn, &version_id)
+        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    require_group_access(&conn, &claims.sub, &v0.group_id).map_err(map_acl_err)?;
+    let group = db_get_group(&conn, &v0.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    require_version_manager(&conn, &claims.sub, &group)?;
+    let v = crate::workflow::start_ask(&conn, &group, &version_id)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    let prompt = crate::workflow::build_ask_kickoff_prompt(&v);
+    let content = format!(
+        "@{} {}",
+        group
+            .admin_member_id
+            .as_ref()
+            .and_then(|aid| {
+                conn.query_row(
+                    "SELECT display_name FROM members WHERE id=?1",
+                    params![aid],
+                    |r| r.get::<_, String>(0),
+                )
+                .ok()
+            })
+            .unwrap_or_else(|| "管理员".into()),
+        prompt
+    );
+    let run_id = kickoff_admin_run(&conn, &state, &group, &body.sender_member_id, content)?;
+    Ok(Json(json!({ "version": v, "runId": run_id })))
+}
+
+async fn cancel_ask_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(version_id): Path<String>,
+) -> Result<Json<crate::workflow::ProjectVersion>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let v = crate::workflow::get_version(&conn, &version_id)
+        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    require_group_access(&conn, &claims.sub, &v.group_id).map_err(map_acl_err)?;
+    let group = db_get_group(&conn, &v.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    require_version_manager(&conn, &claims.sub, &group)?;
+    crate::workflow::cancel_ask(&conn, &version_id)
+        .map(Json)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+}
+
+async fn approve_waves_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(version_id): Path<String>,
+    Json(mut input): Json<crate::workflow::ApproveWavesInput>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let v = crate::workflow::get_version(&conn, &version_id)
+        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    require_group_access(&conn, &claims.sub, &v.group_id).map_err(map_acl_err)?;
+    let group = db_get_group(&conn, &v.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    require_version_manager(&conn, &claims.sub, &group)?;
+    if input.waves.is_empty() {
+        input.waves = crate::workflow::default_waves_from_roadmap(&v);
+    }
+    let (version, waves) = crate::workflow::approve_waves(&conn, &version_id, &input)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    Ok(Json(json!({ "version": version, "waves": waves })))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WavePlayBody {
+    sender_member_id: String,
+}
+
+async fn play_wave_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(wave_id): Path<String>,
+    Json(body): Json<WavePlayBody>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let w0 = crate::workflow::get_wave(&conn, &wave_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    require_group_access(&conn, &claims.sub, &w0.group_id).map_err(map_acl_err)?;
+    let group = db_get_group(&conn, &w0.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    require_version_manager(&conn, &claims.sub, &group)?;
+    let w = crate::workflow::play_wave(&conn, &wave_id).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    let v = crate::workflow::get_version(&conn, &w.version_id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let prompt = crate::workflow::build_wave_kickoff_prompt(&v, &w);
+    let admin_name = group
+        .admin_member_id
+        .as_ref()
+        .and_then(|aid| {
+            conn.query_row(
+                "SELECT display_name FROM members WHERE id=?1",
+                params![aid],
+                |r| r.get::<_, String>(0),
+            )
+            .ok()
+        })
+        .unwrap_or_else(|| "管理员".into());
+    let run_id = kickoff_admin_run(
+        &conn,
+        &state,
+        &group,
+        &body.sender_member_id,
+        format!("@{admin_name} {prompt}"),
+    )?;
+    Ok(Json(json!({ "wave": w, "runId": run_id })))
+}
+
+async fn pause_wave_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(wave_id): Path<String>,
+) -> Result<Json<crate::workflow::Wave>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let w0 = crate::workflow::get_wave(&conn, &wave_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    require_group_access(&conn, &claims.sub, &w0.group_id).map_err(map_acl_err)?;
+    let group = db_get_group(&conn, &w0.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    require_version_manager(&conn, &claims.sub, &group)?;
+    crate::workflow::pause_wave(&conn, &wave_id)
+        .map(Json)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+}
+
+async fn advance_wave_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(wave_id): Path<String>,
+) -> Result<Json<crate::workflow::Wave>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let w0 = crate::workflow::get_wave(&conn, &wave_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    require_group_access(&conn, &claims.sub, &w0.group_id).map_err(map_acl_err)?;
+    let group = db_get_group(&conn, &w0.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    require_version_manager(&conn, &claims.sub, &group)?;
+    crate::workflow::advance_wave_phase(&conn, &wave_id)
+        .map(Json)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+}
+
+async fn play_version_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(version_id): Path<String>,
+    Json(body): Json<WavePlayBody>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let v = crate::workflow::get_version(&conn, &version_id)
+        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    require_group_access(&conn, &claims.sub, &v.group_id).map_err(map_acl_err)?;
+    let group = db_get_group(&conn, &v.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    require_version_manager(&conn, &claims.sub, &group)?;
+    let wave = crate::workflow::play_version_roadmap(&conn, &version_id)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    if let Some(w) = wave {
+        let v = crate::workflow::get_version(&conn, &w.version_id)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+        let prompt = crate::workflow::build_wave_kickoff_prompt(&v, &w);
+        let admin_name = group
+            .admin_member_id
+            .as_ref()
+            .and_then(|aid| {
+                conn.query_row(
+                    "SELECT display_name FROM members WHERE id=?1",
+                    params![aid],
+                    |r| r.get::<_, String>(0),
+                )
+                .ok()
+            })
+            .unwrap_or_else(|| "管理员".into());
+        let run_id = kickoff_admin_run(
+            &conn,
+            &state,
+            &group,
+            &body.sender_member_id,
+            format!("@{admin_name} {prompt}"),
+        )?;
+        return Ok(Json(json!({ "wave": w, "runId": run_id })));
+    }
+    Ok(Json(json!({ "wave": null, "status": "awaiting_release" })))
+}
+
+async fn pause_version_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(version_id): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let v = crate::workflow::get_version(&conn, &version_id)
+        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    require_group_access(&conn, &claims.sub, &v.group_id).map_err(map_acl_err)?;
+    let group = db_get_group(&conn, &v.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    require_version_manager(&conn, &claims.sub, &group)?;
+    crate::workflow::pause_version_roadmap(&conn, &version_id)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReleaseBody {
+    git_tag: Option<String>,
+}
+
+async fn release_version_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(version_id): Path<String>,
+    Json(body): Json<ReleaseBody>,
+) -> Result<Json<crate::workflow::ProjectVersion>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let v = crate::workflow::get_version(&conn, &version_id)
+        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    require_group_access(&conn, &claims.sub, &v.group_id).map_err(map_acl_err)?;
+    let group = db_get_group(&conn, &v.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    require_version_manager(&conn, &claims.sub, &group)?;
+    crate::workflow::mark_released(&conn, &version_id, body.git_tag)
+        .map(Json)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+}
+
 async fn ops_job_web(
     State(state): State<Arc<AppState>>,
     ClaimsExtractor(claims): ClaimsExtractor,
@@ -1971,6 +2333,19 @@ pub fn build_router(state: Arc<AppState>) -> Router {
          .route("/api/feature-tasks/{id}", delete(delete_feature_task_web))
          // PM: Aggregated State
          .route("/api/groups/{group_id}/roadmap-state", get(get_roadmap_state_web))
+         // V1.3.0 Version / Wave workflow
+         .route("/api/groups/{group_id}/version-board", get(version_board_web))
+         .route("/api/project-versions", post(create_version_web))
+         .route("/api/project-versions/{version_id}/roadmap", put(update_version_roadmap_web))
+         .route("/api/project-versions/{version_id}/ask", post(start_ask_web))
+         .route("/api/project-versions/{version_id}/ask/cancel", post(cancel_ask_web))
+         .route("/api/project-versions/{version_id}/waves/approve", post(approve_waves_web))
+         .route("/api/project-versions/{version_id}/play", post(play_version_web))
+         .route("/api/project-versions/{version_id}/pause", post(pause_version_web))
+         .route("/api/project-versions/{version_id}/release", post(release_version_web))
+         .route("/api/waves/{wave_id}/play", post(play_wave_web))
+         .route("/api/waves/{wave_id}/pause", post(pause_wave_web))
+         .route("/api/waves/{wave_id}/advance", post(advance_wave_web))
          // Logs
          .route("/api/logs", get(list_logs_web))
          .route("/api/logs/count", get(count_logs_web))
