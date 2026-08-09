@@ -1608,30 +1608,47 @@ struct ExtensionToggleBody {
     enabled: bool,
 }
 
-async fn put_panellive_extension_web(
+async fn put_extension_web(
     State(state): State<Arc<AppState>>,
     ClaimsExtractor(claims): ClaimsExtractor,
-    Path(group_id): Path<String>,
+    Path((group_id, ext_id)): Path<(String, String)>,
     Json(body): Json<ExtensionToggleBody>,
 ) -> Result<Json<crate::extensions::ExtensionStatus>, (StatusCode, String)> {
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
     db_get_group(&conn, &group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
-    crate::extensions::set_panellive_enabled(&conn, &group_id, body.enabled)
+    crate::extensions::set_group_extension_enabled(&conn, &group_id, &ext_id, body.enabled)
         .map(Json)
         .map_err(|e| {
             if e.starts_with("CONFLICT:") {
                 (StatusCode::CONFLICT, e.trim_start_matches("CONFLICT:").to_string())
+            } else if e.starts_with("未知扩展") {
+                (StatusCode::NOT_FOUND, e)
             } else {
                 (StatusCode::BAD_REQUEST, e)
             }
         })
 }
 
-async fn proxy_panellive(
+async fn put_panellive_extension_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(group_id): Path<String>,
+    Json(body): Json<ExtensionToggleBody>,
+) -> Result<Json<crate::extensions::ExtensionStatus>, (StatusCode, String)> {
+    put_extension_web(
+        State(state),
+        ClaimsExtractor(claims),
+        Path((group_id, crate::extensions::PANELLIVE_ID.to_string())),
+        Json(body),
+    )
+    .await
+}
+
+async fn proxy_extension(
     State(state): State<Arc<AppState>>,
     method: axum::http::Method,
-    Path(path): Path<String>,
+    Path((ext_id, path)): Path<(String, String)>,
     uri: axum::http::Uri,
     headers: axum::http::HeaderMap,
     body: axum::body::Bytes,
@@ -1640,10 +1657,9 @@ async fn proxy_panellive(
         .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
     let upstream_path = crate::extensions::with_proxy_query(sanitized.as_str(), uri.query())
         .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
-    let root = crate::extensions::panellive_root();
-    let manifest = crate::extensions::load_panellive_manifest(&root)
-        .map_err(|e| (StatusCode::BAD_GATEWAY, e))?;
-    let port = crate::extensions::panellive_upstream_port(&manifest);
+    let disc = crate::extensions::find_extension(&ext_id)
+        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    let port = disc.manifest.runtime.default_port;
     let ct = headers
         .get(axum::http::header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
@@ -1681,8 +1697,8 @@ async fn proxy_panellive(
         ct.as_deref(),
     )
     .map_err(|e| (StatusCode::BAD_GATEWAY, e))?;
-    // Session lifecycle via iframe proxy (no JWT): mark live_sessions when group header present.
-    if method_s == "POST" && ex.status == 200 {
+    // PanelLive session lifecycle via iframe proxy (no JWT): mark live_sessions when group header present.
+    if ext_id == crate::extensions::PANELLIVE_ID && method_s == "POST" && ex.status == 200 {
         let gid = headers
             .get("x-linlis-group-id")
             .and_then(|v| v.to_str().ok())
@@ -1780,8 +1796,30 @@ async fn dispatch_a2a_web(
     if envelope.group_id.trim().is_empty() {
         return Err((StatusCode::BAD_REQUEST, "groupId 必填".into()));
     }
-    // Live skills require extension loaded for the group.
-    if envelope.skill.starts_with("live.") {
+    // Skills must be declared by a discovered extension; that extension must be enabled for the group.
+    let declared_by = crate::extensions::discover_extensions()
+        .into_iter()
+        .find(|d| {
+            crate::extensions::skill_allowed(&d.manifest.contributes.a2a_skills, &envelope.skill)
+        });
+    if let Some(disc) = declared_by {
+        let enabled = crate::extensions::is_extension_enabled(
+            &conn,
+            &envelope.group_id,
+            &disc.manifest.id,
+        )
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+        if !enabled {
+            return Err((
+                StatusCode::CONFLICT,
+                format!(
+                    "扩展 {} 未 load：请在运行设置中开启",
+                    disc.manifest.name
+                ),
+            ));
+        }
+    } else if envelope.skill.starts_with("live.") {
+        // backward-compatible hard check if panellive manifest missing
         let enabled = crate::extensions::is_extension_enabled(
             &conn,
             &envelope.group_id,
@@ -1794,20 +1832,27 @@ async fn dispatch_a2a_web(
                 "PanelLive 未 load：请在运行设置中开启 Live 扩展".into(),
             ));
         }
+    } else {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("未知或不支持的 skill：{}", envelope.skill),
+        ));
     }
     if envelope.source.is_none() {
         envelope.source = Some(claims.username.clone());
     }
-    crate::a2a::dispatch_live_skill(&envelope, Some(&state.sched))
-        .map(Json)
-        .map_err(|e| {
-            let status = if e.contains("禁止") {
-                StatusCode::BAD_REQUEST
-            } else {
-                StatusCode::BAD_REQUEST
-            };
-            (status, e)
-        })
+    // Live control-plane skills still handled by a2a::dispatch_live_skill; others accepted as no-op host ack.
+    if envelope.skill.starts_with("live.") {
+        return crate::a2a::dispatch_live_skill(&envelope, Some(&state.sched))
+            .map(Json)
+            .map_err(|e| (StatusCode::BAD_REQUEST, e));
+    }
+    Ok(Json(crate::a2a::A2aDispatchResult {
+        accepted: true,
+        skill: envelope.skill.clone(),
+        session_id: envelope.session_id.clone(),
+        message: "extension skill accepted (host ack; business handled by Extend)".into(),
+    }))
 }
 
 async fn ops_release_status_web(
@@ -2268,6 +2313,10 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/api/groups/{id}/archive", put(put_group_archive_web))
         .route("/api/groups/{id}/extensions", get(list_group_extensions_web))
         .route(
+            "/api/groups/{id}/extensions/{ext_id}",
+            put(put_extension_web),
+        )
+        .route(
             "/api/groups/{id}/extensions/panellive",
             put(put_panellive_extension_web),
         )
@@ -2358,15 +2407,14 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/ws", get(ws_handler))
         .route_layer(middleware::from_fn(auth_middleware));
 
-    // Same-origin PanelLive proxy + events (no JWT — iframe cannot send Bearer).
-    // Events use X-Panellive-Token. Media/API proxied to 127.0.0.1:8790 server-side.
-    let panellive_public = Router::new()
+    // Same-origin extension proxy + PanelLive events (no JWT — iframe cannot send Bearer).
+    let extension_public = Router::new()
         .route("/api/extensions/panellive/events", post(panellive_events_web))
-        .route("/api/extensions/panellive/{*path}", any(proxy_panellive));
+        .route("/api/extensions/{ext_id}/{*path}", any(proxy_extension));
 
     Router::new()
         .merge(auth_routes)
-        .merge(panellive_public)
+        .merge(extension_public)
         .merge(protected)
         .with_state(state)
 }

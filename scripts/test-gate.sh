@@ -27,4 +27,7 @@ bash -c '
   cargo test --no-default-features --lib
 ' bash "${ROOT}"
 
+echo "==> test-gate: extension host purity"
+bash "${ROOT}/scripts/check-extension-purity.sh"
+
 echo "==> test-gate: OK"

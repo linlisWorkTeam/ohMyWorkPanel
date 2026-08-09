@@ -14,6 +14,7 @@ pub mod live_prompt;
 pub mod fs_browse;
 pub mod keepalive;
 pub mod memory;
+pub mod wiki_context;
 mod message_content;
 mod models;
 pub mod logger;

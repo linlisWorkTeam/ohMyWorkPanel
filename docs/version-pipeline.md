@@ -105,10 +105,12 @@ status: active
 
 | 切片 | 内容 | 状态 |
 |---|---|---|
-| S1 | 版本页签 + Tag 时间线；去掉顶栏「项目」 | ✅ 代码 |
+| S1 | 版本页签 + Tag 时间线；去掉顶栏「项目」 | ✅ 代码；版本页标明 Git 工作区 + 多群共享告警 |
 | S2 | 新建/导入版本；Roadmap What/Who/How；虚拟 Tag | ✅ 代码 |
 | S3 | Ask 模式 + 头像 Ask 徽标；默认 Waves 确认；ask_gate | ✅ 代码（slash 补全后续） |
 | S4 | Wave ▶/⏸/推进阶段；Roadmap 播放；awaiting_release 标记发布 | ✅ 代码（无独立 Codex loop 引擎，走管理员 kickoff） |
+| **EH** | **通用扩展宿主**（消灭 panellive 硬编码；AIHotel 页签） | **认领**；见 [`specs/2026-08-06-extension-host-v130-claim.md`](superpowers/specs/2026-08-06-extension-host-v130-claim.md)；S0/S1 后端已开工 |
+| **Wiki** | 跨 Agent 记忆：Wiki `retrieve` + 调度注入【全局知识·Wiki】 | W0/W1 代码；设计 [`WorkPanelWiki/.../2026-08-08-cross-agent-memory-compliance-design.md`](/AI/WorkPanelWiki/docs/superpowers/specs/2026-08-08-cross-agent-memory-compliance-design.md) |
 
 ---
 
@@ -118,7 +120,7 @@ status: active
 |---|---|---|---|
 | **A 工作群** | 绑定 workspace 的 Agent 协作（主产品） | @ 调度、串行、A2A、公告、**版本/Wave 工作流**、经验/记忆 | 把工作群做成纯社交 IM |
 | **B 发布与稳态** | 双槽位自迭代不断供 | 门禁、灰度公告、探活/心跳/指标、promote 审批 | Agent 擅自 promote；打断 stop→start |
-| **C PanelLive** | 扩展宿主；音视频在扩展侧 | iframe + 同源代理 + A2A 控制面 | 平台转发 PCM / 群消息塞音频 |
+| **C 扩展宿主** | manifest 动态 Extend（含 PanelLive / AIHotel） | `LINLIS_EXTENSION_ROOTS`、通用反代/页签/A2A | 平台写扩展业务；为每扩展抄 proxy_* |
 | **D 聊天群** | `groupKind=chat`，无业务 workspace；轻对话 | Phase 1：体验地基（见下） | 未拍板前不做多平台中枢大工程 |
 | **E 质量** | 门禁绿 + 策略文档同步 | 纯函数/调度单测；补缺口见 testing-strategy | 用真 CLI smoke 替代门禁 |
 | **F 工作流 V1.3.0** | Git Tag 版本 + Ask + Wave | 见阶段 5 设计文 | 一次做完 S1–S4；自动无审批 promote |
@@ -138,12 +140,11 @@ status: active
 
 ## 下一站（建议顺序，避免并行发散）
 
-1. **WorkPanel V1.3.0 S1（设计通过后）**：版本页壳 + Tag 时间线；见阶段 5 设计文。
-2. **补打 git tag `v1.2.0`**（产物已在生产；标签与文档对齐）。
-3. **V1.3.0 S2→S4**：按设计切片推进。
-4. **聊天群 D1（若拍板）**：表情/富媒体 + 用户主题隔离。
-5. **质量 E / PanelLive C / D3**：不与 V1.3.0 主路径抢并发。
-6. **稳态债（B）**：每次增量仍灰度 → 批准 promote；勿中断 stop→start。
+1. **V1.3.0 扩展宿主 EH S2–S5**：通用 iframe 页签 + 设置多开关 + 纯净度门禁（目标 **2026-08-09**）。
+2. **V1.3.0 工作流灰度验收** →（批）promote。
+3. **补打 git tag `v1.2.0`**。
+4. **聊天群 D1（若拍板）** / 质量 E / D3：不与宿主收尾抢并发。
+5. **稳态债（B）**：每次增量仍灰度 → 批准 promote；勿中断 stop→start。
 
 ---
 

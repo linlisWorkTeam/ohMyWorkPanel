@@ -44,11 +44,13 @@ import { loadSendKeyMode, saveSendKeyMode, sendKeyHint, shouldSendOnKey, type Se
 import type { ChatEvent, ExtensionStatus, Group, GroupState, Member, PresetRole, RuntimeSettings, TaskRun } from "./types";
 import { ExperiencePanel } from "./ExperiencePanel";
 import { LogsPanel } from "./LogsPanel";
-import { ProjectWorkflowView } from "./ProjectWorkflowView";
 import { ServerPathPicker } from "./ServerPathPicker";
-import { LivePanel } from "./LivePanel";
+import { ExtensionPanel } from "./ExtensionPanel";
 import { VersionView } from "./VersionView";
-import { liveTabEnabled, panelliveStatus } from "./extensions";
+import {
+  collectExtensionTabViews,
+  parseExtMainView,
+} from "./extensions";
 import {
   buildLiveMentionMessage,
   messageToPlainText,
@@ -119,10 +121,10 @@ export function App() {
     typeof window === "undefined" || window.matchMedia("(min-width: 1081px)").matches,
   );
   const [rightPanelTab, setRightPanelTab] = useState<"members" | "experiences" | "logs">("members");
-  const [mainView, setMainView] = useState<"chat" | "versions" | "live" | "project">("chat");
+  const [mainView, setMainView] = useState<string>("chat");
   const [adminInAsk, setAdminInAsk] = useState(false);
   const [extensions, setExtensions] = useState<ExtensionStatus[]>([]);
-  const [liveToggling, setLiveToggling] = useState(false);
+  const [extTogglingId, setExtTogglingId] = useState<string | null>(null);
   const [workspacePath, setWorkspacePath] = useState("/AI/LinlisWorkPanel");
   const [createGroupKind, setCreateGroupKind] = useState<"project" | "chat">("project");
   const [showArchived, setShowArchived] = useState(false);
@@ -179,7 +181,7 @@ export function App() {
     requestAnimationFrame(apply);
   };
 
-  const refresh = async (groupId = current?.group.id) => {
+  const refresh = async (groupId: string | null | undefined = current?.group.id) => {
     if (!groupId) return;
     const state = await api.getGroupState(groupId);
     setCurrent((prev) => {
@@ -301,7 +303,7 @@ export function App() {
       }
       try {
         try {
-          const me = await api.verify();
+          const me = await api.verify() as { sub: string; username: string; isAdmin?: boolean; is_admin?: boolean };
           if (!disposed) {
             const next: AuthUser = {
               userId: me.sub,
@@ -363,7 +365,7 @@ export function App() {
     })();
     const unlisten = listen<ChatEvent>("chat-event", (event) => {
       const payload = event.payload;
-      const activeGroupId = currentGroupIdRef.current;
+      const activeGroupId: string | null | undefined = currentGroupIdRef.current;
       if (isIgnorableWsKind(payload.kind)) return;
       if (payload.kind === "presence_snapshot" && Array.isArray(payload.onlineUserIds)) {
         setOnlineUserIds(new Set(payload.onlineUserIds.filter(Boolean) as string[]));
@@ -387,7 +389,7 @@ export function App() {
       }
       if (payload.kind === "orchestration_status") {
         if (activeGroupId) {
-          void refresh(activeGroupId).catch((reason) => {
+          void refresh(activeGroupId ?? undefined).catch((reason) => {
             if (isUnauthorizedError(reason)) goLogin("登录已失效，请重新登录");
             else setError(readError(reason));
           });
@@ -587,6 +589,22 @@ export function App() {
     }
     void reloadExtensions(current.group.id);
   }, [current?.group.id]);
+
+  // Must stay above auth early returns — login→ready must not add hooks (React #310).
+  useEffect(() => {
+    const chat = current?.group.groupKind === "chat";
+    if (!current || chat) {
+      setAdminInAsk(false);
+      return;
+    }
+    let cancelled = false;
+    void api.getVersionBoard(current.group.id).then((board) => {
+      if (!cancelled) setAdminInAsk(Boolean(board.askingVersionId));
+    }).catch(() => {
+      if (!cancelled) setAdminInAsk(false);
+    });
+    return () => { cancelled = true; };
+  }, [current?.group.id, current?.group.groupKind, mainView]);
 
   const handleMessageScroll = () => {
     const node = messageListRef.current;
@@ -882,39 +900,33 @@ export function App() {
   };
   const selectMention = (member: Member) => setComposer((value) => value.replace(/@([^\s@]*)$/u, `@${member.displayName} `));
 
-  const togglePanellive = async (enabled: boolean) => {
+  const toggleExtension = async (extId: string, enabled: boolean) => {
     if (!current) return;
-    setLiveToggling(true);
+    setExtTogglingId(extId);
     try {
-      const status = await api.setPanelliveEnabled(current.group.id, enabled);
+      const status = await api.setExtensionEnabled(current.group.id, extId, enabled);
       setExtensions((prev) => {
         const others = prev.filter((e) => e.id !== status.id);
         return [...others, status];
       });
-      if (!enabled && mainView === "live") setMainView("chat");
+      const active = parseExtMainView(mainView);
+      if (!enabled && active?.extId === extId) setMainView("chat");
     } catch (reason) {
       setError(readError(reason));
     } finally {
-      setLiveToggling(false);
+      setExtTogglingId(null);
     }
   };
 
-  const liveExt = panelliveStatus(extensions);
-  const liveReady = liveTabEnabled(liveExt);
-
-  useEffect(() => {
-    if (!current || isChatGroup) {
-      setAdminInAsk(false);
-      return;
-    }
-    let cancelled = false;
-    void api.getVersionBoard(current.group.id).then((board) => {
-      if (!cancelled) setAdminInAsk(Boolean(board.askingVersionId));
-    }).catch(() => {
-      if (!cancelled) setAdminInAsk(false);
-    });
-    return () => { cancelled = true; };
-  }, [current?.group.id, isChatGroup, mainView]);
+  const liveExt = extensions.find((e) => e.id === "panellive") ?? null;
+  const liveReady = Boolean(liveExt?.enabled && liveExt.healthy);
+  const groupKind = current?.group.groupKind === "chat" ? "chat" : "project";
+  const extTabViews = collectExtensionTabViews(extensions, groupKind);
+  const activeExtView = (() => {
+    const parsed = parseExtMainView(mainView);
+    if (!parsed) return null;
+    return extTabViews.find((v) => v.ext.id === parsed.extId && v.tab.id === parsed.tabId) ?? null;
+  })();
 
   const addMember = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); if (!current) return;
@@ -1069,25 +1081,43 @@ export function App() {
                   {!isChatGroup && (
                     <button type="button" className={mainView === "versions" ? "active" : ""} onClick={() => setMainView("versions")}>版本</button>
                   )}
-                  <button
-                    type="button"
-                    className={mainView === "live" ? "active" : ""}
-                    disabled={!liveExt?.enabled}
-                    title={!liveExt?.enabled ? "请先在运行设置中开启 PanelLive" : liveReady ? "Live" : "PanelLive 未就绪"}
-                    onClick={() => setMainView("live")}
-                  >
-                    Live{liveExt?.enabled && !liveReady ? "·离线" : ""}
-                  </button>
+                  {extTabViews.map(({ ext, tab, viewKey }) => {
+                    const ready = Boolean(ext.enabled && ext.healthy);
+                    return (
+                      <button
+                        key={viewKey}
+                        type="button"
+                        className={mainView === viewKey ? "active" : ""}
+                        disabled={!ext.enabled}
+                        title={
+                          !ext.enabled
+                            ? `请先在运行设置中开启 ${ext.name}`
+                            : ready
+                              ? tab.title
+                              : `${ext.name} 未就绪`
+                        }
+                        onClick={() => setMainView(viewKey)}
+                      >
+                        {tab.title}{ext.enabled && !ready ? "·离线" : ""}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-              <p>{activeMembers.length} 名成员 · {isChatGroup ? "聊天群" : "项目群 · 服务器工作区"}{liveExt?.enabled ? ` · Live ${liveReady ? "就绪" : "未就绪"}` : ""}</p>
+              <p>
+                {activeMembers.length} 名成员 · {isChatGroup ? "聊天群" : "项目群 · 服务器工作区"}
+                {extTabViews.some((v) => v.ext.enabled)
+                  ? ` · Extend ${extTabViews.filter((v) => v.ext.enabled && v.ext.healthy).length}/${extTabViews.filter((v) => v.ext.enabled).length} 就绪`
+                  : ""}
+              </p>
             </div>
           </div>
           <button className="icon-button mobile-members" onClick={toggleMembers} aria-label="成员面板">成员</button>
         </header>
-        {mainView === "live" ? (
-          <LivePanel
-            extension={liveExt}
+        {activeExtView ? (
+          <ExtensionPanel
+            extension={activeExtView.ext}
+            tab={activeExtView.tab}
             group={current?.group ?? null}
             members={members}
             messages={current?.messages ?? []}
@@ -1103,20 +1133,6 @@ export function App() {
             canManage={isAdmin || Boolean(senderMemberId && current.group.ownerMemberId === senderMemberId)}
             onError={(msg) => setError(msg)}
             onGotoChat={() => setMainView("chat")}
-          />
-        ) : !isChatGroup && mainView === "project" ? (
-          <ProjectWorkflowView
-            group={current.group}
-            members={members}
-            runs={current.runs}
-            canManage
-            onGroupPatch={(g) => setCurrent((prev) => prev && ({ ...prev, group: { ...prev.group, ...g } }))}
-            onMemberPatch={(m) => setCurrent((prev) => {
-              if (!prev) return prev;
-              const members = prev.members.map((x) => (x.id === m.id ? { ...x, ...m } : x));
-              return { ...prev, members };
-            })}
-            onError={(msg) => setError(msg)}
           />
         ) : <>
         <div className="message-list-shell">
@@ -1230,7 +1246,7 @@ export function App() {
       <header>
         <div className="pm-tab-bar">
           <button className={`pm-tab-btn ${rightPanelTab === "members" ? "active" : ""}`} onClick={() => setRightPanelTab("members")}>群成员</button>
-          {!isChatGroup && isAdmin && <button className={`pm-tab-btn`} onClick={() => { setMainView("versions"); }}>版本管理</button>}
+          {!isChatGroup && isAdmin && <button className={`pm-tab-btn ${mainView === "versions" ? "active" : ""}`} onClick={() => { setMainView("versions"); }}>版本管理</button>}
           {isAdmin && <button className={`pm-tab-btn ${rightPanelTab === "experiences" ? "active" : ""}`} onClick={() => setRightPanelTab("experiences")}>经验</button>}
           {isAdmin && <button className={`pm-tab-btn ${rightPanelTab === "logs" ? "active" : ""}`} onClick={() => setRightPanelTab("logs")}>日志</button>}
         </div>
@@ -1419,22 +1435,29 @@ export function App() {
           <ThemeSwitcher />
           {isAdmin && current && (
             <div className="extension-settings">
-              <h3 className="settings-section-title">Extend · PanelLive</h3>
-              <label className="settings-check">
-                <input
-                  type="checkbox"
-                  checked={Boolean(liveExt?.enabled)}
-                  disabled={liveToggling}
-                  onChange={(e) => void togglePanellive(e.target.checked)}
-                />
-                启用 Live（load PanelLive；关闭则 unload，页签置灰）
-              </label>
-              <p className="form-hint">
-                {liveExt
-                  ? `health: ${liveExt.healthy ? "ok" : "down"} · ${liveExt.healthDetail}`
-                  : "尚未查询扩展状态"}
-                {" · "}媒体面由 PanelLive 直连，A2A 仅文本 skills（禁 PCM）。
-              </p>
+              <h3 className="settings-section-title">Extend</h3>
+              {extensions.length === 0 ? (
+                <p className="form-hint">未发现扩展（检查 LINLIS_EXTENSION_ROOTS / 清单文件）。</p>
+              ) : (
+                extensions.map((ext) => (
+                  <div key={ext.id} className="extension-settings-row">
+                    <label className="settings-check">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(ext.enabled)}
+                        disabled={extTogglingId === ext.id}
+                        onChange={(e) => void toggleExtension(ext.id, e.target.checked)}
+                      />
+                      {ext.name}
+                      <span className="form-hint" style={{ marginLeft: 8 }}>
+                        {ext.version} · {ext.healthy ? "health ok" : "health down"}
+                        {ext.healthDetail ? ` · ${ext.healthDetail}` : ""}
+                      </span>
+                    </label>
+                  </div>
+                ))
+              )}
+              <p className="form-hint">启用后顶栏出现 manifest 页签；媒体面由扩展自理，A2A 仅文本 skills（禁 PCM）。</p>
             </div>
           )}
           <div className="extension-settings">

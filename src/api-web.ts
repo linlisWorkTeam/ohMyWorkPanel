@@ -379,6 +379,11 @@ export const api = {
 
   listGroupExtensions: (groupId: string) =>
     apiFetch<ExtensionStatus[]>(`/api/groups/${groupId}/extensions`),
+  setExtensionEnabled: (groupId: string, extId: string, enabled: boolean) =>
+    apiFetch<ExtensionStatus>(`/api/groups/${groupId}/extensions/${encodeURIComponent(extId)}`, {
+      method: "PUT",
+      body: JSON.stringify({ enabled }),
+    }),
   setPanelliveEnabled: (groupId: string, enabled: boolean) =>
     apiFetch<ExtensionStatus>(`/api/groups/${groupId}/extensions/panellive`, {
       method: "PUT",

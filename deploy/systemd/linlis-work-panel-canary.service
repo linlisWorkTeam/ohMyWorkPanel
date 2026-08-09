@@ -15,6 +15,10 @@ Environment=LINLIS_CODEX_PROXY_SCRIPT=/AI/LinlisWorkPanel/scripts/codex-deepseek
 # Separate from prod :18888 so canary restart never steals/kills production Codex shim.
 Environment=LINLIS_CODEX_PROXY_PORT=18889
 Environment=LINLIS_CODEX_BASE_URL=http://127.0.0.1:18889/v1
+Environment=LINLIS_PANELLIVE_ROOT=/AI/WorkPanelLive
+Environment=LINLIS_EXTENSION_ROOTS=/AI/WorkPanelLive:/AI/AIHotel
+Environment=LINLIS_WIKI_ROOT=/AI/WorkPanelWiki
+Environment=LINLIS_WIKI_RETRIEVE=1
 Restart=always
 RestartSec=5
 

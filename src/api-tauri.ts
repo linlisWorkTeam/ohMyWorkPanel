@@ -76,7 +76,7 @@ export const api = {
   // PM: Aggregated State
   getRoadmapState: (groupId: string) => invoke<RoadmapState>("get_roadmap_state", { groupId }),
 
-  listRoadmapOrchestrations: async () => [] as import("./types").RoadmapOrchestration[],
+  listRoadmapOrchestrations: async (_groupId: string) => [] as import("./types").RoadmapOrchestration[],
   startRoadmapItem: async (_id: string) => { throw new Error("路线图编排请在 Web 灰度环境使用"); },
   pauseRoadmapOrchestration: async (_id: string) => { throw new Error("路线图编排请在 Web 灰度环境使用"); },
   resumeRoadmapOrchestration: async (_id: string) => { throw new Error("路线图编排请在 Web 灰度环境使用"); },
@@ -105,43 +105,46 @@ export const api = {
   listServerDir: (path: string) => invoke<DirListing>("list_server_dir", { path }),
   createServerDir: (parent: string, name: string) =>
     invoke<string>("create_server_dir", { parent, name }).then((path) => ({ path })),
-  getVersionBoard: async () => {
+  getVersionBoard: async (): Promise<import("./types").VersionBoard> => {
     throw new Error("Desktop mode: 版本页仅 Web 服务可用");
   },
-  createProjectVersion: async () => {
+  createProjectVersion: async (): Promise<import("./types").ProjectVersion> => {
     throw new Error("Desktop mode: 版本页仅 Web 服务可用");
   },
-  updateVersionRoadmap: async () => {
+  updateVersionRoadmap: async (): Promise<import("./types").ProjectVersion> => {
     throw new Error("Desktop mode: 版本页仅 Web 服务可用");
   },
-  startVersionAsk: async () => {
+  startVersionAsk: async (): Promise<{ version: import("./types").ProjectVersion; runId: string }> => {
     throw new Error("Desktop mode: 版本页仅 Web 服务可用");
   },
-  cancelVersionAsk: async () => {
+  cancelVersionAsk: async (): Promise<import("./types").ProjectVersion> => {
     throw new Error("Desktop mode: 版本页仅 Web 服务可用");
   },
-  approveVersionWaves: async () => {
+  approveVersionWaves: async (): Promise<{ version: import("./types").ProjectVersion; waves: import("./types").Wave[] }> => {
     throw new Error("Desktop mode: 版本页仅 Web 服务可用");
   },
-  playWave: async () => {
+  playWave: async (): Promise<{ wave: import("./types").Wave; runId: string }> => {
     throw new Error("Desktop mode: 版本页仅 Web 服务可用");
   },
-  pauseWave: async () => {
+  pauseWave: async (): Promise<import("./types").Wave> => {
     throw new Error("Desktop mode: 版本页仅 Web 服务可用");
   },
-  advanceWave: async () => {
+  advanceWave: async (): Promise<import("./types").Wave> => {
     throw new Error("Desktop mode: 版本页仅 Web 服务可用");
   },
-  playVersion: async () => {
+  playVersion: async (): Promise<{ wave: import("./types").Wave | null; runId?: string; status?: string }> => {
     throw new Error("Desktop mode: 版本页仅 Web 服务可用");
   },
-  pauseVersion: async () => {
+  pauseVersion: async (): Promise<{ ok: boolean }> => {
     throw new Error("Desktop mode: 版本页仅 Web 服务可用");
   },
-  releaseVersion: async () => {
+  releaseVersion: async (): Promise<import("./types").ProjectVersion> => {
     throw new Error("Desktop mode: 版本页仅 Web 服务可用");
   },
   listGroupExtensions: async (_groupId: string) => [] as import("./types").ExtensionStatus[],
+  setExtensionEnabled: async (_groupId: string, _extId: string, _enabled: boolean): Promise<import("./types").ExtensionStatus> => {
+    throw new Error("Desktop mode: Extension Host 仅 Web 服务可用");
+  },
   setPanelliveEnabled: async (_groupId: string, _enabled: boolean) => {
     throw new Error("Desktop mode: PanelLive Extension Host 仅 Web 服务可用");
   },

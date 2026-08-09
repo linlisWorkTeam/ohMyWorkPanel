@@ -22,22 +22,49 @@ function extractText(content) {
   return '';
 }
 
-// Responses API tools -> Chat Completions tools
+// Responses API tools -> Chat Completions tools.
+// Upstream (OpenCode Zen Go / DeepSeek) only accepts type=function.
+// Drop host tools like web_search / web_search_call that Codex CLI injects —
+// otherwise upstream 400: unknown variant `web_search`, expected `function`.
 function convertTools(tools) {
   if (!Array.isArray(tools) || tools.length === 0) return undefined;
-  return tools.map(t => {
-    if (t && t.type === 'function') {
-      return {
+  const out = [];
+  let dropped = 0;
+  for (const t of tools) {
+    if (!t || typeof t !== 'object') {
+      dropped++;
+      continue;
+    }
+    // Already Chat Completions shape
+    if (t.type === 'function' && t.function && t.function.name) {
+      out.push({
+        type: 'function',
+        function: {
+          name: t.function.name,
+          description: t.function.description || '',
+          parameters: t.function.parameters || { type: 'object', properties: {} }
+        }
+      });
+      continue;
+    }
+    // Responses API shape: { type: 'function', name, description, parameters }
+    if (t.type === 'function' && t.name) {
+      out.push({
         type: 'function',
         function: {
           name: t.name,
           description: t.description || '',
           parameters: t.parameters || { type: 'object', properties: {} }
         }
-      };
+      });
+      continue;
     }
-    return t;
-  });
+    dropped++;
+  }
+  if (dropped > 0) {
+    console.log(`  → convertTools: kept ${out.length} function tools, dropped ${dropped} non-function (e.g. web_search)`);
+  }
+  return out.length > 0 ? out : undefined;
 }
 
 // Responses API tool_choice -> Chat Completions tool_choice

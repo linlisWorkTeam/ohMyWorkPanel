@@ -17,7 +17,9 @@ choice: C — full design; implement S1→S4
 
 **目标**：工作群用 Git Tag 管理产品版本；版本页与聊天平级；管理员 Agent 经 Ask → Wave 敏捷迭代编排执行；简易迭代在 Tag 时汇总。
 
-**非目标（V1.3.0）**：聊天群 D1；多平台 IM；平台内嵌 PCM；自动无人工 promote 生产；替换 Codex/Cursor CLI 本体。
+**同版本纳入（纯平台）**：**通用扩展宿主**——消灭 panellive 硬编码，manifest 动态发现/反代/页签；PanelLive 行为零回归；不为 AIHotel 抄专用 proxy。见 [`2026-08-06-extension-host-v130-claim.md`](./2026-08-06-extension-host-v130-claim.md)。
+
+**非目标（V1.3.0）**：聊天群 D1；多平台 IM；平台内嵌 PCM；自动无人工 promote 生产；替换 Codex/Cursor CLI 本体；AIHotel 剧本/NPC 业务（留扩展仓）。
 
 **实现策略（已选 C）**：本文为**全量设计**；代码按 **S1→S4** 分批灰度交付，每批独立门禁/docs/commit。
 

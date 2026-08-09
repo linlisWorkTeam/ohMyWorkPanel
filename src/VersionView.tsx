@@ -114,6 +114,15 @@ export function VersionView({ group, members, senderMemberId, canManage, onError
             {board.askingVersionId ? " · Ask 进行中" : ""}
             {admin ? ` · 管理员 ${admin.displayName}` : " · 未设管理员"}
           </p>
+          {(board.workspacePath || group.workspacePath) && (
+            <p className="version-workspace-hint">
+              Git 来自工作区 <code>{board.workspacePath || group.workspacePath}</code>
+              {" · "}版本记录按本群隔离
+              {(board.workspaceSharedWith?.length ?? 0) > 0
+                ? ` · 与其他群共享该路径：${board.workspaceSharedWith!.join("、")}`
+                : ""}
+            </p>
+          )}
         </div>
         {canManage && (
           <div className="version-actions">
@@ -129,6 +138,11 @@ export function VersionView({ group, members, senderMemberId, canManage, onError
 
       {board.git.finishLastRound && (
         <div className="version-banner">本轮已完成（HEAD 停在最新 Tag）。可新建版本开启下一轮。</div>
+      )}
+      {(board.workspaceSharedWith?.length ?? 0) > 0 && (
+        <div className="version-banner warn">
+          多个项目群指向同一工作区时，Git Tag 时间线会看起来一样；上方「版本」列表仍只属于本群。
+        </div>
       )}
       {!board.adminMemberId && (
         <div className="version-banner warn">请先在成员面板设置管理员 Agent，否则无法 Ask / 执行 Wave。</div>

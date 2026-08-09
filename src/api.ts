@@ -21,9 +21,9 @@ export function onUnauthorized(_listener: () => void): () => void {
 
 export const api = {
   login: (_username: string, _password: string) =>
-    Promise.reject(new Error("Desktop mode does not use web login")) as Promise<{ token: string; user_id: string; username: string }>,
+    Promise.reject(new Error("Desktop mode does not use web login")) as Promise<{ token: string; user_id: string; username: string; isAdmin?: boolean; is_admin?: boolean }>,
   register: (_username: string, _password: string) =>
-    Promise.reject(new Error("Desktop mode does not use web register")) as Promise<{ token: string; user_id: string; username: string }>,
+    Promise.reject(new Error("Desktop mode does not use web register")) as Promise<{ token: string; user_id: string; username: string; isAdmin?: boolean; is_admin?: boolean }>,
   bootstrap: () => invoke<{ groups: GroupState["group"][] }>("bootstrap"),
   getGroupState: (groupId: string) => invoke<GroupState>("get_group_state", { groupId }),
   markGroupRead: (_groupId: string) => Promise.resolve({ ok: true as const }),
@@ -92,7 +92,7 @@ export const api = {
   // PM: Aggregated State
   getRoadmapState: (groupId: string) => invoke<RoadmapState>("get_roadmap_state", { groupId }),
 
-  listRoadmapOrchestrations: async () => [] as import("./types").RoadmapOrchestration[],
+  listRoadmapOrchestrations: async (_groupId: string) => [] as import("./types").RoadmapOrchestration[],
   startRoadmapItem: async (_id: string) => { throw new Error("路线图编排请在 Web 灰度环境使用"); },
   pauseRoadmapOrchestration: async (_id: string) => { throw new Error("路线图编排请在 Web 灰度环境使用"); },
   resumeRoadmapOrchestration: async (_id: string) => { throw new Error("路线图编排请在 Web 灰度环境使用"); },
@@ -122,46 +122,49 @@ export const api = {
   createServerDir: (parent: string, name: string) =>
     invoke<string>("create_server_dir", { parent, name }).then((path) => ({ path })),
   listGroupExtensions: async (_groupId: string) => [] as import("./types").ExtensionStatus[],
+  setExtensionEnabled: async (_groupId: string, _extId: string, _enabled: boolean): Promise<import("./types").ExtensionStatus> => {
+    throw new Error("Desktop mode: Extension Host 仅 Web 服务可用");
+  },
   setPanelliveEnabled: async (_groupId: string, _enabled: boolean) => {
     throw new Error("Desktop mode: PanelLive Extension Host 仅 Web 服务可用");
   },
   dispatchA2a: async () => {
     throw new Error("Desktop mode: A2A dispatch 仅 Web 服务可用");
   },
-  getVersionBoard: async () => {
+  getVersionBoard: async (_groupId: string): Promise<import("./types").VersionBoard> => {
     throw new Error("Desktop mode: 版本页仅 Web 服务可用");
   },
-  createProjectVersion: async () => {
+  createProjectVersion: async (_input: { groupId: string; name?: string; mode?: string; what?: string; who?: string; how?: string; oneLiner?: string; requesterMemberId?: string }): Promise<import("./types").ProjectVersion> => {
     throw new Error("Desktop mode: 版本页仅 Web 服务可用");
   },
-  updateVersionRoadmap: async () => {
+  updateVersionRoadmap: async (_versionId: string, _input: { what?: string; who?: string; how?: string; oneLiner?: string; name?: string; requesterMemberId?: string }): Promise<import("./types").ProjectVersion> => {
     throw new Error("Desktop mode: 版本页仅 Web 服务可用");
   },
-  startVersionAsk: async () => {
+  startVersionAsk: async (_versionId: string, _senderMemberId: string): Promise<{ version: import("./types").ProjectVersion; runId: string }> => {
     throw new Error("Desktop mode: 版本页仅 Web 服务可用");
   },
-  cancelVersionAsk: async () => {
+  cancelVersionAsk: async (_versionId: string): Promise<import("./types").ProjectVersion> => {
     throw new Error("Desktop mode: 版本页仅 Web 服务可用");
   },
-  approveVersionWaves: async () => {
+  approveVersionWaves: async (_versionId: string, _waves?: { title: string }[]): Promise<{ version: import("./types").ProjectVersion; waves: import("./types").Wave[] }> => {
     throw new Error("Desktop mode: 版本页仅 Web 服务可用");
   },
-  playWave: async () => {
+  playWave: async (_waveId: string, _senderMemberId: string): Promise<{ wave: import("./types").Wave; runId: string }> => {
     throw new Error("Desktop mode: 版本页仅 Web 服务可用");
   },
-  pauseWave: async () => {
+  pauseWave: async (_waveId: string): Promise<import("./types").Wave> => {
     throw new Error("Desktop mode: 版本页仅 Web 服务可用");
   },
-  advanceWave: async () => {
+  advanceWave: async (_waveId: string): Promise<import("./types").Wave> => {
     throw new Error("Desktop mode: 版本页仅 Web 服务可用");
   },
-  playVersion: async () => {
+  playVersion: async (_versionId: string, _senderMemberId: string): Promise<{ wave: import("./types").Wave | null; runId?: string; status?: string }> => {
     throw new Error("Desktop mode: 版本页仅 Web 服务可用");
   },
-  pauseVersion: async () => {
+  pauseVersion: async (_versionId: string): Promise<{ ok: boolean }> => {
     throw new Error("Desktop mode: 版本页仅 Web 服务可用");
   },
-  releaseVersion: async () => {
+  releaseVersion: async (_versionId: string, _gitTag?: string): Promise<import("./types").ProjectVersion> => {
     throw new Error("Desktop mode: 版本页仅 Web 服务可用");
   },
   updateGroupWorkspace: (groupId: string, workspacePath: string) =>

@@ -17,7 +17,7 @@ export function formatUnreadBadge(count: number): string {
 }
 
 /** Bump unread for a group that is not currently open. */
-export function bumpUnread(groups: Group[], groupId: string, activeGroupId: string | null): Group[] {
+export function bumpUnread(groups: Group[], groupId: string, activeGroupId: string | null | undefined): Group[] {
   if (!groupId || groupId === activeGroupId) return groups;
   return sortGroupsForSidebar(
     groups.map((g) =>

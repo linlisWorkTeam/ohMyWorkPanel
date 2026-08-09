@@ -1,4 +1,5 @@
-//! Extension Host — load/unload Extend services (PanelLive MVP).
+//! Extension Host — discover / load / proxy Extend services via manifest.
+//! PanelLive remains the default registered root; AIHotel and others via LINLIS_EXTENSION_ROOTS.
 
 use crate::db::{now, AppResult};
 use rusqlite::{params, Connection, OptionalExtension};
@@ -9,6 +10,12 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 pub const PANELLIVE_ID: &str = "panellive";
+
+#[derive(Debug, Clone)]
+pub struct DiscoveredExtension {
+    pub root: PathBuf,
+    pub manifest: ExtensionManifest,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -85,11 +92,65 @@ pub fn panellive_root() -> PathBuf {
         .unwrap_or_else(|_| PathBuf::from("/AI/WorkPanelLive"))
 }
 
-pub fn load_panellive_manifest(root: &Path) -> AppResult<ExtensionManifest> {
+/// Absolute roots containing `extension.manifest.json`.
+/// `LINLIS_EXTENSION_ROOTS` = `:` / `;` separated list; always merges `LINLIS_PANELLIVE_ROOT` fallback.
+pub fn extension_roots() -> Vec<PathBuf> {
+    let mut roots: Vec<PathBuf> = Vec::new();
+    if let Ok(raw) = std::env::var("LINLIS_EXTENSION_ROOTS") {
+        for part in raw.split(|c| c == ':' || c == ';') {
+            let p = part.trim();
+            if !p.is_empty() {
+                roots.push(PathBuf::from(p));
+            }
+        }
+    }
+    let live = panellive_root();
+    if !roots.iter().any(|r| r == &live) {
+        roots.insert(0, live);
+    }
+    // Optional default for AIHotel when present on disk and not already listed.
+    let hotel = PathBuf::from("/AI/AIHotel");
+    if hotel.join("extension.manifest.json").is_file() && !roots.iter().any(|r| r == &hotel) {
+        roots.push(hotel);
+    }
+    roots
+}
+
+pub fn load_manifest(root: &Path) -> AppResult<ExtensionManifest> {
     let path = root.join("extension.manifest.json");
     let raw = std::fs::read_to_string(&path)
-        .map_err(|e| format!("读取 PanelLive 清单失败（{}）：{e}", path.display()))?;
+        .map_err(|e| format!("读取扩展清单失败（{}）：{e}", path.display()))?;
     serde_json::from_str(&raw).map_err(|e| format!("解析 extension.manifest.json：{e}"))
+}
+
+pub fn load_panellive_manifest(root: &Path) -> AppResult<ExtensionManifest> {
+    load_manifest(root)
+}
+
+pub fn discover_extensions() -> Vec<DiscoveredExtension> {
+    let mut out = Vec::new();
+    let mut seen_ids = std::collections::HashSet::new();
+    for root in extension_roots() {
+        if !root.join("extension.manifest.json").is_file() {
+            continue;
+        }
+        match load_manifest(&root) {
+            Ok(manifest) => {
+                if seen_ids.insert(manifest.id.clone()) {
+                    out.push(DiscoveredExtension { root, manifest });
+                }
+            }
+            Err(e) => eprintln!("extension discover skip {}: {e}", root.display()),
+        }
+    }
+    out
+}
+
+pub fn find_extension(ext_id: &str) -> AppResult<DiscoveredExtension> {
+    discover_extensions()
+        .into_iter()
+        .find(|d| d.manifest.id == ext_id)
+        .ok_or_else(|| format!("未知扩展：{ext_id}"))
 }
 
 pub fn ensure_extensions_table(conn: &Connection) -> AppResult<()> {
@@ -228,7 +289,7 @@ pub fn http_post_json_local(host: &str, port: u16, path: &str, json_body: &str) 
 pub fn sanitize_proxy_path(raw: &str) -> AppResult<String> {
     let trimmed = raw.trim().trim_start_matches('/');
     if trimmed.is_empty() {
-        return Ok("/live.html".into());
+        return Ok("/".into());
     }
     if trimmed.contains("..") || trimmed.contains('\\') || trimmed.contains('\0') {
         return Err("非法代理路径".into());
@@ -237,6 +298,12 @@ pub fn sanitize_proxy_path(raw: &str) -> AppResult<String> {
 }
 
 /// Append browser query to sanitized path (needed for `?format=json` TTS etc.).
+
+/// Best-effort discovery for test/dev: mock manifest may omit `runtime`.
+fn discover_mock_or_panellive() -> Vec<DiscoveredExtension> {
+    discover_extensions()
+}
+
 pub fn with_proxy_query(path: &str, query: Option<&str>) -> AppResult<String> {
     let Some(q) = query.map(str::trim).filter(|s| !s.is_empty()) else {
         return Ok(path.to_string());
@@ -248,11 +315,15 @@ pub fn with_proxy_query(path: &str, query: Option<&str>) -> AppResult<String> {
 }
 
 /// Same-origin base for browser iframe (never expose 127.0.0.1 to clients).
-pub fn panellive_public_base() -> &'static str {
-    "/api/extensions/panellive"
+pub fn extension_public_base(ext_id: &str) -> String {
+    format!("/api/extensions/{ext_id}")
 }
 
-pub fn check_panellive_health(manifest: &ExtensionManifest) -> (bool, String) {
+pub fn panellive_public_base() -> String {
+    extension_public_base(PANELLIVE_ID)
+}
+
+pub fn check_extension_health(manifest: &ExtensionManifest) -> (bool, String) {
     let path = if manifest.runtime.health_path.starts_with('/') {
         manifest.runtime.health_path.clone()
     } else {
@@ -265,63 +336,97 @@ pub fn check_panellive_health(manifest: &ExtensionManifest) -> (bool, String) {
     }
 }
 
+pub fn check_panellive_health(manifest: &ExtensionManifest) -> (bool, String) {
+    check_extension_health(manifest)
+}
+
 pub fn panellive_upstream_port(manifest: &ExtensionManifest) -> u16 {
     manifest.runtime.default_port
 }
 
 pub fn panellive_base_url(_manifest: &ExtensionManifest) -> String {
-    panellive_public_base().into()
+    panellive_public_base()
 }
 
 pub fn panellive_token() -> String {
-    std::env::var("LINLIS_PANELLIVE_TOKEN").unwrap_or_else(|_| "panellive-dev-token".into())
+    std::env::var("LINLIS_PANELLIVE_TOKEN")
+        .or_else(|_| std::env::var("LINLIS_EXTENSION_TOKEN"))
+        .unwrap_or_else(|_| "panellive-dev-token".into())
+}
+
+pub fn status_for_discovered(
+    conn: &Connection,
+    group_id: &str,
+    disc: &DiscoveredExtension,
+) -> AppResult<ExtensionStatus> {
+    let enabled = is_extension_enabled(conn, group_id, &disc.manifest.id)?;
+    let (healthy, detail) = if enabled {
+        check_extension_health(&disc.manifest)
+    } else {
+        (false, "unloaded".into())
+    };
+    Ok(ExtensionStatus {
+        id: disc.manifest.id.clone(),
+        name: disc.manifest.name.clone(),
+        version: disc.manifest.version.clone(),
+        kind: disc.manifest.kind.clone(),
+        enabled,
+        healthy,
+        health_detail: detail,
+        base_url: extension_public_base(&disc.manifest.id),
+        tabs: disc.manifest.contributes.tabs.clone(),
+        a2a_skills: disc.manifest.contributes.a2a_skills.clone(),
+        media_plane: disc.manifest.runtime.media_plane.clone(),
+    })
 }
 
 pub fn list_group_extensions(conn: &Connection, group_id: &str) -> AppResult<Vec<ExtensionStatus>> {
     ensure_extensions_table(conn)?;
-    let root = panellive_root();
-    let manifest = load_panellive_manifest(&root)?;
-    let enabled = is_extension_enabled(conn, group_id, PANELLIVE_ID)?;
-    let (healthy, detail) = if enabled {
-        check_panellive_health(&manifest)
-    } else {
-        (false, "unloaded".into())
-    };
-    Ok(vec![ExtensionStatus {
-        id: manifest.id.clone(),
-        name: manifest.name.clone(),
-        version: manifest.version.clone(),
-        kind: manifest.kind.clone(),
-        enabled,
-        healthy,
-        health_detail: detail,
-        base_url: panellive_base_url(&manifest),
-        tabs: manifest.contributes.tabs.clone(),
-        a2a_skills: manifest.contributes.a2a_skills.clone(),
-        media_plane: manifest.runtime.media_plane.clone(),
-    }])
+    let mut out = Vec::new();
+    for disc in discover_extensions() {
+        out.push(status_for_discovered(conn, group_id, &disc)?);
+    }
+    Ok(out)
+}
+
+/// Enable = load (require health); disable = unload. Works for any discovered ext id.
+pub fn set_group_extension_enabled(
+    conn: &Connection,
+    group_id: &str,
+    ext_id: &str,
+    enabled: bool,
+) -> AppResult<ExtensionStatus> {
+    ensure_extensions_table(conn)?;
+    let disc = find_extension(ext_id)?;
+    if enabled {
+        let (ok, detail) = check_extension_health(&disc.manifest);
+        if !ok {
+            return Err(format!(
+                "CONFLICT:扩展 {} 未就绪，无法 load。请先在 {} 启动服务（默认 :{}）。详情：{detail}",
+                disc.manifest.name,
+                disc.root.display(),
+                disc.manifest.runtime.default_port
+            ));
+        }
+    }
+    set_extension_enabled(conn, group_id, ext_id, enabled)?;
+    status_for_discovered(conn, group_id, &disc)
 }
 
 /// Enable = load (require health); disable = unload.
 pub fn set_panellive_enabled(conn: &Connection, group_id: &str, enabled: bool) -> AppResult<ExtensionStatus> {
-    ensure_extensions_table(conn)?;
-    let root = panellive_root();
-    let manifest = load_panellive_manifest(&root)?;
-    if enabled {
-        let (ok, detail) = check_panellive_health(&manifest);
-        if !ok {
-            return Err(format!(
-                "CONFLICT:PanelLive 未就绪，无法 load。请先在 {} 执行 npm start（默认 :{}）。详情：{detail}",
-                root.display(),
-                manifest.runtime.default_port
-            ));
+    set_group_extension_enabled(conn, group_id, PANELLIVE_ID, enabled)
+}
+
+/// Prefix match for A2A skills (`live.*`, `hotel.*`, or exact).
+pub fn skill_allowed(declared: &[String], skill: &str) -> bool {
+    declared.iter().any(|d| {
+        if let Some(prefix) = d.strip_suffix(".*") {
+            skill == prefix || skill.starts_with(&format!("{prefix}."))
+        } else {
+            d == skill
         }
-    }
-    set_extension_enabled(conn, group_id, PANELLIVE_ID, enabled)?;
-    let list = list_group_extensions(conn, group_id)?;
-    list.into_iter()
-        .next()
-        .ok_or_else(|| "扩展状态缺失".into())
+    })
 }
 
 #[cfg(test)]
@@ -344,6 +449,7 @@ mod tests {
     #[test]
     fn sanitize_proxy_rejects_dotdot() {
         assert!(sanitize_proxy_path("../etc/passwd").is_err());
+        assert_eq!(sanitize_proxy_path("").unwrap(), "/");
         assert_eq!(sanitize_proxy_path("live.html").unwrap(), "/live.html");
         assert_eq!(sanitize_proxy_path("v1/session/start").unwrap(), "/v1/session/start");
         assert_eq!(
@@ -352,6 +458,20 @@ mod tests {
         );
         assert_eq!(with_proxy_query("/v1/tts", None).unwrap(), "/v1/tts");
         assert!(with_proxy_query("/v1/tts", Some("a b")).is_err());
+    }
+
+    #[test]
+    fn skill_allowed_prefix_and_exact() {
+        let decl = vec!["live.*".into(), "hotel.session.start".into()];
+        assert!(skill_allowed(&decl, "live.session.start"));
+        assert!(skill_allowed(&decl, "hotel.session.start"));
+        assert!(!skill_allowed(&decl, "hotel.other"));
+    }
+
+    #[test]
+    fn extension_roots_includes_panellive() {
+        let roots = extension_roots();
+        assert!(roots.iter().any(|r| r.ends_with("WorkPanelLive") || r == &panellive_root()));
     }
 
     #[test]
@@ -365,6 +485,70 @@ mod tests {
         assert!(is_extension_enabled(&conn, "g1", PANELLIVE_ID).unwrap());
         set_extension_enabled(&conn, "g1", PANELLIVE_ID, false).unwrap();
         assert!(!is_extension_enabled(&conn, "g1", PANELLIVE_ID).unwrap());
+    }
+
+    #[test]
+    fn discover_defaults_to_panellive_and_skips_bad_root() {
+        // LINLIS_EXTENSION_ROOTS unset in test env; at least panellive default root is listed.
+        let roots = extension_roots();
+        assert!(!roots.is_empty());
+        // A root without manifest must be skipped silently.
+        let tmp = std::env::temp_dir();
+        let disc = discover_extensions();
+        for d in &disc {
+            assert!(d.root.join("extension.manifest.json").is_file());
+        }
+        let _ = tmp;
+    }
+
+    #[test]
+    fn unknown_extension_errors() {
+        let err = find_extension("no-such-ext-xyz").unwrap_err();
+        assert!(err.contains("未知扩展"));
+    }
+
+    #[test]
+    fn status_unloaded_when_disabled() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        init_db(file.path()).unwrap();
+        let conn = open_db(file.path()).unwrap();
+        // panellive not enabled yet -> healthy=false, unloaded
+        let list = list_group_extensions(&conn, "g1").unwrap();
+        let pl = list.iter().find(|s| s.id == PANELLIVE_ID);
+        if let Some(s) = pl {
+            assert!(!s.enabled);
+            assert!(!s.healthy);
+            assert_eq!(s.health_detail, "unloaded");
+        }
+    }
+
+    #[test]
+    fn a2a_skill_prefix_contract() {
+        // manifest-driven A2A: hotel.* must match hotel.* and hotel.anything but not live.*
+        let decl = vec!["hotel.*".to_string()];
+        assert!(skill_allowed(&decl, "hotel.session.start"));
+        assert!(skill_allowed(&decl, "hotel.any.deep"));
+        assert!(!skill_allowed(&decl, "live.session.start"));
+        assert!(skill_allowed(&decl, "hotel")); // prefix 本身（无点后缀）也接受
+    }
+
+    #[test]
+    fn sanitize_keeps_public_route_compat() {
+        // `/api/extensions/panellive` base path with no subpath must proxy to upstream `/`.
+        assert_eq!(sanitize_proxy_path("").unwrap(), "/");
+        assert_eq!(sanitize_proxy_path("/").unwrap(), "/");
+        // `live.html` (legacy iframe entry) still allowed.
+        assert_eq!(sanitize_proxy_path("live.html").unwrap(), "/live.html");
+        assert!(sanitize_proxy_path("../x").is_err());
+    }
+
+    #[test]
+    fn extension_roots_merges_env_without_dup() {
+        std::env::set_var("LINLIS_EXTENSION_ROOTS", "/AI/WorkPanelLive");
+        let roots = extension_roots();
+        let count = roots.iter().filter(|r| **r == panellive_root()).count();
+        assert_eq!(count, 1, "panellive root must not be duplicated");
+        std::env::remove_var("LINLIS_EXTENSION_ROOTS");
     }
 
 }

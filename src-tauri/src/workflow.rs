@@ -98,6 +98,10 @@ pub struct VersionBoard {
     pub waves: Vec<Wave>,
     pub asking_version_id: Option<String>,
     pub admin_member_id: Option<String>,
+    /// Group workspace used for Git tag timeline (not the same as version rows).
+    pub workspace_path: String,
+    /// Other project groups that share this workspace (Git looks identical).
+    pub workspace_shared_with: Vec<String>,
 }
 
 fn version_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ProjectVersion> {
@@ -217,6 +221,35 @@ pub fn asking_version_id(conn: &Connection, group_id: &str) -> AppResult<Option<
     .map_err(|e| e.to_string())
 }
 
+/// Other non-chat groups that use the same workspace_path (Git timeline will match).
+pub fn workspace_peer_group_names(
+    conn: &Connection,
+    group_id: &str,
+    workspace_path: &str,
+) -> AppResult<Vec<String>> {
+    let ws = workspace_path.trim();
+    if ws.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut stmt = conn
+        .prepare(
+            "SELECT name FROM groups
+             WHERE id != ?1
+               AND trim(ifnull(workspace_path,'')) = ?2
+               AND ifnull(group_kind,'project') != 'chat'
+             ORDER BY name COLLATE NOCASE",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![group_id, ws], |r| r.get::<_, String>(0))
+        .map_err(|e| e.to_string())?;
+    let mut names = Vec::new();
+    for row in rows {
+        names.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(names)
+}
+
 pub fn board_for_group(db_path: &Path, group: &Group) -> AppResult<VersionBoard> {
     let conn = open_db(db_path)?;
     ensure_workflow_tables(&conn)?;
@@ -224,12 +257,16 @@ pub fn board_for_group(db_path: &Path, group: &Group) -> AppResult<VersionBoard>
     let versions = list_versions(&conn, &group.id)?;
     let waves = list_waves_for_group(&conn, &group.id)?;
     let asking = asking_version_id(&conn, &group.id)?;
+    let workspace_shared_with =
+        workspace_peer_group_names(&conn, &group.id, &group.workspace_path)?;
     Ok(VersionBoard {
         git,
         versions,
         waves,
         asking_version_id: asking,
         admin_member_id: group.admin_member_id.clone(),
+        workspace_path: group.workspace_path.clone(),
+        workspace_shared_with,
     })
 }
 
@@ -755,5 +792,41 @@ mod tests {
         let w = play_wave(&conn, &waves[0].id).unwrap();
         assert_eq!(w.play_state, "playing");
         pause_wave(&conn, &w.id).unwrap();
+    }
+
+    #[test]
+    fn workspace_peers_list_other_project_groups() {
+        let file = NamedTempFile::new().unwrap();
+        init_db(file.path()).unwrap();
+        let conn = open_db(file.path()).unwrap();
+        conn.execute(
+            "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at,group_kind)
+             VALUES('g1','Alpha','/AI/Shared','o','admin',1,'project')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at,group_kind)
+             VALUES('g2','Beta','/AI/Shared','o','admin',2,'project')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at,group_kind)
+             VALUES('g3','ChatOnly','/AI/Shared','o','admin',3,'chat')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at,group_kind)
+             VALUES('g4','Other','/AI/Else','o','admin',4,'project')",
+            [],
+        )
+        .unwrap();
+        let peers = workspace_peer_group_names(&conn, "g1", "/AI/Shared").unwrap();
+        assert_eq!(peers, vec!["Beta".to_string()]);
+        let board = board_for_group(file.path(), &crate::db::get_group(&conn, "g1").unwrap()).unwrap();
+        assert_eq!(board.workspace_path, "/AI/Shared");
+        assert_eq!(board.workspace_shared_with, vec!["Beta".to_string()]);
     }
 }

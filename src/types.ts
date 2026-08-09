@@ -295,6 +295,10 @@ export interface VersionBoard {
   waves: Wave[];
   askingVersionId?: string | null;
   adminMemberId?: string | null;
+  /** Workspace used for Git tag timeline (version rows stay per-group). */
+  workspacePath?: string;
+  /** Other project groups sharing that workspace. */
+  workspaceSharedWith?: string[];
 }
 
  // === Project Management ===
