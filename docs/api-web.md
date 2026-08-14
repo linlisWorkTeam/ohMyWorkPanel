@@ -31,7 +31,7 @@
 | GET/PUT | `/api/groups/{id}/announcement` |
 | PUT | `/api/groups/{id}/workspace` |
 | PUT | `/api/groups/{id}/archive` |
-| POST | `/api/groups/{group_id}/members`（`invite:true` → 待接受用户 + `inviteUrl`） |
+| GET/POST | `/api/groups/{group_id}/members`（GET 只读成员列表且不改变未读；POST `invite:true` → 待接受用户 + `inviteUrl`） |
 | DELETE | `/api/groups/{group_id}/members/{member_id}`（软移除 `is_active=0`） |
 | DELETE | `/api/groups/{group_id}/members/{member_id}/purge`（永久删除/隐藏 roster） |
 | GET | `/api/invites/{token}`（无鉴权；邀请预览） |
