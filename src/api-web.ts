@@ -245,6 +245,20 @@ export const api = {
     apiFetch<string>(`/api/runs/${runId}/retry`, { method: "POST" }),
 
   getSettings: () => apiFetch<RuntimeSettings>("/api/settings"),
+  getAgentModels: () =>
+    apiFetch<{
+      adapters: Record<string, string[]>;
+      cursorSource?: string;
+      cursorSyncedAt?: number | null;
+      todos?: string[];
+    }>("/api/agent-models"),
+  refreshAgentModels: () =>
+    apiFetch<{
+      adapters: Record<string, string[]>;
+      cursorSource?: string;
+      cursorSyncedAt?: number | null;
+      todos?: string[];
+    }>("/api/agent-models/refresh", { method: "POST" }),
   getMetricsLatest: () => apiFetch<MetricsSample>("/api/metrics/latest"),
   listActiveRuns: (groupId: string) =>
     apiFetch<TaskRun[]>(`/api/groups/${groupId}/runs/active`),

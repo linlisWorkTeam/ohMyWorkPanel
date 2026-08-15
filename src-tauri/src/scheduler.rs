@@ -119,6 +119,9 @@ pub(crate) fn plan_queued_starts(
     if available <= 0 {
         return Ok(Vec::new());
     }
+    if crate::release_drain::is_enabled(conn)? {
+        return Ok(Vec::new());
+    }
     let mut busy_agents: HashSet<String> = HashSet::new();
     {
         let mut stmt = conn

@@ -9,7 +9,9 @@ mod opencode;
 pub mod parse;
 
 use crate::db::AppResult;
-use parse::{parse_agent_event, parse_agent_line, DeltaMode, ParsedEvent};
+use parse::{
+    parse_agent_event, parse_agent_line, parse_openclaw_mixed_output, DeltaMode, ParsedEvent,
+};
 use std::{
     path::Path,
     process::Stdio,
@@ -285,6 +287,7 @@ where
     // OpenClaw `--json` often emits one pretty-printed object across many lines.
     // Buffer until a full JSON value parses; never echo raw fragments into chat.
     let mut openclaw_buf = String::new();
+    let mut openclaw_got_final = false;
     let mut last_failure_hint: Option<String> = None;
     loop {
         tokio::select! {
@@ -309,6 +312,9 @@ where
                         }
                         if !event.text.is_empty() {
                             let replace = event.mode == DeltaMode::Replace;
+                            if event.channel == "final" {
+                                openclaw_got_final = true;
+                            }
                             on_delta(event.channel, event.text, replace).await?;
                         }
                     } else {
@@ -337,6 +343,9 @@ where
                             }
                             if !event.text.is_empty() {
                                 let replace = event.mode == DeltaMode::Replace;
+                                if event.channel == "final" {
+                                    openclaw_got_final = true;
+                                }
                                 on_delta(event.channel, event.text, replace).await?;
                             }
                         }
@@ -362,10 +371,81 @@ where
         .await
         .map_err(|e| format!("等待 Agent 结束失败：{e}"))?;
     let stderr = stderr_task.await.unwrap_or_default();
+    // OpenClaw 2026.3 often prints the JSON envelope on stderr (stdout empty),
+    // especially after gateway→embedded fallback. Recover payloads[].text.
+    if kind == AdapterKind::OpenClaw && !openclaw_got_final {
+        if let Some(event) = parse_openclaw_mixed_output(&stderr) {
+            if let Some(id) = event.session_id.clone() {
+                captured_session = Some(id);
+            }
+            if !event.text.is_empty() {
+                let replace = event.mode == DeltaMode::Replace;
+                on_delta(event.channel, event.text, replace).await?;
+                openclaw_got_final = true;
+            }
+        }
+    }
     if !status.success() {
+        // Prefer a clean payload over dumping gateway noise + raw JSON.
+        if kind == AdapterKind::OpenClaw && openclaw_got_final {
+            return Ok(captured_session);
+        }
         return Err(format_cli_failure(adapter, &status.to_string(), &stderr, last_failure_hint.as_deref()));
     }
+    if kind == AdapterKind::OpenClaw && !openclaw_got_final {
+        return Err(format!(
+            "{adapter} 未解析到回复（stdout 空且 stderr 无 payloads）。stderr 摘要：{}",
+            stderr.chars().take(280).collect::<String>()
+        ));
+    }
     Ok(captured_session)
+}
+
+/// Fold adapter stdout/stderr into the user-visible **final** text.
+/// Used by contract tests (and mirrors OpenClaw stderr recovery in `run_streaming`).
+pub fn resolve_adapter_final_text(kind: AdapterKind, stdout: &str, stderr: &str) -> Option<String> {
+    let mut final_text = String::new();
+    let mut got_final = false;
+
+    if kind == AdapterKind::OpenClaw {
+        let trimmed = stdout.trim();
+        if !trimmed.is_empty() {
+            if serde_json::from_str::<serde_json::Value>(trimmed).is_ok() {
+                let event = kind.parse_event(trimmed);
+                if event.channel == "final" && !event.text.is_empty() {
+                    final_text = event.text;
+                    got_final = true;
+                }
+            } else if let Some(event) = parse_openclaw_mixed_output(stdout) {
+                if !event.text.is_empty() {
+                    final_text = event.text;
+                    got_final = true;
+                }
+            }
+        }
+        if !got_final {
+            if let Some(event) = parse_openclaw_mixed_output(stderr) {
+                if !event.text.is_empty() {
+                    final_text = event.text;
+                    got_final = true;
+                }
+            }
+        }
+        return got_final.then_some(final_text);
+    }
+
+    for line in stdout.lines() {
+        let event = kind.parse_event(line);
+        if event.channel != "final" || event.text.is_empty() {
+            continue;
+        }
+        got_final = true;
+        match event.mode {
+            DeltaMode::Replace => final_text = event.text,
+            DeltaMode::Append => final_text.push_str(&event.text),
+        }
+    }
+    got_final.then_some(final_text)
 }
 
 fn codex_failure_hint(line: &str) -> Option<String> {
@@ -411,6 +491,80 @@ fn format_cli_failure(adapter: &str, status: &str, stderr: &str, hint: Option<&s
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn adapter_final_response_contracts() {
+        // Acceptance: each adapter fixture must yield the expected user-visible token,
+        // not envelopes / gateway noise / empty 「已完成。」 placeholders.
+        let cases: &[(AdapterKind, &str, &str, &str)] = &[
+            (
+                AdapterKind::OpenClaw,
+                "",
+                r#"Gateway agent failed; falling back to embedded: Error: gateway closed (1006)
+{
+  "payloads": [{ "text": "PONG_OPENCLAW", "mediaUrl": null }],
+  "meta": { "agentMeta": { "sessionId": "s-oc" } }
+}
+"#,
+                "PONG_OPENCLAW",
+            ),
+            (
+                AdapterKind::OpenClaw,
+                r#"{"runId":"r1","status":"ok","result":{"payloads":[{"text":"PONG_OPENCLAW_STDOUT"}]}}"#,
+                "ignored stderr noise",
+                "PONG_OPENCLAW_STDOUT",
+            ),
+            (
+                AdapterKind::Cursor,
+                r#"{"type":"system","session_id":"c1"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"PONG_CURSOR"}]},"session_id":"c1"}
+{"type":"result","subtype":"success","result":"PONG_CURSOR","session_id":"c1"}"#,
+                "",
+                "PONG_CURSOR",
+            ),
+            (
+                AdapterKind::Codex,
+                r#"{"type":"thread.started","thread_id":"t1"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"PONG_CODEX"}}
+{"type":"turn.completed"}"#,
+                "",
+                "PONG_CODEX",
+            ),
+            (
+                AdapterKind::ClaudeCode,
+                r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"PONG_CLAUDE"}]},"session_id":"cl1"}
+{"type":"result","subtype":"success","result":"PONG_CLAUDE","session_id":"cl1"}"#,
+                "",
+                "PONG_CLAUDE",
+            ),
+            (
+                AdapterKind::OpenCode,
+                r#"{"type":"text","text":"PONG_OPENCODE"}"#,
+                "",
+                "PONG_OPENCODE",
+            ),
+        ];
+
+        for (kind, stdout, stderr, expected) in cases {
+            let got = resolve_adapter_final_text(*kind, stdout, stderr)
+                .unwrap_or_else(|| panic!("{kind:?}: expected final text, got None"));
+            assert_eq!(got, *expected, "{kind:?} final text mismatch");
+            assert!(
+                !got.contains("\"runId\"") && !got.contains("\"payloads\""),
+                "{kind:?} must not leak envelope JSON"
+            );
+            assert!(
+                !got.contains("Gateway agent failed"),
+                "{kind:?} must not leak gateway stderr"
+            );
+        }
+    }
+
+    #[test]
+    fn openclaw_empty_streams_yield_no_final() {
+        assert!(resolve_adapter_final_text(AdapterKind::OpenClaw, "", "gateway only, no json").is_none());
+    }
 
     #[test]
     fn build_args_match_cli_contracts() {

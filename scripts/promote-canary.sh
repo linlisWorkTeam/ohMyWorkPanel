@@ -60,6 +60,11 @@ ensure_prod_started() {
 }
 trap ensure_prod_started EXIT INT TERM
 
+# Smooth promote: drain prod agents before stop
+if systemctl is-active --quiet linlis-work-panel.service; then
+  bash "$(dirname "$0")/lib/drain-wait.sh" "${PROD_PORT}" "${LINLIS_DRAIN_TIMEOUT:-180}" || true
+fi
+
 systemctl stop linlis-work-panel.service || true
 PROD_STOPPED=1
 sleep 1

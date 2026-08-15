@@ -8,6 +8,10 @@ Active handoff notes for future agents.
 
 | Date | Topic | Status |
 |------|-------|--------|
+| 2026-08-15 | [平滑发版 Drain + 重启重入队](./2026-08-15-smooth-release-drain.md) | active |
+| 2026-08-15 | [Cursor 模型目录定时同步](./2026-08-15-cursor-model-catalog-sync.md) | active |
+| 2026-08-15 | [Cursor Grok 4.6 模型目录](./2026-08-15-cursor-grok-4.6.md) | active |
+| 2026-08-10 | [OpenClaw stderr 回显 + 响应契约测](./2026-08-10-openclaw-echo-contracts.md) | active |
 | 2026-08-06 | [V1.3.0 工作流灰度](./2026-08-06-v1.3.0-workflow-canary.md) | active |
 | 2026-08-06 | [Codex 代理 tools/tool_calls 修复](./2026-08-06-codex-proxy-tools.md) | active |
 | 2026-08-06 | [V1.3.0 工作流时代设计](../superpowers/specs/2026-08-06-workpanel-v1.3.0-workflow-era-design.md) | draft-for-review |

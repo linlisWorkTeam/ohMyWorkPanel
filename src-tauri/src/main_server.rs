@@ -80,6 +80,8 @@ async fn main() {
     web::start_scheduler_background(sched.clone());
     linlis_work_panel_lib::keepalive::start_keepalive_loop(sched);
     linlis_work_panel_lib::metrics::start_perf_loop(db_path.clone());
+    // Cursor --list-models → live catalog (other adapters: TODO in model_catalog)
+    linlis_work_panel_lib::model_catalog::start_cursor_model_sync_loop();
 
     // Codex Responses shim on :18888 — owned by this process (or reuse if already bound).
     let _codex_proxy = linlis_work_panel_lib::codex_proxy::start_embedded().await;

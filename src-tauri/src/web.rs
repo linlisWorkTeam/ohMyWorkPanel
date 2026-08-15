@@ -468,23 +468,26 @@ async fn send_message_web(
      .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
      // Create task runs for target agents (Ask-gate: ignore idle chatter toward admin)
+     let drain_active = crate::release_drain::is_enabled(&conn).unwrap_or(false);
      let mut run_ids: Vec<String> = Vec::new();
-     for agent_id in target_agents {
-         let allowed = crate::workflow::ask_allows_agent_run(
-             &conn,
-             &input.group_id,
-             &msg.sender_member_id,
-             &agent_id,
-             &input.mention_member_ids,
-             false,
-         )
-         .unwrap_or(true);
-         if !allowed {
-             continue;
-         }
-         match create_task_run(&conn, &input.group_id, &msg.id, &agent_id, None, 0) {
-             Ok(rid) => run_ids.push(rid),
-             Err(_) => {}
+     if !drain_active {
+         for agent_id in target_agents {
+             let allowed = crate::workflow::ask_allows_agent_run(
+                 &conn,
+                 &input.group_id,
+                 &msg.sender_member_id,
+                 &agent_id,
+                 &input.mention_member_ids,
+                 false,
+             )
+             .unwrap_or(true);
+             if !allowed {
+                 continue;
+             }
+             match create_task_run(&conn, &input.group_id, &msg.id, &agent_id, None, 0) {
+                 Ok(rid) => run_ids.push(rid),
+                 Err(_) => {}
+             }
          }
      }
 
@@ -508,6 +511,7 @@ async fn send_message_web(
      Ok(Json(json!({
          "message": msg,
          "runIds": run_ids,
+         "drainActive": drain_active,
      })))
 }
 
@@ -1126,6 +1130,34 @@ async fn get_message_channel_part_web(
  }
 
  // === Settings ===
+
+ async fn get_agent_models_web(
+     ClaimsExtractor(_claims): ClaimsExtractor,
+ ) -> Result<Json<crate::model_catalog::AgentModelsResponse>, (StatusCode, String)> {
+     Ok(Json(crate::model_catalog::catalog_response()))
+ }
+
+ async fn refresh_agent_models_web(
+     State(state): State<Arc<AppState>>,
+     ClaimsExtractor(claims): ClaimsExtractor,
+ ) -> Result<Json<crate::model_catalog::AgentModelsResponse>, (StatusCode, String)> {
+     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
+     match tokio::task::spawn_blocking(crate::model_catalog::refresh_cursor_blocking).await {
+         Ok(Ok(_)) => {}
+         Ok(Err(e)) => {
+             // Still return catalog (fallback); surface warning in source field already
+             let _ = e;
+         }
+         Err(e) => {
+             return Err((
+                 StatusCode::INTERNAL_SERVER_ERROR,
+                 format!("refresh join error: {e}"),
+             ))
+         }
+     }
+     Ok(Json(crate::model_catalog::catalog_response()))
+ }
 
  async fn get_settings_web(
      State(state): State<Arc<AppState>>,
@@ -1864,6 +1896,33 @@ async fn ops_release_status_web(
     Ok(Json(ops::release_status().await))
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DrainBody {
+    enabled: bool,
+}
+
+async fn ops_drain_get_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+) -> Result<Json<crate::release_drain::DrainStatus>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
+    crate::release_drain::status(&conn).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
+
+async fn ops_drain_put_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Json(body): Json<DrainBody>,
+) -> Result<Json<crate::release_drain::DrainStatus>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
+    crate::release_drain::set_enabled(&conn, body.enabled)
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
+
 fn require_version_manager(
     conn: &rusqlite::Connection,
     user_id: &str,
@@ -2325,6 +2384,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/api/fs/list", get(list_server_dir_web))
         .route("/api/fs/mkdir", post(create_server_dir_web))
         .route("/api/ops/release-status", get(ops_release_status_web))
+        .route("/api/ops/drain", get(ops_drain_get_web).put(ops_drain_put_web))
         .route("/api/ops/job", get(ops_job_web))
         .route("/api/ops/test-gate", post(ops_test_gate_web))
         .route("/api/ops/deploy-canary", post(ops_deploy_canary_web))
@@ -2354,6 +2414,8 @@ pub fn build_router(state: Arc<AppState>) -> Router {
          // Settings / metrics
          .route("/api/settings", get(get_settings_web))
          .route("/api/settings", put(update_settings_web))
+         .route("/api/agent-models", get(get_agent_models_web))
+         .route("/api/agent-models/refresh", post(refresh_agent_models_web))
          .route("/api/metrics/latest", get(metrics_latest_web))
          // OCR
          .route("/api/ocr", post(ocr_image_web))

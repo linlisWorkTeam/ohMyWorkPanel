@@ -10,6 +10,14 @@ pub fn models_for_adapter(adapter: &str) -> &'static [&'static str] {
         // Keep in sync with `cursor-agent --list-models` / src/agentModels.ts
         "cursor" => &[
             "auto",
+            "cursor-grok-4.6-high-fast",
+            "cursor-grok-4.6-high",
+            "cursor-grok-4.6-xhigh-fast",
+            "cursor-grok-4.6-xhigh",
+            "cursor-grok-4.6-medium-fast",
+            "cursor-grok-4.6-medium",
+            "cursor-grok-4.6-low-fast",
+            "cursor-grok-4.6-low",
             "cursor-grok-4.5-high",
             "cursor-grok-4.5-high-fast",
             "cursor-grok-4.5-medium",
@@ -57,6 +65,8 @@ mod tests {
     #[test]
     fn cursor_catalog_includes_grok_and_kimi() {
         let models = models_for_adapter("cursor");
+        assert!(models.contains(&"cursor-grok-4.6-high-fast"));
+        assert!(models.contains(&"cursor-grok-4.6-xhigh"));
         assert!(models.contains(&"cursor-grok-4.5-high"));
         assert!(models.contains(&"kimi-k3-max"));
         assert!(models.contains(&"kimi-k3-high"));

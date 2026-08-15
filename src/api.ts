@@ -64,6 +64,15 @@ export const api = {
   retryRun: (runId: string) => invoke<string>("retry_run", { runId }),
   detectAgent: (memberId: string) => invoke<string>("detect_agent", { memberId }),
   getSettings: () => invoke<RuntimeSettings>("get_runtime_settings"),
+  getAgentModels: async () => ({
+    adapters: {} as Record<string, string[]>,
+    cursorSource: "fallback" as const,
+    cursorSyncedAt: null as number | null,
+    todos: ["Desktop: live Cursor model sync is Web-server only"] as string[],
+  }),
+  refreshAgentModels: async () => {
+    throw new Error("Desktop mode: agent-models refresh 仅 Web 服务可用");
+  },
   getMetricsLatest: () => Promise.reject(new Error("metrics API is web-only")) as Promise<import("./types").MetricsSample>,
   listActiveRuns: (_groupId: string) => Promise.resolve([] as import("./types").TaskRun[]),
    updateSettings: (settings: RuntimeSettings) => invoke<RuntimeSettings>("update_runtime_settings", { settings }),

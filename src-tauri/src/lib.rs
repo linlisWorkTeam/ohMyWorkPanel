@@ -19,6 +19,8 @@ mod message_content;
 mod models;
 pub mod logger;
 pub mod metrics;
+pub mod model_catalog;
+pub mod release_drain;
 pub mod event_sender;
 pub mod ops;
 pub mod orchestrator;

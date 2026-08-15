@@ -13,6 +13,7 @@
 
 ```bash
 ./scripts/deploy-canary.sh
+# 脚本在 restart 前会 drain-wait（拒新 @、等 running=0，超时仍重启并由启动恢复重入队）
 systemctl is-active linlis-work-panel-canary.service
 # 部署灰度后生产仍须 active
 systemctl is-active linlis-work-panel.service
@@ -35,7 +36,7 @@ systemctl is-active linlis-work-panel.service
 
 ```bash
 ./scripts/approve-prod-release.sh "简述原因"
-./scripts/promote-canary.sh   # 内部 stop→start；勿用易中断的裸 restart 半截
+./scripts/promote-canary.sh   # drain-wait → stop→start；勿用易中断的裸 restart 半截
 ```
 
 - [ ] promote 结束后 `linlis-work-panel.service` **active**（不是 dead）

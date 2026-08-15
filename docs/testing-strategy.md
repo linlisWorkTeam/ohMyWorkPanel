@@ -44,7 +44,7 @@ status: active
 | `extensions.test.ts` | PanelLive entry / 同源 baseUrl / 缺 tabs 容错 | ✅ |
 | `memberForm.test.ts` | chatbot 槽位、加入已有用户 | ✅ |
 | `authSession.test.ts` | 发送者成员解析 | ✅ |
-| `agentModels.test.ts` | 模型目录（含 cursor grok/kimi） | ✅ |
+| `agentModels.test.ts` | 模型目录（含 cursor grok **4.6**/4.5、kimi） | ✅ |
 | `sendKey` / `chatUi` / `markdownLite` / `roadmapUi` | 发送键、折叠、MD、路线图 UI 纯函数 | ✅ |
 | `queueCounts.test.ts` | 同 Agent running/queued 聚合、忙闲文案、展开列表排序 | ✅（2026-08-05） |
 
@@ -54,7 +54,7 @@ status: active
 
 | 模块 | 覆盖重点 | 是否仍贴合 |
 |---|---|---|
-| `adapters::*` / `parse` | build_args、Cursor 候选、JSONL | ✅ |
+| `adapters::*` / `parse` / `model_catalog` | build_args、Cursor 候选、JSONL、**各适配器 final 文本契约**、Cursor `--list-models` 解析 | ✅ |
 | `a2a` | Live skills、禁 PCM | ✅ |
 | `extensions` | manifest、enable、proxy path sanitize | ✅ |
 | `db` | interrupted runs、joinable user、seed `is_system`、scoped user | ✅ |
@@ -93,6 +93,7 @@ status: active
 | R6 | promote 覆盖生产 DB | 脚本+清单 | 非单测 |
 | R7 | 生产读 workspace `dist` | systemd / epitaph | 运维约束 |
 | R8 | 适配器 CLI 参数漂移 | L1 快照 + smoke | 部分 |
+| R8b | Agent 回显≠预期（OpenClaw stderr / 原始信封） | L1 `resolve_adapter_final_text` + parse 契约 | ✅（2026-08-10） |
 | R9 | 种子群 `is_system` / 跨 workspace | L1 db + memory | ✅ |
 | R10 | PanelLive 同源 proxy / A2A 禁 PCM | L1 extensions + a2a | ✅；proxy HTTP 集成未做 |
 | R11 | 发布断连 60s + **30s 静默横幅** | L1 releasingState | ✅；stub 探活/时序未测 |
@@ -100,6 +101,7 @@ status: active
 | R13 | metrics 20s + `/api/metrics/latest` | L1 metrics | 部分；路由集成未做 |
 | R14 | React #310（hooks after early return） | 手工 / 未来 RTL | **缺口** |
 | R15 | promote stop→start 中断留 dead | 清单+经验 | 非单测（2026-08-05 已踩） |
+| R16 | 发版砍 running Agent | L1 drain + 启动 requeue + drain-wait 脚本 | ✅（2026-08-15） |
 
 ## 门禁：绑 `deploy-canary.sh`
 

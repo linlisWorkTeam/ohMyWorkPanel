@@ -232,11 +232,23 @@ fn empty_event() -> ParsedEvent {
 }
 
 /// OpenClaw CLI JSON result object (pretty or compact).
+///
+/// Two shapes seen in the wild:
+/// 1) Wrapped: `{ runId, status, result: { payloads:[{text}], meta } }`
+/// 2) Bare result (often on stderr after gateway→embedded fallback):
+///    `{ payloads:[{text}], meta }`
 fn parse_openclaw_envelope(value: &Value, session_id: Option<String>) -> Option<ParsedEvent> {
     let has_run_id = value.get("runId").is_some() || value.get("run_id").is_some();
-    let result = value.get("result")?;
-    let payloads = result.get("payloads").and_then(|v| v.as_array());
-    if !has_run_id && payloads.is_none() {
+    let result_obj = value.get("result").filter(|v| v.is_object());
+    let payloads = result_obj
+        .and_then(|r| r.get("payloads"))
+        .or_else(|| value.get("payloads"))
+        .and_then(|v| v.as_array());
+    // Bare `{payloads, meta}` has no runId — still OpenClaw.
+    if !has_run_id && payloads.is_none() && result_obj.is_none() {
+        return None;
+    }
+    if payloads.is_none() && result_obj.is_none() {
         return None;
     }
     // Prefer payloads[].text; ignore huge meta/systemPromptReport.
@@ -252,8 +264,8 @@ fn parse_openclaw_envelope(value: &Value, session_id: Option<String>) -> Option<
     }
     let text = if texts.is_empty() {
         // Fallbacks without dumping the whole envelope.
-        result
-            .get("text")
+        result_obj
+            .and_then(|r| r.get("text"))
             .and_then(|v| v.as_str())
             .map(str::to_string)
             .or_else(|| {
@@ -267,9 +279,14 @@ fn parse_openclaw_envelope(value: &Value, session_id: Option<String>) -> Option<
     } else {
         texts.join("\n\n")
     };
+    // Never echo raw envelope JSON into the chat bubble.
+    if looks_like_openclaw_envelope_text(&text) {
+        return None;
+    }
     let sid = session_id.or_else(|| {
-        result
-            .pointer("/meta/agentMeta/sessionId")
+        result_obj
+            .and_then(|r| r.pointer("/meta/agentMeta/sessionId"))
+            .or_else(|| value.pointer("/meta/agentMeta/sessionId"))
             .and_then(|v| v.as_str())
             .map(str::to_string)
     });
@@ -279,6 +296,66 @@ fn parse_openclaw_envelope(value: &Value, session_id: Option<String>) -> Option<
         session_id: sid,
         mode: DeltaMode::Replace,
     })
+}
+
+fn looks_like_openclaw_envelope_text(text: &str) -> bool {
+    let t = text.trim_start();
+    if !t.starts_with('{') {
+        return false;
+    }
+    if let Ok(v) = serde_json::from_str::<Value>(t) {
+        return v.get("runId").is_some()
+            || v.get("run_id").is_some()
+            || (v.get("payloads").is_some() && v.get("meta").is_some())
+            || (v.get("result").and_then(|r| r.get("payloads")).is_some());
+    }
+    t.contains("\"runId\"") && t.contains("\"payloads\"")
+}
+
+/// Pull the first balanced `{...}` JSON object from mixed CLI stderr/stdout.
+pub fn extract_json_object_from_mixed(raw: &str) -> Option<&str> {
+    let bytes = raw.as_bytes();
+    let start = raw.find('{')?;
+    let mut depth = 0i32;
+    let mut in_str = false;
+    let mut escape = false;
+    for (i, &b) in bytes.iter().enumerate().skip(start) {
+        if in_str {
+            if escape {
+                escape = false;
+            } else if b == b'\\' {
+                escape = true;
+            } else if b == b'"' {
+                in_str = false;
+            }
+            continue;
+        }
+        match b {
+            b'"' => in_str = true,
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(&raw[start..=i]);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Parse OpenClaw output that may sit on stderr with gateway noise prefixed.
+pub fn parse_openclaw_mixed_output(raw: &str) -> Option<ParsedEvent> {
+    let json = extract_json_object_from_mixed(raw)?;
+    let event = parse_agent_event(json);
+    if event.text.is_empty() {
+        return None;
+    }
+    if event.text.contains("\"runId\"") || event.text.contains("\"payloads\"") {
+        return None;
+    }
+    Some(event)
 }
 
 fn extract_assistant_text(value: &Value) -> Option<String> {
@@ -507,6 +584,42 @@ mod tests {
             event.session_id.as_deref(),
             Some("14603e9e-a615-428f-8cef-7189e5f4d9bc")
         );
+    }
+
+    #[test]
+    fn parses_openclaw_bare_payloads_result_shape() {
+        let raw = r#"{
+          "payloads": [{ "text": "PONG_OPENCLAW", "mediaUrl": null }],
+          "meta": { "agentMeta": { "sessionId": "sess-bare" } }
+        }"#;
+        let event = parse_agent_event(raw);
+        assert_eq!(event.text, "PONG_OPENCLAW");
+        assert_eq!(event.session_id.as_deref(), Some("sess-bare"));
+        assert!(!looks_like_openclaw_envelope_text(&event.text));
+    }
+
+    #[test]
+    fn parses_openclaw_json_buried_in_gateway_stderr() {
+        let raw = r#"Gateway agent failed; falling back to embedded: Error: gateway closed (1006)
+Gateway target: ws://127.0.0.1:18789
+{
+  "payloads": [{ "text": "PONG_OPENCLAW", "mediaUrl": null }],
+  "meta": { "agentMeta": { "sessionId": "s2" } }
+}
+"#;
+        let event = parse_openclaw_mixed_output(raw).expect("extract");
+        assert_eq!(event.text, "PONG_OPENCLAW");
+        assert!(!event.text.contains("Gateway"));
+        assert!(!event.text.contains("runId"));
+    }
+
+    #[test]
+    fn openclaw_final_must_not_be_raw_envelope() {
+        // Regression: canary once stored the whole envelope as final text.
+        let leaked = r#"{"runId":"x","status":"ok","result":{"payloads":[{"text":"hi"}]}}"#;
+        let event = parse_agent_event(leaked);
+        assert_eq!(event.text, "hi");
+        assert!(!looks_like_openclaw_envelope_text(&event.text));
     }
 
     #[test]

@@ -62,6 +62,10 @@ if systemctl list-unit-files linlis-codex-proxy.service >/dev/null 2>&1; then
   echo "==> retiring standalone linlis-codex-proxy.service (now embedded)"
   systemctl disable --now linlis-codex-proxy.service >/dev/null 2>&1 || true
 fi
+# Smooth restart: drain canary agent runs before stop (timeout → requeue on boot)
+if systemctl is-active --quiet linlis-work-panel-canary.service; then
+  bash "$(dirname "$0")/lib/drain-wait.sh" "${CANARY_PORT}" "${LINLIS_DRAIN_TIMEOUT:-180}" || true
+fi
 # Canary uses :18889 (see unit). Do NOT fuser-kill :18888 — that is production's Codex shim.
 systemctl restart linlis-work-panel-canary.service
 sleep 2

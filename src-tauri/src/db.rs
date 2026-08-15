@@ -243,16 +243,23 @@ pub fn init_db(path: &Path) -> AppResult<()> {
     ).map_err(|e| e.to_string())?;
     connection
         .execute(
-            "UPDATE task_runs SET status='interrupted', completed_at=?1 WHERE status IN ('queued','running')",
-            params![now()],
-        )
-        .map_err(|e| e.to_string())?;
-    connection
-        .execute(
             "UPDATE messages SET status='interrupted' WHERE status='streaming'",
             [],
         )
         .map_err(|e| e.to_string())?;
+    // Smooth restart (方案 A): re-queue incomplete runs instead of leaving them dead.
+    // Streaming bubbles are already interrupted above; scheduler will open a new output message.
+    let ts = now();
+    connection
+        .execute(
+            "UPDATE task_runs SET status='queued', started_at=NULL, completed_at=NULL,
+             output_message_id=NULL, phase='recovering', phase_updated_at=?1,
+             error_message='recovered_after_restart'
+             WHERE status IN ('queued','running')",
+            params![ts],
+        )
+        .map_err(|e| e.to_string())?;
+    let _ = crate::release_drain::clear_on_startup(&connection);
     ensure_default_seed(&connection)?;
     Ok(())
 }
@@ -1836,7 +1843,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn database_marks_incomplete_runs_interrupted() {
+    fn database_requeues_incomplete_runs_after_restart() {
         let file = tempfile::NamedTempFile::new().unwrap();
         init_db(file.path()).unwrap();
         let conn = open_db(file.path()).unwrap();
@@ -1876,7 +1883,11 @@ mod tests {
         let status: String = conn
             .query_row("SELECT status FROM task_runs WHERE id='r'", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(status, "interrupted");
+        let phase: Option<String> = conn
+            .query_row("SELECT phase FROM task_runs WHERE id='r'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(status, "queued");
+        assert_eq!(phase.as_deref(), Some("recovering"));
     }
 
     #[test]

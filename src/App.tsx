@@ -15,7 +15,7 @@ import {
   isLazyMessageChannel,
   parseMessageContent,
 } from "./messageContent";
-import { defaultModelForAdapter, modelsForAdapter } from "./agentModels";
+import { defaultModelForAdapter, modelsForAdapter, applyAgentModelsPayload } from "./agentModels";
 import { canSubmitUserMember, chatbotSlotTaken, memberRosterAction, type UserAddMode } from "./memberForm";
 import { InviteLanding, parseInviteTokenFromPath } from "./InviteLanding";
 import { markdownToHtml } from "./markdownLite";
@@ -331,6 +331,10 @@ export function App() {
           if ((loadAuthUser()?.isAdmin ?? false)) setShowCreate(true);
         }
         try { setSettings(await api.getSettings()); } catch { /* scoped users may lack settings */ }
+        try {
+          const catalog = await api.getAgentModels();
+          applyAgentModelsPayload(catalog);
+        } catch { /* optional live catalog */ }
         try { setPresetRoles(await api.getPresetRoles()); } catch { /* optional */ }
         if (!disposed) {
           setError(null);
