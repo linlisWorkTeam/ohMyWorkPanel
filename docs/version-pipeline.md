@@ -9,14 +9,14 @@ status: active
 > **本文是产品/平台演进的单一事实源（SSOT）。**  
 > 新功能先在本文件占位（轨道 + 阶段），再开 Feature / 写 epitaph；禁止「东改西改」无版本归属的散弹改动。  
 > 细节仍以 `docs/epitaph/*` 与 `docs/superpowers/{specs,plans}/*` 为准；本文件只看**流水线与方向**。  
-> 当前生产产物：豆包语音 UX 等已 promote（`prod` RELEASE ≈ `2026-08-05T16:49:03Z`）。Git 标签待补 **`v1.2.0`**；前序 **`v1.1.0`**。下一产品里程碑：**WorkPanel V1.3.0（工作流）**（设计审稿中）。
+> 当前 Git 标签：**`v1.3.0`**（工作流实现点 `8e3869d`）；前序 **`v1.2.0`**（基线 `0750306`）、**`v1.1.0`**。HEAD 上的 drain / 4.6 目录 / 群设置等为 **1.3.0+** 补丁，尚未另打小版本。`package.json` / Cargo 已对齐 **1.3.0**。
 
 ## 怎么用（Agent / 人类）
 
 1. 动手前：确认改动属于哪条**轨道**、落在哪个**阶段**（已交付 / 进行中 / 下一站）。
 2. 不在流水线上的需求：先讨论是否立项，写入「下一站」或「暂缓」，再实现。
 3. 发版：灰度 `:8081` → docs → commit →（管理员批）promote `:8080`。嵌套调用 ≤3。
-4. 版本号说明：历史 epitaph 用过 `v1.2`…`v1.7` 与 `BaseV1.0.0`；`package.json` 仍为 `0.1.0`（未跟 semver 对齐）。**产品里程碑以本文「流水线阶段」为准**，不以 npm version 为准。
+4. 版本号说明：历史 epitaph 用过平台小步 `v1.2`…`v1.7` 与 `BaseV1.0.0`。Git tag 与 `package.json` 现已对齐产品里程碑（`v1.1.0` / `v1.2.0` / `v1.3.0`）。**勿把历史 epitaph「v1.3 双槽位」当成 tag `v1.3.0`。**
 
 ---
 
@@ -97,9 +97,9 @@ status: active
 | 代理修复 | PanelLive 同源代理**转发 query**（`?format=json`） | `extensions::with_proxy_query` |
 | Live 一致 | 会话态经代理；聊天同步进 Live UI | `epitaph/2026-08-05-live-session-chat-parity.md` |
 | 工作区边界 | Live Extend ↔ Host 仓/群拍板（文档） | `specs/2026-08-05-workspace-boundary-live-host.md` |
-| 发布 | promote 已完成；**git tag `v1.2.0` 待补**；不碰 prod DB | 本阶段 |
+| 发布 | promote 已完成；**git tag `v1.2.0` = `0750306`**；不碰 prod DB | 本阶段 |
 
-### 阶段 5 — **WorkPanel V1.3.0（工作流）**（实现中 → 灰度，2026-08-06）
+### 阶段 5 — **WorkPanel V1.3.0（工作流）**（已打 tag `v1.3.0` = `8e3869d`）
 
 > 与历史 epitaph「v1.3 双槽位」不同名不同义。全量设计：[`specs/2026-08-06-workpanel-v1.3.0-workflow-era-design.md`](superpowers/specs/2026-08-06-workpanel-v1.3.0-workflow-era-design.md)。
 
@@ -141,8 +141,8 @@ status: active
 ## 下一站（建议顺序，避免并行发散）
 
 1. **V1.3.0 扩展宿主 EH S2–S5**：通用 iframe 页签 + 设置多开关 + 纯净度门禁（目标 **2026-08-09**）。
-2. **V1.3.0 工作流灰度验收** →（批）promote。
-3. **补打 git tag `v1.2.0`**。
+2. **V1.3.0 工作流已在生产**；后续增量仍灰度 →（批）promote。
+3. **Git tag**：`v1.2.0` / `v1.3.0` 已补（2026-08-15）；下一小版本待立项后再打。
 4. **聊天群 D1（若拍板）** / 质量 E / D3：不与宿主收尾抢并发。
 5. **稳态债（B）**：每次增量仍灰度 → 批准 promote；勿中断 stop→start。
 

@@ -8,6 +8,7 @@ Active handoff notes for future agents.
 
 | Date | Topic | Status |
 |------|-------|--------|
+| 2026-08-15 | [补打 v1.2.0/v1.3.0 并对齐 SSOT](./2026-08-15-git-tag-ssot.md) | active |
 | 2026-08-15 | [恢复群公告/工作目录设置入口](./2026-08-15-group-settings-tab.md) | active |
 | 2026-08-15 | [平滑发版 Drain + 重启重入队](./2026-08-15-smooth-release-drain.md) | active |
 | 2026-08-15 | [Cursor 模型目录定时同步](./2026-08-15-cursor-model-catalog-sync.md) | active |
@@ -16,7 +17,7 @@ Active handoff notes for future agents.
 | 2026-08-06 | [V1.3.0 工作流灰度](./2026-08-06-v1.3.0-workflow-canary.md) | active |
 | 2026-08-06 | [Codex 代理 tools/tool_calls 修复](./2026-08-06-codex-proxy-tools.md) | active |
 | 2026-08-06 | [V1.3.0 工作流时代设计](../superpowers/specs/2026-08-06-workpanel-v1.3.0-workflow-era-design.md) | draft-for-review |
-| 2026-08-06 | [v1.2.0 生产基线 promote](./2026-08-06-v1.2.0-baseline-promote.md) | active（tag 待补） |
+| 2026-08-06 | [v1.2.0 生产基线 promote](./2026-08-06-v1.2.0-baseline-promote.md) | active（tag 已补） |
 | 2026-08-05 | [版本流水线 SSOT](../version-pipeline.md) | active（非 epitaph，索引挂此） |
 | 2026-08-05 | [Live/Host 工作区边界拍板](../superpowers/specs/2026-08-05-workspace-boundary-live-host.md) | decided |
 | 2026-08-05 | [Host 豆包语音 UX（按住说话/气泡播放）](./2026-08-05-doubao-voice-ux-host.md) | active |
