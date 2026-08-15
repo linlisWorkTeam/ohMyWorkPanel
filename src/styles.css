@@ -276,6 +276,11 @@
 /* Group title + view toggle */
 .group-title-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
 .group-title-row h1 { margin:0; }
+.chat-header button.linkish {
+  border:0; background:transparent; padding:0; color:#3d78b7; font-size:12px; text-decoration:underline;
+}
+.chat-header button.linkish:hover { color:#1f5a96; }
+.group-settings-view { flex:1; min-height:0; }
 .view-toggle {
   display:inline-flex; border:1px solid var(--border-soft, #d5dbe3); border-radius:999px; overflow:hidden;
   background: color-mix(in srgb, var(--bg-surface, #f4f6f9) 80%, transparent); padding:2px; gap:2px;

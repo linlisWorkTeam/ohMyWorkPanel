@@ -47,6 +47,7 @@ import { LogsPanel } from "./LogsPanel";
 import { ServerPathPicker } from "./ServerPathPicker";
 import { ExtensionPanel } from "./ExtensionPanel";
 import { VersionView } from "./VersionView";
+import { GroupSettingsView } from "./GroupSettingsView";
 import {
   collectExtensionTabViews,
   parseExtMainView,
@@ -1085,6 +1086,7 @@ export function App() {
                   {!isChatGroup && (
                     <button type="button" className={mainView === "versions" ? "active" : ""} onClick={() => setMainView("versions")}>版本</button>
                   )}
+                  <button type="button" className={mainView === "settings" ? "active" : ""} onClick={() => setMainView("settings")}>设置</button>
                   {extTabViews.map(({ ext, tab, viewKey }) => {
                     const ready = Boolean(ext.enabled && ext.healthy);
                     return (
@@ -1109,7 +1111,14 @@ export function App() {
                 </div>
               </div>
               <p>
-                {activeMembers.length} 名成员 · {isChatGroup ? "聊天群" : "项目群 · 服务器工作区"}
+                {activeMembers.length} 名成员 · {isChatGroup ? "聊天群" : "项目群"}
+                {!isChatGroup && current.group.workspacePath
+                  ? ` · ${current.group.workspacePath}`
+                  : ""}
+                {" · "}
+                <button type="button" className="linkish" onClick={() => setMainView("settings")}>
+                  公告 / 工作目录在「设置」
+                </button>
                 {extTabViews.some((v) => v.ext.enabled)
                   ? ` · Extend ${extTabViews.filter((v) => v.ext.enabled && v.ext.healthy).length}/${extTabViews.filter((v) => v.ext.enabled).length} 就绪`
                   : ""}
@@ -1137,6 +1146,26 @@ export function App() {
             canManage={isAdmin || Boolean(senderMemberId && current.group.ownerMemberId === senderMemberId)}
             onError={(msg) => setError(msg)}
             onGotoChat={() => setMainView("chat")}
+          />
+        ) : mainView === "settings" ? (
+          <GroupSettingsView
+            group={current.group}
+            members={members}
+            canManage={isAdmin || Boolean(senderMemberId && current.group.ownerMemberId === senderMemberId)}
+            onGroupPatch={(g) => {
+              setCurrent((prev) => (prev ? { ...prev, group: { ...prev.group, ...g } } : prev));
+              setGroups((prev) => prev.map((x) => (x.id === g.id ? { ...x, ...g } : x)));
+            }}
+            onMemberPatch={(m) => {
+              setCurrent((prev) => {
+                if (!prev) return prev;
+                return {
+                  ...prev,
+                  members: prev.members.map((x) => (x.id === m.id ? { ...x, ...m } : x)),
+                };
+              });
+            }}
+            onError={(msg) => setError(msg)}
           />
         ) : <>
         <div className="message-list-shell">
@@ -1251,6 +1280,7 @@ export function App() {
         <div className="pm-tab-bar">
           <button className={`pm-tab-btn ${rightPanelTab === "members" ? "active" : ""}`} onClick={() => setRightPanelTab("members")}>群成员</button>
           {!isChatGroup && isAdmin && <button className={`pm-tab-btn ${mainView === "versions" ? "active" : ""}`} onClick={() => { setMainView("versions"); }}>版本管理</button>}
+          <button className={`pm-tab-btn ${mainView === "settings" ? "active" : ""}`} onClick={() => { setMainView("settings"); setShowMembers(false); }}>群设置</button>
           {isAdmin && <button className={`pm-tab-btn ${rightPanelTab === "experiences" ? "active" : ""}`} onClick={() => setRightPanelTab("experiences")}>经验</button>}
           {isAdmin && <button className={`pm-tab-btn ${rightPanelTab === "logs" ? "active" : ""}`} onClick={() => setRightPanelTab("logs")}>日志</button>}
         </div>

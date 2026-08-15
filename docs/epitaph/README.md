@@ -8,6 +8,7 @@ Active handoff notes for future agents.
 
 | Date | Topic | Status |
 |------|-------|--------|
+| 2026-08-15 | [恢复群公告/工作目录设置入口](./2026-08-15-group-settings-tab.md) | active |
 | 2026-08-15 | [平滑发版 Drain + 重启重入队](./2026-08-15-smooth-release-drain.md) | active |
 | 2026-08-15 | [Cursor 模型目录定时同步](./2026-08-15-cursor-model-catalog-sync.md) | active |
 | 2026-08-15 | [Cursor Grok 4.6 模型目录](./2026-08-15-cursor-grok-4.6.md) | active |
