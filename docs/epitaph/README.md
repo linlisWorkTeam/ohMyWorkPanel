@@ -8,6 +8,7 @@ Active handoff notes for future agents.
 
 | Date | Topic | Status |
 |------|-------|--------|
+| 2026-08-15 | [交接运行时注入 Context Seams](./2026-08-15-context-seams-handoff.md) | active |
 | 2026-08-15 | [补打 v1.2.0/v1.3.0 并对齐 SSOT](./2026-08-15-git-tag-ssot.md) | active |
 | 2026-08-15 | [恢复群公告/工作目录设置入口](./2026-08-15-group-settings-tab.md) | active |
 | 2026-08-15 | [平滑发版 Drain + 重启重入队](./2026-08-15-smooth-release-drain.md) | active |

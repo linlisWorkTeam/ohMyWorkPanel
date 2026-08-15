@@ -61,6 +61,7 @@ status: active
 | `memory` | 群内锁定 + **种子群跨 workspace** | ✅ |
 | `metrics` | classify + latest 缓存 | ✅ 未锁 `PERF_SAMPLE_SECS=20` |
 | `scheduler` | 同 Agent 串行、announcement | ✅ 无 `run_heartbeat` / seq 单测 |
+| `context_seams` | 空 section 省略、epitaph Active 解析、路径不逃逸、ledger 无正文 | ✅ |
 | `fs_browse` / `orchestrator` / `auth` / `codex_proxy` | 路径、编排、JWT、shim | ✅ |
 
 **结论（Rust 用例）**：现有断言未与当前行为冲突；缺口主要在「新能力无测」，不是「旧测撒谎」。

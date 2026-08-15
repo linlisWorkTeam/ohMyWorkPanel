@@ -7,6 +7,7 @@ mod commands;
 mod ocr;
 pub mod codex_proxy;
 mod context_policy;
+mod context_seams;
 pub mod db;
 pub mod presence;
 pub mod extensions;

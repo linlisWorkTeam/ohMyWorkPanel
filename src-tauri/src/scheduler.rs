@@ -400,6 +400,10 @@ fn get_execution_context(state: &SchedulerState, run_id: &str) -> AppResult<Exec
     } else { None };
 
     let announcement_block = format_announcement_block(&group.announcement, 4096);
+    let epitaph_block = crate::context_seams::epitaph_handoff_block(
+        std::path::Path::new(&group.workspace_path),
+        1200,
+    );
     let live_block = crate::live_prompt::live_prompt_suffix(
         state.is_live_active(&group.id),
         &agent.kind,
@@ -422,19 +426,50 @@ fn get_execution_context(state: &SchedulerState, run_id: &str) -> AppResult<Exec
         &root,
         &group.announcement,
     );
+    let sections: Vec<_> = [
+        crate::context_seams::section("announcement", "group.announcement", &announcement_block),
+        crate::context_seams::section("epitaph", "docs/epitaph", &epitaph_block),
+        crate::context_seams::section("live", "live_prompt", &live_block),
+        crate::context_seams::section("memory", ".linlis/memory", &memory_block),
+        crate::context_seams::section("wiki", "WorkPanelWiki.retrieve", &wiki_block),
+        crate::context_seams::section("experience", "experiences", &experience_block),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    let context_ledger = crate::context_seams::ledger_prompt_line(&sections);
+    let ledger_json = crate::context_seams::ledger_json(&sections);
+    let _ = crate::logger::log(
+        &conn,
+        crate::logger::LogLevel::Info,
+        "context_seams",
+        if context_ledger.is_empty() {
+            "【已注入上下文】（无）"
+        } else {
+            &context_ledger
+        },
+        Some(&ledger_json),
+    );
+    let ledger_suffix = if context_ledger.is_empty() {
+        String::new()
+    } else {
+        format!("\n{context_ledger}")
+    };
     let prompt = format!(
-        "你是群聊中的 Agent「{}」。职责：{}。\n工作目录：{}{}{}{}{}\n请只完成当前任务，明确说明结果与风险。需要其他 Agent 协作时，使用 @成员名 提及。\n任务根消息：{}\n最近群聊：{}\n你可以将重要经验通过 `!保存经验 <标题>: <内容> #标签` 保存。{}{}",
+        "你是群聊中的 Agent「{}」。职责：{}。\n工作目录：{}{}{}{}{}{}\n请只完成当前任务，明确说明结果与风险。需要其他 Agent 协作时，使用 @成员名 提及。\n任务根消息：{}\n最近群聊：{}\n你可以将重要经验通过 `!保存经验 <标题>: <内容> #标签` 保存。{}{}{}",
         agent.display_name,
         agent.role_description,
         group.workspace_path,
         announcement_block,
+        epitaph_block,
         live_block,
         memory_block,
         wiki_block,
         root,
         lines,
         experience_block,
-        review_block.as_deref().unwrap_or_default()
+        review_block.as_deref().unwrap_or_default(),
+        ledger_suffix
     );
     Ok(ExecutionContext {
         run,
@@ -444,6 +479,7 @@ fn get_execution_context(state: &SchedulerState, run_id: &str) -> AppResult<Exec
         settings,
         recent_chat: lines,
         root_task: root,
+        context_ledger,
     })
 }
 
@@ -451,6 +487,12 @@ async fn execute_run(state: SchedulerState, run_id: String) {
     let context = match get_execution_context(&state, &run_id) {
         Ok(v) => {
             emit_phase(&state, &v.group.id, &run_id, "preparing");
+            if !v.context_ledger.is_empty() {
+                let mut ev = ChatEvent::bare("context_injected", &v.group.id);
+                ev.run_id = Some(run_id.clone());
+                ev.delta = Some(v.context_ledger.clone());
+                emit(&state, ev);
+            }
             v
         }
         Err(error) => {
@@ -756,20 +798,31 @@ fn format_announcement_block(announcement: &str, max_chars: usize) -> String {
 fn short_resume_prompt(context: &ExecutionContext) -> String {
     let task = extract_root_from_prompt(&context.prompt);
     let announcement_block = format_announcement_block(&context.group.announcement, 2048);
+    let epitaph_block = crate::context_seams::epitaph_handoff_block(
+        std::path::Path::new(&context.group.workspace_path),
+        800,
+    );
     // Resume sessions keep the Live constraint if the prepared prompt had it.
     let live_block = if context.prompt.contains("【PanelLive") {
         format!("\n\n{}", crate::live_prompt::PANELLIVE_LLM_PROMPT_FALLBACK)
     } else {
         String::new()
     };
+    let ledger = if context.context_ledger.is_empty() {
+        String::new()
+    } else {
+        format!("\n{}", context.context_ledger)
+    };
     format!(
-        "你是群聊中的 Agent「{}」。职责：{}。\n工作目录：{}{}{}\n请只完成当前任务，明确说明结果与风险。需要其他 Agent 协作时，使用 @成员名 提及。\n任务根消息：{}\n（续接同一 CLI session，无需重复历史。）\n你可以将重要经验通过 `!保存经验 <标题>: <内容> #标签` 保存。",
+        "你是群聊中的 Agent「{}」。职责：{}。\n工作目录：{}{}{}{}\n请只完成当前任务，明确说明结果与风险。需要其他 Agent 协作时，使用 @成员名 提及。\n任务根消息：{}\n（续接同一 CLI session，无需重复历史。）\n你可以将重要经验通过 `!保存经验 <标题>: <内容> #标签` 保存。{}",
         context.agent.display_name,
         context.agent.role_description,
         context.group.workspace_path,
         announcement_block,
+        epitaph_block,
         live_block,
-        task
+        task,
+        ledger
     )
 }
 

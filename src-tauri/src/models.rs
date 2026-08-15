@@ -299,6 +299,8 @@ pub struct ExecutionContext {
     pub recent_chat: String,
     /// Root task / triggering message plain text.
     pub root_task: String,
+    /// Compact injected-context ledger line (also logged / WS).
+    pub context_ledger: String,
 }
  
  // === Project Management ===
