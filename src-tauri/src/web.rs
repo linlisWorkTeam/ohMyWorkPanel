@@ -1010,12 +1010,11 @@ async fn put_member_workspace_web(
     Path(member_id): Path<String>,
     Json(body): Json<MemberWorkspaceBody>,
 ) -> Result<Json<Member>, (StatusCode, String)> {
-      let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-      crate::db::assert_member_mutable(&conn, &member_id).map_err(map_acl_err)?;
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    crate::db::assert_member_mutable(&conn, &member_id).map_err(map_acl_err)?;
     let member = conn
         .query_row(
-            "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model,m.auth_user_id FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id WHERE m.id=?1",
+            &format!("{} WHERE m.id=?1", crate::db::MEMBER_SELECT),
             params![member_id],
             member_from_row,
         )

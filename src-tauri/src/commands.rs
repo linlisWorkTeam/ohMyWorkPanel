@@ -419,7 +419,7 @@ pub fn set_admin(
     let conn = open_db(&state.db_path)?;
     let _ = get_group(&conn, &group_id)?;
     if let Some(id) = &member_id {
-    if let Some(id) = &member_id { assert_member_mutable(&conn, id)?; }
+        assert_member_mutable(&conn, id)?;
         if !crate::db::member_is_default_responder_candidate(&conn, &group_id, id)? {
             return Err("默认响应者必须是本群活跃的 Agent 或聊天机器人。".into());
         }
@@ -875,8 +875,8 @@ pub fn update_member_workspace_cmd(
     state: State<'_, AppState>,
 ) -> AppResult<crate::models::Member> {
     let conn = open_db(&state.db_path)?;
-    let member = conn
     assert_member_mutable(&conn, &member_id)?;
+    let member = conn
         .query_row(
             &format!("{} WHERE m.id=?1", crate::db::MEMBER_SELECT),
             rusqlite::params![member_id],
