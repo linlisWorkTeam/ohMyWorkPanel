@@ -73,6 +73,11 @@ pub struct Member {
     /// User placeholder awaiting invite accept (`auth_user_id` still null).
     #[serde(default)]
     pub invite_pending: bool,
+    /// Platform-locked bootstrap agent (seed system groups): read-only, cannot be
+    /// edited/removed/reassigned by users; only WorkPanel group's agent holds full
+    /// self-bootstrap write capability (linlis-super-harness).
+    #[serde(default)]
+    pub system_locked: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

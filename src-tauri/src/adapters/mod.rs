@@ -2,6 +2,7 @@ pub mod chatbot;
 mod claude;
 mod codex;
 mod cursor;
+mod dsh;
 mod mock;
 pub mod models;
 mod openclaw;
@@ -37,6 +38,7 @@ pub enum AdapterKind {
     OpenCode,
     OpenClaw,
     Cursor,
+    Dsh,
 }
 
 impl AdapterKind {
@@ -48,6 +50,7 @@ impl AdapterKind {
             "opencode" => Ok(Self::OpenCode),
             "openclaw" => Ok(Self::OpenClaw),
             "cursor" => Ok(Self::Cursor),
+            "dsh" => Ok(Self::Dsh),
             other => Err(format!("不支持的 Agent 适配器：{other}")),
         }
     }
@@ -60,6 +63,7 @@ impl AdapterKind {
             Self::OpenCode => "opencode",
             Self::OpenClaw => "openclaw",
             Self::Cursor => "cursor",
+            Self::Dsh => "dsh",
         }
     }
 
@@ -70,6 +74,7 @@ impl AdapterKind {
             Self::ClaudeCode => &["claude"],
             Self::OpenCode => &["opencode"],
             Self::OpenClaw => openclaw::candidate_executables(),
+            Self::Dsh => dsh::candidate_executables(),
             Self::Cursor => cursor::candidate_executables(),
         }
     }
@@ -123,6 +128,7 @@ impl AdapterKind {
             Self::OpenCode => opencode::build_args(prompt, model),
             Self::OpenClaw => openclaw::build_args(prompt, session_id, model),
             Self::Cursor => cursor::build_args(prompt, session_id, model),
+            Self::Dsh => dsh::build_args(prompt, session_id, model),
         }
     }
 
@@ -544,6 +550,12 @@ mod tests {
                 "",
                 "PONG_OPENCODE",
             ),
+            (
+                AdapterKind::Dsh,
+                "PONG_DSH\n",
+                "",
+                "PONG_DSH",
+            ),
         ];
 
         for (kind, stdout, stderr, expected) in cases {
@@ -650,6 +662,14 @@ mod tests {
                 "do work",
                 "--json"
             ]
+        );
+        assert_eq!(
+            AdapterKind::Dsh.build_args("do work", None, None),
+            vec!["--profile", "headless", "do work"]
+        );
+        assert_eq!(
+            AdapterKind::Dsh.build_args("do work", Some("sess-1"), Some("gpt-5")),
+            vec!["--profile", "headless", "do work"]
         );
     }
 

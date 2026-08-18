@@ -372,6 +372,9 @@ async fn create_group_web(
              }
          }
      }
+       // 普通项目群预制极简 bootstrap-dsh（不可修改；chat 群不建）
+       crate::db::ensure_minimal_bootstrap_dsh(&conn, &group_id, &group_kind)
+           .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
     logger::info(&conn, "group", &format!("group created: {} (id: {})", input.name, group_id), None);
     group_state(&conn, &group_id).map(Json).map_err(|e| {
@@ -836,6 +839,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, user_id: Opt
  ) -> Result<Json<()>, (StatusCode, String)> {
      let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
      require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
+      crate::db::assert_member_mutable(&conn, &member_id).map_err(map_acl_err)?;
      let group = db_get_group(&conn, &group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
      if group.owner_member_id == member_id {
          return Err((StatusCode::FORBIDDEN, "cannot remove owner".into()));
@@ -853,6 +857,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, user_id: Opt
      Path((group_id, member_id)): Path<(String, String)>,
  ) -> Result<Json<()>, (StatusCode, String)> {
      let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+      crate::db::assert_member_mutable(&conn, &member_id).map_err(map_acl_err)?;
      require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
      crate::db::hard_delete_member(&conn, &group_id, &member_id).map_err(|e| {
          let status = if e.contains("群主") {
@@ -917,6 +922,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, user_id: Opt
      let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
      require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
      let _ = db_get_group(&conn, &group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+      if let Some(id) = member_id { crate::db::assert_member_mutable(&conn, id).map_err(map_acl_err)?; }
      if let Some(id) = member_id {
          let ok = crate::db::member_is_default_responder_candidate(&conn, &group_id, id)
              .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
@@ -981,6 +987,7 @@ async fn put_member_model_web(
     Json(body): Json<MemberModelBody>,
 ) -> Result<Json<Member>, (StatusCode, String)> {
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+      crate::db::assert_member_mutable(&conn, &member_id).map_err(map_acl_err)?;
     crate::db::set_member_model(&conn, &member_id, body.model.as_deref())
         .map_err(|e| (StatusCode::NOT_FOUND, e))?;
     conn.query_row(
@@ -1003,6 +1010,8 @@ async fn put_member_workspace_web(
     Path(member_id): Path<String>,
     Json(body): Json<MemberWorkspaceBody>,
 ) -> Result<Json<Member>, (StatusCode, String)> {
+      let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+      crate::db::assert_member_mutable(&conn, &member_id).map_err(map_acl_err)?;
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     let member = conn
         .query_row(

@@ -36,6 +36,8 @@ pub fn models_for_adapter(adapter: &str) -> &'static [&'static str] {
         "claude-code" => &["sonnet", "opus", "haiku"],
         "opencode" => &["default", "claude-sonnet-4", "gpt-5"],
         "openclaw" => &["default"],
+        // dsh: 模型选择由 DeepSeek Harness 的 profile 配置决定，前端不提供下拉。
+        "dsh" => &[],
         "chatbot-deepseek" | "deepseek" => &[
             "deepseek-v4-flash",
             "deepseek-chat",

@@ -52,6 +52,10 @@ export CARGO_BUILD_JOBS=1 NODE_OPTIONS=--max-old-space-size=1024
 | 文档 | 用途 |
 |---|---|
 | [`docs/version-pipeline.md`](docs/version-pipeline.md) | **版本流水线 / 轨道 / 下一站（SSOT）** |
+| [`docs/superpowers/specs/2026-08-16-dsh-self-bootstrap-runtime.md`](docs/superpowers/specs/2026-08-16-dsh-self-bootstrap-runtime.md) | **DSH 自举接入总设计（轨道 G）** |
+| [`docs/superpowers/specs/2026-08-16-dsh-ui-language-workpanel.md`](docs/superpowers/specs/2026-08-16-dsh-ui-language-workpanel.md) | **借鉴 DSH UI 设计语言（三栏：工作区=群聊，右栏=Agent）** |
+| [`docs/release-runbook-2026-08-16-dsh-self-bootstrap.md`](docs/release-runbook-2026-08-16-dsh-self-bootstrap.md) | **发布 Runbook：本地验证 → GitHub → ECS 灰度 :8081 → 生产 :8080** |
+| [`docs/release-manifest-2026-08-16.md`](docs/release-manifest-2026-08-16.md) | **本次发布变更清单（逐文件核对 + 达成标准）** |
 | [`docs/api-web.md`](docs/api-web.md) | Web API 薄索引 |
 | [`docs/testing-strategy.md`](docs/testing-strategy.md) | 测试金字塔与门禁 |
 | [`docs/release-checklist.md`](docs/release-checklist.md) | 发版检查（含前端壳） |
@@ -89,6 +93,7 @@ export CARGO_BUILD_JOBS=1 NODE_OPTIONS=--max-old-space-size=1024
 | `opencode` | `opencode` | JSON run |
 | `openclaw` | （HTTP/配置） | 产品/运维向 Agent |
 | `cursor` | `agent`（回退 `cursor-agent`） | Cursor CLI |
+| `dsh` | `dsh`（npm `@deepseek-ai/dsh`） | DeepSeek Harness headless：`dsh --profile headless "task"`；成员栏可「跳转 DSH Web」嵌入 `:3080` Web UI |
 | `chatbot-*` | HTTP（curl） | 聊天群轻量机器人，无工具 |
 
 ### 安装 Cursor CLI

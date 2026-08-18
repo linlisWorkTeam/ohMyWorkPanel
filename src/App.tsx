@@ -1,4 +1,4 @@
-﻿import { listen } from "@tauri-apps/api/event";
+import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { FormEvent, KeyboardEvent, memo, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 import { api, getAuthToken, onUnauthorized, requiresAuth, setAuthToken } from "./api";
@@ -95,6 +95,8 @@ const PHASE_LABEL: Record<string, string> = {
   awaiting_first_token: "等待首包", streaming: "流式输出", finalizing: "收尾",
   completed: "完成", failed: "失败",
 };
+/** DeepSeek Harness Web UI 默认地址（`dsh web`，默认 :3080）。可手动改成实际端口。 */
+const DSH_WEB_URL = "http://127.0.0.1:3080";
 const time = (value: number) => new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit" }).format(value);
 const dayLabel = (value: number) => {
   const d = new Date(value);
@@ -1147,7 +1149,9 @@ export function App() {
             onError={(msg) => setError(msg)}
             onGotoChat={() => setMainView("chat")}
           />
-        ) : mainView === "settings" ? (
+        ) : mainView === "dsh" ? (
+            <DSHView onClose={() => setMainView("chat")} />
+          ) : mainView === "settings" ? (
           <GroupSettingsView
             group={current.group}
             members={members}
@@ -1306,6 +1310,7 @@ export function App() {
             onDetect={detect}
             onModel={(m, model) => void changeMemberModel(m, model)}
             onCancelRun={(run) => void changeRun(run, "cancel")}
+              onOpenDsh={() => setMainView("dsh")}
           />
         ))}</div>
         {inviteLinkFlash && (
@@ -1388,6 +1393,7 @@ export function App() {
               <option value="cursor">Cursor CLI（agent/cursor-agent）</option>
               <option value="claude-code">Claude Code</option>
               <option value="opencode">OpenCode</option>
+                <option value="dsh">DeepSeek Harness（dsh）</option>
             </select>
             {modelsForAdapter(newMember.adapter).length > 0 && (
               <select value={newMember.model || defaultModelForAdapter(newMember.adapter)} onChange={(event) => setNewMember((value) => ({ ...value, model: event.target.value }))}>
@@ -1564,6 +1570,31 @@ export function App() {
     {error && <div className="error-toast"><span>{error}</span><button onClick={() => setError(null)}>×</button></div>}
   </main>;
 }
+
+function DSHView({ onClose }: { onClose?: () => void }) {
+  return (
+    <div className="live-panel dsh-view">
+      <div className="dsh-view-head">
+        <p className="live-panel-hint">
+          已嵌入 DeepSeek Harness Web 界面（{DSH_WEB_URL}）。
+          若未启动，请在服务器上运行 <code>dsh web</code>（默认 :3080）；面板直接嵌入本机该端口。
+        </p>
+        {onClose && (
+          <button type="button" className="pm-btn sm" onClick={onClose}>
+            返回聊天
+          </button>
+        )}
+      </div>
+      <iframe
+        title="DeepSeek Harness Web"
+        className="live-frame"
+        src={DSH_WEB_URL}
+        allow="microphone; autoplay"
+      />
+    </div>
+  );
+}
+
 
 const MessageBubble = memo(function MessageBubble({
   message,
@@ -1819,12 +1850,14 @@ function TypingIndicator({ label }: { label: string }) {
   );
 }
 
-function MemberRow({ member, group, runs, detecting, online, askMode, onAdmin, onRemove, onDetect, onModel, onCancelRun }: {
+function MemberRow({ member, group, runs, detecting, online, askMode, onAdmin, onRemove, onDetect, onModel, onCancelRun, onOpenDsh }: {
   member: Member; group: Group; runs: TaskRun[]; detecting?: boolean; online?: boolean; askMode?: boolean;
   onAdmin: (id: string | null) => void; onRemove: (member: Member) => void; onDetect: (member: Member) => void;
   onModel: (member: Member, model: string) => void;
   onCancelRun: (run: TaskRun) => void;
+    onOpenDsh?: (member: Member) => void;
 }) {
+    
   const isAdmin = group.adminMemberId === member.id;
   const modelOptions = modelsForAdapter(member.adapter);
   const counts = queueCounts(runs, member.id);
@@ -1858,6 +1891,7 @@ function MemberRow({ member, group, runs, detecting, online, askMode, onAdmin, o
           )}
           {askMode && <em className="ask-badge">Ask</em>}
           {member.kind === "chatbot" && <em className="admin-badge">机器人</em>}
+            {member.systemLocked && <em className="admin-badge" title="平台锁定的自举 Agent，不可修改/移除">系统</em>}
           {member.invitePending && <em className="invite-badge">链接中</em>}
           {online && <em className="online-badge">在线</em>}
           {busy && <em className="responding-badge">{busy}</em>}
@@ -1900,9 +1934,18 @@ function MemberRow({ member, group, runs, detecting, online, askMode, onAdmin, o
         )}
       </div>
       <div className="member-actions">
+          {!member.systemLocked && (<>
         {member.kind === "agent" && (
           <button disabled={!!detecting} onClick={() => onDetect(member)}>{detecting ? "检测中" : "检测"}</button>
         )}
+          {member.kind === "agent" && member.adapter === "dsh" && (
+            <button
+              onClick={() => onOpenDsh?.(member)}
+              title="在群聊内打开 DeepSeek Harness Web 界面（需在服务器启动 dsh web，默认 :3080）"
+            >
+              跳转 DSH Web
+            </button>
+          )}
         {(member.kind === "agent" || member.kind === "chatbot") && (
           <button onClick={() => onAdmin(isAdmin ? null : member.id)} title={group.groupKind === "chat" ? "未设置时无人默认回复；设置后无 @ 时由该成员兜底" : "群管理员（Agent 可保活）"}>
             {isAdmin
@@ -1917,6 +1960,7 @@ function MemberRow({ member, group, runs, detecting, online, askMode, onAdmin, o
               : "移除"}
           </button>
         )}
+          </>)}
       </div>
     </div>
   );

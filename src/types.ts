@@ -1,4 +1,4 @@
-﻿export type MemberKind = "user" | "agent" | "chatbot";
+export type MemberKind = "user" | "agent" | "chatbot";
 export type RunStatus = "queued" | "running" | "awaiting_review" | "changes_requested" | "completed" | "failed" | "cancelled" | "interrupted";
 export type RunPhase =
   | "queued"
@@ -73,7 +73,7 @@ export interface Member {
   avatarColor: string;
   roleDescription: string;
   isActive: boolean;
-  adapter: "mock" | "codex" | "claude-code" | "opencode" | "openclaw" | "cursor" | "chatbot-opencode-go" | "chatbot-deepseek" | string | null;
+  adapter: "mock" | "codex" | "claude-code" | "opencode" | "openclaw" | "cursor" | "dsh" | "chatbot-opencode-go" | "chatbot-deepseek" | string | null;
   executablePath: string | null;
   runtimeStatus: "unknown" | "ready" | "unavailable" | null;
   tags: string;
@@ -88,6 +88,8 @@ export interface Member {
   authUserId?: string | null;
   /** Pending invite (user with no authUserId yet) */
   invitePending?: boolean;
+  /** Platform-locked bootstrap agent (bootstrap-dsh / linlis-super-harness): read-only, cannot be edited/removed/reassigned. */
+  systemLocked?: boolean;
 }
 
 /** addMember response may include invite link fields (web). */

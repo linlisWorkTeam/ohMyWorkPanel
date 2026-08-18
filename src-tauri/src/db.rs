@@ -151,6 +151,7 @@ pub fn init_db(path: &Path) -> AppResult<()> {
         "ALTER TABLE agent_profiles ADD COLUMN last_heartbeat_at INTEGER",
         "ALTER TABLE agent_profiles ADD COLUMN warm_status TEXT NOT NULL DEFAULT 'cold'",
         "ALTER TABLE agent_profiles ADD COLUMN model TEXT",
+        "ALTER TABLE agent_profiles ADD COLUMN system_locked INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE task_runs ADD COLUMN phase TEXT",
         "ALTER TABLE task_runs ADD COLUMN phase_updated_at INTEGER",
         "ALTER TABLE groups ADD COLUMN group_kind TEXT NOT NULL DEFAULT 'project'",
@@ -297,6 +298,7 @@ pub fn ensure_default_seed(connection: &Connection) -> AppResult<()> {
             "UPDATE groups SET is_system=1 WHERE id=?1",
             params![GROUP_ID],
         );
+        ensure_workpanel_super_harness(connection, GROUP_ID)?;
         return Ok(());
     }
 
@@ -356,8 +358,84 @@ pub fn ensure_default_seed(connection: &Connection) -> AppResult<()> {
             .map_err(|e| e.to_string())?;
     }
 
+    // WorkPanel 组(种子/系统群)唯一完整自举执行者：linlis-super-harness（不可修改）
+    ensure_workpanel_super_harness(connection, GROUP_ID)?;
+
     Ok(())
 }
+
+/// Platform-locked WorkPanel self-bootstrap agent (`linlis-super-harness`).
+/// Lives in the WorkPanel seed/system group (`is_system=1`) and is the ONLY executor
+/// holding full self-bootstrap (面板自举/自改) write capability. system_locked=1 makes
+/// it read-only in UI and rejects all mutations in backend commands.
+fn ensure_workpanel_super_harness(connection: &Connection, group_id: &str) -> AppResult<()> {
+    const SUPER_HARNESS_MEMBER_ID: &str = "seed-member-linlis-super-harness";
+    let created_at = now();
+    connection
+        .execute(
+            "INSERT OR IGNORE INTO members(id, group_id, kind, display_name, avatar_color, role_description, is_active, created_at)
+             VALUES(?1, ?2, 'agent', 'linlis-super-harness', '#7c3aed', 'WorkPanel 自举引导器（不可修改；唯一拥有面板自举/自改完整执行权）', 1, ?3)",
+            params![SUPER_HARNESS_MEMBER_ID, group_id, created_at],
+        )
+        .map_err(|e| e.to_string())?;
+    connection
+        .execute(
+            "INSERT INTO agent_profiles(member_id, adapter, executable_path, runtime_status, updated_at, system_locked)
+             VALUES(?1, 'dsh', NULL, 'unknown', ?2, 1)
+             ON CONFLICT(member_id) DO UPDATE SET adapter='dsh', system_locked=1, runtime_status='unknown'",
+            params![SUPER_HARNESS_MEMBER_ID, created_at],
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// 普通项目群极简自举 Agent（bootstrap-dsh-<group>，system_locked=1，无面板写回权）。
+/// chat 群不创建。幂等：重复调用 INSERT OR IGNORE / ON CONFLICT。
+pub fn ensure_minimal_bootstrap_dsh(
+    connection: &Connection,
+    group_id: &str,
+    group_kind: &str,
+) -> AppResult<()> {
+    if group_kind == "chat" {
+        return Ok(());
+    }
+    let member_id = format!("bootstrap-dsh-{group_id}");
+    let display = format!("bootstrap-dsh·{}", &group_id[..group_id.len().min(8)]);
+    let ts = now();
+    connection
+        .execute(
+            "INSERT OR IGNORE INTO members(id, group_id, kind, display_name, avatar_color, role_description, is_active, created_at)
+             VALUES(?1, ?2, 'agent', ?3, '#6d28d9', '极简 DSH 自举引导器（不可修改；仅组内 dsh 执行，无面板写回权）', 1, ?4)",
+            params![&member_id, group_id, display, ts],
+        )
+        .map_err(|e| e.to_string())?;
+    connection
+        .execute(
+            "INSERT INTO agent_profiles(member_id, adapter, executable_path, runtime_status, updated_at, system_locked)
+             VALUES(?1, 'dsh', NULL, 'unknown', ?2, 1)
+             ON CONFLICT(member_id) DO UPDATE SET adapter='dsh', system_locked=1",
+            params![&member_id, ts],
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Reject mutations on platform-locked bootstrap agents (system_locked=1).
+pub fn assert_member_mutable(connection: &Connection, member_id: &str) -> AppResult<()> {
+    let locked: i64 = connection
+        .query_row(
+            "SELECT COALESCE(p.system_locked,0) FROM agent_profiles p WHERE p.member_id=?1",
+            params![member_id],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+    if locked != 0 {
+        return Err("平台锁定的自举 Agent（bootstrap-dsh / linlis-super-harness）不可修改或移除。".into());
+    }
+    Ok(())
+}
+
+
 
 fn migrate_members_allow_chatbot(connection: &Connection) -> AppResult<()> {
     let ddl: String = connection
@@ -463,10 +541,11 @@ pub fn member_from_row(row: &Row<'_>) -> rusqlite::Result<Member> {
         model: row.get(16).ok().flatten(),
         auth_user_id,
         invite_pending,
+          system_locked: row.get::<_, i64>(18).ok().unwrap_or(0) != 0,
     })
 }
 
-pub const MEMBER_SELECT: &str = "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model,m.auth_user_id
+pub const MEMBER_SELECT: &str = "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model,m.auth_user_id,COALESCE(p.system_locked,0)
          FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id";
 
 pub fn message_from_row(row: &Row<'_>) -> rusqlite::Result<Message> {

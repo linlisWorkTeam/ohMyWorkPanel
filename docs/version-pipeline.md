@@ -124,6 +124,7 @@ status: active
 | **D 聊天群** | `groupKind=chat`，无业务 workspace；轻对话 | Phase 1：体验地基（见下） | 未拍板前不做多平台中枢大工程 |
 | **E 质量** | 门禁绿 + 策略文档同步 | 纯函数/调度单测；补缺口见 testing-strategy | 用真 CLI smoke 替代门禁 |
 | **F 工作流 V1.3.0** | Git Tag 版本 + Ask + Wave | 见阶段 5 设计文 | 一次做完 S1–S4；自动无审批 promote |
+| **G 自举运行时** | 借 DSH 自举能力：会话可回放/分叉、能力可热载/可回滚、subagent 跨进程委派；**自举只由预制不可改的两级自举 Agent 执行（WorkPanel 组 `linlis-super-harness` 完整 / 普通群极简 `bootstrap-dsh`）** | 群聊治理层（决策卡/审批）先行；两级 `system_locked` 不可修改；完整自举写回权只挂 `linlis-super-harness`；DSH 进程隔离 + 锁版本；自举动作必须经群聊人类批准 | 把 dsh 内核寄生进 WorkPanel；agent 自我批准/绕过灰度；普通 Agent 或极简 bootstrap-dsh 拥有面板自举写回权 |
 
 ### 轨道 D — 聊天群（已对齐的方向，待拍板开工）
 
@@ -146,6 +147,7 @@ status: active
 4. **Git tag**：`v1.2.0` / `v1.3.0` 已补（2026-08-15）；下一小版本待立项后再打。
 5. **聊天群 D1（若拍板）** / 质量 E Phase 2 / D3：不与宿主收尾抢并发。
 6. **稳态债（B）**：每次增量仍灰度 → 批准 promote；勿中断 stop→start。
+7. **轨道 G 自举运行时（新占位）**：设计 Spec `2026-08-16-dsh-self-bootstrap-runtime.md` + 群聊治理层 `2026-08-16-group-chat-governance-plane.md`；P0（dsh headless 适配器 + DSH Web 嵌入）✅；P1 ACP 会话回放待立项（先立群聊治理层）。
 
 ---
 
@@ -170,3 +172,5 @@ status: active
 | [`docs/panellive-platform-requirements.md`](panellive-platform-requirements.md) | Live 契约 |
 | [`docs/roadmap.md`](roadmap.md) | 历史勾选 + 指向本文 |
 | [`docs/superpowers/specs/2026-08-06-workpanel-v1.3.0-workflow-era-design.md`](superpowers/specs/2026-08-06-workpanel-v1.3.0-workflow-era-design.md) | V1.3.0 工作流全量设计 |
+| [`docs/superpowers/specs/2026-08-16-dsh-self-bootstrap-runtime.md`](superpowers/specs/2026-08-16-dsh-self-bootstrap-runtime.md) | 轨道 G：DSH 自举接入总设计（会两级不可改自举 Agent） |
+| [`docs/superpowers/specs/2026-08-16-dsh-ui-language-workpanel.md`](superpowers/specs/2026-08-16-dsh-ui-language-workpanel.md) | 借鉴 DSH UI 设计语言（三栏：工作区=群聊，右栏=Agent） |

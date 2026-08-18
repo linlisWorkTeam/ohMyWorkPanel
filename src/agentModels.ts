@@ -31,6 +31,7 @@ const STATIC: Record<string, string[]> = {
   "claude-code": ["sonnet", "opus", "haiku"],
   opencode: ["default", "claude-sonnet-4", "gpt-5"],
   openclaw: ["default"],
+    dsh: [],
   "chatbot-deepseek": ["deepseek-v4-flash", "deepseek-chat", "deepseek-reasoner"],
   deepseek: ["deepseek-v4-flash", "deepseek-chat", "deepseek-reasoner"],
   "chatbot-opencode-go": ["deepseek-v4-flash", "deepseek-chat"],

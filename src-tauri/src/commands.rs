@@ -40,6 +40,22 @@ fn to_scheduler(state: &AppState, app: &AppHandle) -> SchedulerState {
     }
 }
 
+/// Reject mutations on platform-locked bootstrap agents (`agent_profiles.system_locked=1`).
+fn assert_member_mutable(conn: &rusqlite::Connection, member_id: &str) -> AppResult<()> {
+    let locked: i64 = conn
+        .query_row(
+            "SELECT COALESCE(p.system_locked,0) FROM agent_profiles p WHERE p.member_id=?1",
+            params![member_id],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+    if locked != 0 {
+        return Err("平台锁定的自举 Agent（bootstrap-dsh / linlis-super-harness）不可修改或移除。".into());
+    }
+    Ok(())
+}
+
+
 #[tauri::command]
 pub fn bootstrap(state: State<'_, AppState>) -> AppResult<Bootstrap> {
     Ok(Bootstrap {
@@ -184,6 +200,8 @@ pub fn create_group(input: CreateGroupInput, state: State<'_, AppState>) -> AppR
             ).map_err(|e| e.to_string())?;
         }
     }
+    // 普通项目群预制极简 bootstrap-dsh（不可修改；chat 群不建）
+    crate::db::ensure_minimal_bootstrap_dsh(&conn, &group_id, &group_kind)?;
     group_state(&conn, &group_id)
 }
 
@@ -321,6 +339,7 @@ pub async fn remove_member(
     let state = state.inner().clone();
     let conn = open_db(&state.db_path)?;
     let group = get_group(&conn, &group_id)?;
+    assert_member_mutable(&conn, &member_id)?;
     if group.owner_member_id == member_id {
         return Err("不能移除群主。".into());
     }
@@ -400,6 +419,7 @@ pub fn set_admin(
     let conn = open_db(&state.db_path)?;
     let _ = get_group(&conn, &group_id)?;
     if let Some(id) = &member_id {
+    if let Some(id) = &member_id { assert_member_mutable(&conn, id)?; }
         if !crate::db::member_is_default_responder_candidate(&conn, &group_id, id)? {
             return Err("默认响应者必须是本群活跃的 Agent 或聊天机器人。".into());
         }
@@ -856,6 +876,7 @@ pub fn update_member_workspace_cmd(
 ) -> AppResult<crate::models::Member> {
     let conn = open_db(&state.db_path)?;
     let member = conn
+    assert_member_mutable(&conn, &member_id)?;
         .query_row(
             &format!("{} WHERE m.id=?1", crate::db::MEMBER_SELECT),
             rusqlite::params![member_id],
@@ -946,6 +967,7 @@ pub fn update_member_model_cmd(
     state: State<'_, AppState>,
 ) -> AppResult<Member> {
     let conn = open_db(&state.db_path)?;
+    assert_member_mutable(&conn, &member_id)?;
     crate::db::set_member_model(&conn, &member_id, model.as_deref())?;
     conn.query_row(
         &format!("{} WHERE m.id=?1", crate::db::MEMBER_SELECT),
