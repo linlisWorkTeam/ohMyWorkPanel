@@ -147,7 +147,7 @@ status: active
 4. **Git tag**：`v1.2.0` / `v1.3.0` 已补（2026-08-15）；下一小版本待立项后再打。
 5. **聊天群 D1（若拍板）** / 质量 E Phase 2 / D3：不与宿主收尾抢并发。
 6. **稳态债（B）**：每次增量仍灰度 → 批准 promote；勿中断 stop→start。
-7. **轨道 G 自举运行时（新占位）**：设计 Spec `2026-08-16-dsh-self-bootstrap-runtime.md` + 群聊治理层 `2026-08-16-group-chat-governance-plane.md`；P0（dsh headless 适配器 + DSH Web 嵌入）✅；P1 ACP 会话回放待立项（先立群聊治理层）。
+7. **轨道 G 自举运行时（新占位）**：设计 Spec `2026-08-16-dsh-self-bootstrap-runtime.md` + 群聊治理层 `2026-08-16-group-chat-governance-plane.md`；P0（dsh headless 适配器 + DSH Web 嵌入）✅；P1 ACP 会话回放待立项（先立群聊治理层）。**小组件定位**：见 `specs/2026-08-16-widget-capability-placement.md`（widget=页签/能力，不单独建群；仅治理型项目群例外）。
 
 ---
 
@@ -174,3 +174,4 @@ status: active
 | [`docs/superpowers/specs/2026-08-06-workpanel-v1.3.0-workflow-era-design.md`](superpowers/specs/2026-08-06-workpanel-v1.3.0-workflow-era-design.md) | V1.3.0 工作流全量设计 |
 | [`docs/superpowers/specs/2026-08-16-dsh-self-bootstrap-runtime.md`](superpowers/specs/2026-08-16-dsh-self-bootstrap-runtime.md) | 轨道 G：DSH 自举接入总设计（会两级不可改自举 Agent） |
 | [`docs/superpowers/specs/2026-08-16-dsh-ui-language-workpanel.md`](superpowers/specs/2026-08-16-dsh-ui-language-workpanel.md) | 借鉴 DSH UI 设计语言（三栏：工作区=群聊，右栏=Agent） |
+| [`docs/superpowers/specs/2026-08-16-widget-capability-placement.md`](superpowers/specs/2026-08-16-widget-capability-placement.md) | 小组件形态判定与收敛路线（widget=页签/能力，不单独建群） |

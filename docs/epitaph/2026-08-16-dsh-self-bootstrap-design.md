@@ -23,6 +23,7 @@ status: active
 | `docs/superpowers/plans/2026-08-16-dsh-self-bootstrap-plan.md` | 执行清单（P1–P4 任务与 Files） |
 | `docs/version-pipeline.md` | SSOT 新增**轨道 G 自举运行时**占位 |
 | `docs/superpowers/specs/2026-08-16-dsh-ui-language-workpanel.md` | 借鉴 DSH UI 设计语言（三栏：工作区=群聊，右栏=Agent） |
+| `docs/superpowers/specs/2026-08-16-widget-capability-placement.md` | 小组件形态判定（widget=页签/能力不建群；仅治理型项目群例外） |
 | `src-tauri/src/adapters/dsh.rs` | P0 headless 适配器 |
 
 ## Locked product decisions

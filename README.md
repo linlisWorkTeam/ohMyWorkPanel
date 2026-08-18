@@ -54,6 +54,7 @@ export CARGO_BUILD_JOBS=1 NODE_OPTIONS=--max-old-space-size=1024
 | [`docs/version-pipeline.md`](docs/version-pipeline.md) | **版本流水线 / 轨道 / 下一站（SSOT）** |
 | [`docs/superpowers/specs/2026-08-16-dsh-self-bootstrap-runtime.md`](docs/superpowers/specs/2026-08-16-dsh-self-bootstrap-runtime.md) | **DSH 自举接入总设计（轨道 G）** |
 | [`docs/superpowers/specs/2026-08-16-dsh-ui-language-workpanel.md`](docs/superpowers/specs/2026-08-16-dsh-ui-language-workpanel.md) | **借鉴 DSH UI 设计语言（三栏：工作区=群聊，右栏=Agent）** |
+| [`docs/superpowers/specs/2026-08-16-widget-capability-placement.md`](docs/superpowers/specs/2026-08-16-widget-capability-placement.md) | **小组件形态判定与收敛路线（widget=页签/能力，不单独建群）** |
 | [`docs/release-runbook-2026-08-16-dsh-self-bootstrap.md`](docs/release-runbook-2026-08-16-dsh-self-bootstrap.md) | **发布 Runbook：本地验证 → GitHub → ECS 灰度 :8081 → 生产 :8080** |
 | [`docs/release-manifest-2026-08-16.md`](docs/release-manifest-2026-08-16.md) | **本次发布变更清单（逐文件核对 + 达成标准）** |
 | [`docs/api-web.md`](docs/api-web.md) | Web API 薄索引 |
