@@ -1335,5 +1335,23 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .goal-bar:hover { background: color-mix(in srgb, var(--lp-accent) 12%, var(--lp-bg-active)); }
 .goal-bar:focus-visible { outline: 2px solid var(--lp-ring); outline-offset: -2px; }
 
+/* 成员/Agent 面板开关（桌面与移动端均可见；修复桌面右栏关后无法重开） */
+.chat-header .members-toggle {
+  border: 0;
+  background: transparent;
+  color: var(--lp-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 10px;
+  padding: 0 12px;
+  flex: none;
+  transition: background .15s ease, color .15s ease;
+}
+.chat-header .members-toggle:hover { background: var(--lp-bg-hover); color: var(--lp-text-primary); }
+.chat-header .members-toggle[aria-pressed="true"] { color: var(--lp-accent); background: var(--lp-bg-active); }
+
+
 
 

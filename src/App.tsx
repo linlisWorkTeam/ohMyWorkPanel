@@ -1083,6 +1083,24 @@ export function App() {
     });
   };
 
+  // P2 键盘快捷键：⌘/Ctrl+1 左栏折叠轨、⌘/Ctrl+2 成员面板、Esc 关浮层
+  useEffect(() => {
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      const mod = event.ctrlKey || event.metaKey;
+      if (mod && event.key === "1") { event.preventDefault(); frame.toggleLeft(); }
+      else if (mod && event.key === "2") { event.preventDefault(); toggleMembers(); }
+      else if (event.key === "Escape") {
+        if (showCreate || showSettings || showAddMember) event.preventDefault();
+        setShowCreate(false);
+        setShowSettings(false);
+        setShowAddMember(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frame.toggleLeft, showCreate, showSettings, showAddMember]);
+
   return <main className="app-shell" ref={frame.rootRef} style={frame.rootStyle} data-left={frame.leftMode} data-right={frame.rightOpen ? "open" : "closed"}>
     {showSidebar && <div className="sidebar-backdrop" onClick={() => setShowSidebar(false)} />}
     {showMembers && <div className="members-backdrop" onClick={() => setShowMembers(false)} />}
@@ -1123,7 +1141,7 @@ export function App() {
         <button
           type="button"
           className="rail-toggle"
-          title={frame.leftMode === "open" ? "折叠为控制轨（56px）" : "展开侧栏"}
+          title={frame.leftMode === "open" ? "折叠为控制轨（56px）· Ctrl/⌘ + 1" : "展开侧栏 · Ctrl/⌘ + 1"}
           aria-label="折叠或展开侧栏"
           onClick={() => frame.toggleLeft()}
         >
@@ -1193,7 +1211,16 @@ export function App() {
               </p>
             </div>
           </div>
-          <button className="icon-button mobile-members" onClick={toggleMembers} aria-label="成员面板">成员</button>
+          <button
+            type="button"
+            className="members-toggle"
+            onClick={toggleMembers}
+            aria-label="成员 / Agent 面板"
+            aria-pressed={showMembers}
+            title="成员 / Agent 面板（Ctrl/⌘ + 2）"
+          >
+            {showMembers ? "▤" : "▥"} 成员
+          </button>
         </header>
         {goalBar && (
           <div
