@@ -42,8 +42,22 @@ pub(crate) fn resolve_api_key_with(
 }
 
 fn default_auth_path() -> std::path::PathBuf {
+    // CODEX_HOME points at the `.codex` dir itself (matches the Node shim & Codex CLI).
+    if let Some(home) = std::env::var_os("CODEX_HOME") {
+        return std::path::PathBuf::from(home).join("auth.json");
+    }
     let home = std::env::var_os("HOME")
         .map(std::path::PathBuf::from)
+        .or_else(|| {
+            #[cfg(windows)]
+            {
+                std::env::var_os("USERPROFILE").map(std::path::PathBuf::from)
+            }
+            #[cfg(not(windows))]
+            {
+                None
+            }
+        })
         .unwrap_or_else(|| std::path::PathBuf::from("/root"));
     home.join(".codex").join("auth.json")
 }

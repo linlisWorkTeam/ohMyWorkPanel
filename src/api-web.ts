@@ -1,4 +1,4 @@
-﻿// Web API layer - replaces api.ts when running in browser (non-Tauri mode).
+// Web API layer - replaces api.ts when running in browser (non-Tauri mode).
 // Uses fetch() + WebSocket instead of Tauri invoke().
 import type {
   AddMemberResult, GroupState, Member, MessageChannelPart, MessagePage, MetricsSample, PresetRole, RuntimeSettings, Message, TaskRun,
@@ -505,6 +505,24 @@ export const api = {
   opsRunTestGate: () => apiFetch<void>("/api/ops/test-gate", { method: "POST" }),
   opsDeployCanary: () => apiFetch<void>("/api/ops/deploy-canary", { method: "POST" }),
 
+  // Agent 配置：一键导入 / 导出 / 自检 / 安装（仅管理员；脱敏展示）
+  agentConfigStatus: () => apiFetch<AgentEnvStatus>("/api/agent-config/status"),
+  agentConfigExport: (includeSecrets: boolean) =>
+    apiFetch<AgentConfigBundle>("/api/agent-config/export", {
+      method: "POST",
+      body: JSON.stringify({ includeSecrets }),
+    }),
+  agentConfigImport: (bundle: Partial<AgentConfigBundle>, autoInstall: boolean, overwrite = true) =>
+    apiFetch<ImportReport>("/api/agent-config/import", {
+      method: "POST",
+      body: JSON.stringify({ bundle, autoInstall, overwrite }),
+    }),
+  agentConfigInstall: (cli: string) =>
+    apiFetch<{ cli: string; ok: boolean; detail: string }>(
+      `/api/agent-config/install/${encodeURIComponent(cli)}`,
+      { method: "POST" },
+    ),
+
   // WebSocket - replaces Tauri listen()
   connectWS: (onMessage: (data: string) => void) => {
     const ws = new WebSocket(`${WS_BASE}/ws?token=${authToken ?? ""}`);
@@ -513,3 +531,53 @@ export const api = {
     return ws;
   },
 };
+
+// ==== Agent 配置类型 ====
+
+export interface AgentConfigBundle {
+  schemaVersion?: number;
+  exportedAt?: number | null;
+  exportedBy?: string | null;
+  source?: string | null;
+  codex: { enabled?: boolean; baseUrl?: string | null; model?: string | null; apiKey?: string | null; authMode?: string | null };
+  claude: { enabled?: boolean; baseUrl?: string | null; authToken?: string | null; model?: string | null };
+  cursor: { enabled?: boolean; executable?: string | null; model?: string | null; cliConfig?: unknown; mcp?: unknown };
+  opencode: { enabled?: boolean; model?: string | null; apiKey?: string | null };
+  files?: Record<string, unknown>;
+  agents?: { adapter: string; displayName?: string; memberId?: string; model?: string | null; apiKey?: string | null; executable?: string | null }[];
+  autoInstall?: string[];
+}
+
+export interface CliPresence {
+  cli: string;
+  present: boolean;
+  path?: string | null;
+  label: string;
+}
+
+export interface AgentEnvStatus {
+  nodePath?: string | null;
+  shimUp: boolean;
+  shimPort: number;
+  clis: CliPresence[];
+  codexKeySet: boolean;
+  claudeSettingsPresent: boolean;
+  cursorConfigPresent: boolean;
+  bundleImportedAt?: number | null;
+  autoApply: boolean;
+  effective: AgentConfigBundle;
+}
+
+export interface ImportStep {
+  name: string;
+  status: "ok" | "warn" | "err";
+  detail: string;
+}
+
+export interface ImportReport {
+  ok: boolean;
+  steps: ImportStep[];
+  installed: string[];
+  missing: string[];
+  warnings: string[];
+}

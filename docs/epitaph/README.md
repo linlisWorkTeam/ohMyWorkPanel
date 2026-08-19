@@ -8,6 +8,7 @@ Active handoff notes for future agents.
 
 | Date | Topic | Status |
 |------|-------|--------|
+| 2026-08-18 | [Agent 配置一键导入/导出/自检/CLI 自动安装](./2026-08-18-agent-config-import.md) | active |
 | 2026-08-16 | [DSH 自举接入：设计落地 + P0](./2026-08-16-dsh-self-bootstrap-design.md) | active |
 | 2026-08-15 | [交接运行时注入 Context Seams](./2026-08-15-context-seams-handoff.md) | active |
 | 2026-08-15 | [补打 v1.2.0/v1.3.0 并对齐 SSOT](./2026-08-15-git-tag-ssot.md) | active |

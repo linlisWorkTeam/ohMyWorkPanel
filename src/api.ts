@@ -188,4 +188,25 @@ export const api = {
   opsJob: () => invoke<OpsJobState>("ops_job_status"),
   opsRunTestGate: () => invoke<void>("ops_run_test_gate"),
   opsDeployCanary: () => invoke<void>("ops_deploy_canary"),
+
+  // Agent 配置：一键导入（仅 Web 服务；桌面态抛提示但保持类型与 Web 一致）
+  agentConfigStatus: async (): Promise<import("./api-web").AgentEnvStatus> => {
+    throw new Error("Agent 配置（一键导入/导出）仅 Web 服务可用");
+  },
+  agentConfigExport: async (includeSecrets: boolean): Promise<import("./api-web").AgentConfigBundle> => {
+    void includeSecrets;
+    throw new Error("Agent 配置（一键导入/导出）仅 Web 服务可用");
+  },
+  agentConfigImport: async (
+    bundle: Partial<import("./api-web").AgentConfigBundle>,
+    autoInstall: boolean,
+    overwrite = true,
+  ): Promise<import("./api-web").ImportReport> => {
+    void bundle; void autoInstall; void overwrite;
+    throw new Error("Agent 配置（一键导入/导出）仅 Web 服务可用");
+  },
+  agentConfigInstall: async (cli: string): Promise<{ cli: string; ok: boolean; detail: string }> => {
+    void cli;
+    throw new Error("Agent 配置（一键导入/导出）仅 Web 服务可用");
+  },
 };

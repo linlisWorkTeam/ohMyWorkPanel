@@ -24,15 +24,20 @@ if [[ -d "${PROD_SLOT}/bin" ]]; then
   mkdir -p "${BAK}"
   /bin/cp -a "${PROD_SLOT}/bin" "${BAK}/bin" 2>/dev/null || true
   /bin/cp -a "${PROD_SLOT}/dist" "${BAK}/dist" 2>/dev/null || true
+  /bin/cp -a "${PROD_SLOT}/scripts" "${BAK}/scripts" 2>/dev/null || true
   /bin/cp -a "${PROD_SLOT}/meta" "${BAK}/meta" 2>/dev/null || true
   echo "Previous prod artifacts backed up to ${BAK}"
 fi
 
-mkdir -p "${PROD_SLOT}/bin" "${PROD_SLOT}/dist" "${PROD_SLOT}/meta"
+mkdir -p "${PROD_SLOT}/bin" "${PROD_SLOT}/dist" "${PROD_SLOT}/meta" "${PROD_SLOT}/scripts"
 /bin/cp -f "${CANARY_SLOT}/bin/linlis-work-panel-server" "${PROD_SLOT}/bin/linlis-work-panel-server"
 chmod +x "${PROD_SLOT}/bin/linlis-work-panel-server"
 rm -rf "${PROD_SLOT}/dist"
 /bin/cp -a "${CANARY_SLOT}/dist" "${PROD_SLOT}/dist"
+# 随槽位发布 Codex shim 脚本（与可执行文件同目录，启动自动解析）
+if [[ -f "${CANARY_SLOT}/scripts/codex-deepseek-proxy.cjs" ]]; then
+  /bin/cp -f "${CANARY_SLOT}/scripts/codex-deepseek-proxy.cjs" "${PROD_SLOT}/scripts/codex-deepseek-proxy.cjs"
+fi
 
 STAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 SHA="$(sha256sum "${PROD_SLOT}/bin/linlis-work-panel-server" | awk '{print $1}')"

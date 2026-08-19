@@ -112,6 +112,13 @@ status: active
 | **EH** | **通用扩展宿主**（消灭 panellive 硬编码；AIHotel 页签） | **认领**；见 [`specs/2026-08-06-extension-host-v130-claim.md`](superpowers/specs/2026-08-06-extension-host-v130-claim.md)；S0/S1 后端已开工 |
 | **Wiki** | 跨 Agent 记忆：Wiki `retrieve` + 调度注入【全局知识·Wiki】 | W0/W1 代码；设计 [`WorkPanelWiki/.../2026-08-08-cross-agent-memory-compliance-design.md`](/AI/WorkPanelWiki/docs/superpowers/specs/2026-08-08-cross-agent-memory-compliance-design.md) |
 
+### 阶段 5.1 — 1.3.0+ 增量补丁（HEAD 上，未另打小版本）
+
+| 切片 | 内容 | 状态 |
+|---|---|---|
+| P1 | 平滑发版 Drain + 重启重入队；Cursor 4.6 模型目录；群公告/工作区设置入口恢复 | ✅（前序补丁） |
+| **I1** | **Agent 配置一键导入**：顶部「Agent 配置」页（仅管理员）——服务器导出配置包 → 本地一键导入（写 `~/.codex`/`~/.claude`/`~/.cursor`/通用 `files`，同步 agent_profiles，持久化+启动自动重放）；缺失 CLI 自动安装（best-effort）；环境自检；release 槽位自带 codex shim 脚本（开箱即用，新机无需重新 vibecoding） | ✅ 代码（spec：`specs/2026-08-18-agent-config-one-click-import.md`；本机端到端验证；待 ECS 灰度） |
+
 ---
 
 ## 锁定的产品方向（勿漂移）
@@ -148,6 +155,7 @@ status: active
 5. **聊天群 D1（若拍板）** / 质量 E Phase 2 / D3：不与宿主收尾抢并发。
 6. **稳态债（B）**：每次增量仍灰度 → 批准 promote；勿中断 stop→start。
 7. **轨道 G 自举运行时（新占位）**：设计 Spec `2026-08-16-dsh-self-bootstrap-runtime.md` + 群聊治理层 `2026-08-16-group-chat-governance-plane.md`；P0（dsh headless 适配器 + DSH Web 嵌入）✅；P1 ACP 会话回放待立项（先立群聊治理层）。**小组件定位**：见 `specs/2026-08-16-widget-capability-placement.md`（widget=页签/能力，不单独建群；仅治理型项目群例外）。
+8. **Agent 配置一键导入（I1，轨道 A / 发布打包）**：代码已落地（阶段 5.1）；下一步 ECS canary `:8081` 部署 + 群公告 →（批）promote 生产；顺带验证「服务器导出 → 新机一键导入」端到端与前端壳冒烟（`release-checklist.md §F`）。
 
 ---
 

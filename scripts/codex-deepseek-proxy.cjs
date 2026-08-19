@@ -1,12 +1,20 @@
 const http = require('http');
 const https = require('https');
 
+const os = require('os');
+const path = require('path');
+
 const TARGET = process.env.CODEX_UPSTREAM_HOST || 'opencode.ai';
 const TARGET_PATH = process.env.CODEX_UPSTREAM_PATH || '/zen/go/v1/chat/completions';
 
+// Cross-platform Codex home (CODEX_HOME > ~/.codex; Linux `/root` fallback).
+const CODEX_HOME =
+  process.env.CODEX_HOME ||
+  path.join(os.homedir() || (process.env.HOME || '/root'), '.codex');
+
 let API_KEY;
 try {
-  API_KEY = require('/root/.codex/auth.json').OPENAI_API_KEY;
+  API_KEY = require(path.join(CODEX_HOME, 'auth.json')).OPENAI_API_KEY;
 } catch(e) {
   API_KEY = process.env.OPENAI_API_KEY;
 }

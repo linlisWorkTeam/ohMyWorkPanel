@@ -58,6 +58,11 @@ async fn main() {
     db::init_db(&db_path).expect("init database");
     println!("DB: {}", db_path.display());
 
+    // 启动时幂等重放已导入的 Agent 配置（开箱即用：缺失配置自动补写）。
+    if let Err(e) = linlis_work_panel_lib::agent_config::auto_apply_on_startup(&db_path) {
+        eprintln!("Agent config auto-apply: {e}");
+    }
+
     let (tx, _) = broadcast::channel::<String>(256);
 
     // Create scheduler state with Web event sender

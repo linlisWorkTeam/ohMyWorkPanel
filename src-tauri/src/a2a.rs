@@ -118,12 +118,17 @@ pub fn dispatch_live_skill(
     }
 
     let root = crate::extensions::panellive_root();
-    let manifest = crate::extensions::load_panellive_manifest(&root)?;
-    let port = crate::extensions::panellive_upstream_port(&manifest);
+    // Only control-plane skills that call the PanelLive upstream need the manifest;
+    // transcript acks are WS-only and must not hard-fail when the Live host repo is absent.
+    let upstream_port = || -> Result<u16, String> {
+        let manifest = crate::extensions::load_panellive_manifest(&root)?;
+        Ok(crate::extensions::panellive_upstream_port(&manifest))
+    };
     let host = "127.0.0.1";
 
     let (msg, session_id) = match envelope.skill.as_str() {
         "live.session.start" => {
+            let port = upstream_port()?;
             let (code, body) = crate::extensions::http_post_json_local(host, port, "/v1/session/start", "{}")?;
             if code != 200 {
                 return Err(format!("PanelLive session/start HTTP {code}: {body}"));
@@ -141,6 +146,7 @@ pub fn dispatch_live_skill(
         }
         "live.session.stop" | "live.session.cancel" => {
             // A2: PanelLive has cancel only — stop maps to cancel.
+            let port = upstream_port()?;
             let sid = envelope
                 .session_id
                 .clone()
@@ -164,6 +170,7 @@ pub fn dispatch_live_skill(
             )
         }
         "live.synthesize.request" => {
+            let port = upstream_port()?;
             let text = envelope
                 .payload
                 .get("text")

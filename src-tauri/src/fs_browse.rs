@@ -146,8 +146,15 @@ mod tests {
 
     #[test]
     fn rejects_missing_path() {
-        let err = resolve_server_dir("/tmp/linlis-definitely-missing-dir-xyz").unwrap_err();
-        assert!(err.contains("不存在") || err.contains("不可访问"));
+        #[cfg(windows)]
+        let missing = r"C:\linlis-definitely-missing-dir-xyz";
+        #[cfg(not(windows))]
+        let missing = "/tmp/linlis-definitely-missing-dir-xyz";
+        let err = resolve_server_dir(missing).unwrap_err();
+        assert!(
+            err.contains("不存在") || err.contains("不可访问"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]

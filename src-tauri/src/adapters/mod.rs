@@ -1,6 +1,6 @@
 pub mod chatbot;
 mod claude;
-mod codex;
+pub(crate) mod codex;
 mod cursor;
 mod dsh;
 mod mock;
@@ -170,6 +170,22 @@ fn find_executable_path(name: &str) -> Option<String> {
         }
         None
     })
+}
+
+/// Public wrapper for agent-config / provisioning: whether a CLI executable (or a Windows
+/// shim extension of it) is findable on PATH (incl. npm global on Windows).
+pub fn find_executable_on_path(name: &str) -> Option<String> {
+    find_executable_path(name)
+        .or_else(|| {
+            #[cfg(windows)]
+            {
+                find_in_npm(name)
+            }
+            #[cfg(not(windows))]
+            {
+                None
+            }
+        })
 }
 
 #[cfg(windows)]

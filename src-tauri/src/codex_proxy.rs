@@ -127,6 +127,15 @@ fn resolve_script_path() -> PathBuf {
             return path;
         }
     }
+    // 打包后：可执行文件旁自带 `scripts/`（开箱即用，不依赖工作目录 / 仓库路径）。
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let path = dir.join("scripts/codex-deepseek-proxy.cjs");
+            if path.is_file() {
+                return path;
+            }
+        }
+    }
     // Deploy layout: workspace next to common host path
     let candidates = [
         PathBuf::from("/AI/LinlisWorkPanel/scripts/codex-deepseek-proxy.cjs"),

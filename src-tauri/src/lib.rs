@@ -1,4 +1,5 @@
-﻿pub mod auth;
+pub mod auth;
+pub mod agent_config;
 mod adapters;
 pub mod a2a;
 

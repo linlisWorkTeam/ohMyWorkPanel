@@ -1,6 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { FormEvent, KeyboardEvent, memo, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from "react";
+import { FormEvent, KeyboardEvent, memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 import { api, getAuthToken, onUnauthorized, requiresAuth, setAuthToken } from "./api";
 import {
   agentReplyDefaultOpen,
@@ -40,6 +40,7 @@ import {
   sliceVisibleMessages,
 } from "./messageHistory";
 import { loadAuthUser, resolveSenderMemberId, saveAuthUser, type AuthUser } from "./authSession";
+import { Divider, useAppFrame } from "./components/ui";
 import { loadSendKeyMode, saveSendKeyMode, sendKeyHint, shouldSendOnKey, type SendKeyMode } from "./sendKey";
 import type { ChatEvent, ExtensionStatus, Group, GroupState, Member, PresetRole, RuntimeSettings, TaskRun } from "./types";
 import { ExperiencePanel } from "./ExperiencePanel";
@@ -48,6 +49,7 @@ import { ServerPathPicker } from "./ServerPathPicker";
 import { ExtensionPanel } from "./ExtensionPanel";
 import { VersionView } from "./VersionView";
 import { GroupSettingsView } from "./GroupSettingsView";
+import { AgentConfigView } from "./AgentConfigView";
 import {
   collectExtensionTabViews,
   parseExtMainView,
@@ -142,6 +144,7 @@ export function App() {
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [settings, setSettings] = useState<RuntimeSettings | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [agentCfgImported, setAgentCfgImported] = useState(false);
   const [wsLink, setWsLink] = useState<{ state: WsLinkState; elapsedMs: number }>({
     state: "connected",
     elapsedMs: 0,
@@ -169,6 +172,8 @@ export function App() {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasMoreOlder, setHasMoreOlder] = useState(false);
   const loadingOlderRef = useRef(false);
+  const closeMembers = useCallback(() => setShowMembers(false), []);
+  const frame = useAppFrame({ rightOpen: showMembers, onRightClose: closeMembers });
   currentGroupIdRef.current = current?.group.id;
 
   const scrollMessagesToBottom = (force = false) => {
@@ -1033,7 +1038,7 @@ export function App() {
     });
   };
 
-  return <main className="app-shell">
+  return <main className="app-shell" ref={frame.rootRef} style={frame.rootStyle} data-left={frame.leftMode} data-right={frame.rightOpen ? "open" : "closed"}>
     {showSidebar && <div className="sidebar-backdrop" onClick={() => setShowSidebar(false)} />}
     {showMembers && <div className="members-backdrop" onClick={() => setShowMembers(false)} />}
     <aside className={`group-sidebar ${showSidebar ? "open" : ""}`}>
@@ -1070,10 +1075,21 @@ export function App() {
         )}
       </nav>
       <div className="sidebar-footer">
+        <button
+          type="button"
+          className="rail-toggle"
+          title={frame.leftMode === "open" ? "折叠为控制轨（56px）" : "展开侧栏"}
+          aria-label="折叠或展开侧栏"
+          onClick={() => frame.toggleLeft()}
+        >
+          {frame.leftMode === "open" ? "◀◀" : "▶▶"}
+        </button>
         <button type="button" onClick={() => setShowSettings(true)}>运行设置</button>
         {requiresAuth && <button onClick={() => goLogin(null)}>退出登录{authUser ? `（${authUser.username}）` : ""}</button>}
       </div>
     </aside>
+
+    <Divider {...frame.leftDivider} />
 
     <section className="chat-panel">
       {current ? <>
@@ -1089,6 +1105,11 @@ export function App() {
                     <button type="button" className={mainView === "versions" ? "active" : ""} onClick={() => setMainView("versions")}>版本</button>
                   )}
                   <button type="button" className={mainView === "settings" ? "active" : ""} onClick={() => setMainView("settings")}>设置</button>
+                  {isAdmin && (
+                    <button type="button" className={mainView === "agent-config" ? "active" : ""} onClick={() => setMainView("agent-config")} title="Agent 配置：一键导入/导出、环境自检、CLI 自动安装">
+                      Agent 配置{agentCfgImported ? "✓" : ""}
+                    </button>
+                  )}
                   {extTabViews.map(({ ext, tab, viewKey }) => {
                     const ready = Boolean(ext.enabled && ext.healthy);
                     return (
@@ -1170,6 +1191,11 @@ export function App() {
               });
             }}
             onError={(msg) => setError(msg)}
+          />
+        ) : mainView === "agent-config" ? (
+          <AgentConfigView
+            onError={(msg) => setError(msg)}
+            onStatusChange={setAgentCfgImported}
           />
         ) : <>
         <div className="message-list-shell">
@@ -1278,6 +1304,8 @@ export function App() {
         </>}
       </> : <div className="loading">正在打开本地群聊…</div>}
     </section>
+
+    <Divider {...frame.rightDivider} />
 
     {current && showMembers && <aside className="member-panel">
       <header>

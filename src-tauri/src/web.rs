@@ -1246,6 +1246,81 @@ async fn get_message_channel_part_web(
      Json(serde_json::json!({ "ok": true, "service": "linlis-work-panel" }))
  }
 
+ // === Agent Config（一键导入 / 导出 / 自检 / 安装）===
+
+ async fn agent_config_status_web(
+     State(state): State<Arc<AppState>>,
+     ClaimsExtractor(claims): ClaimsExtractor,
+ ) -> Result<Json<crate::agent_config::AgentEnvStatus>, (StatusCode, String)> {
+     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
+     Ok(Json(crate::agent_config::status(&state.db_path)))
+ }
+
+ #[derive(Debug, Deserialize)]
+ #[serde(rename_all = "camelCase")]
+ struct AgentConfigExportBody {
+     #[serde(default)]
+     include_secrets: bool,
+ }
+
+ async fn agent_config_export_web(
+     State(state): State<Arc<AppState>>,
+     ClaimsExtractor(claims): ClaimsExtractor,
+     Json(body): Json<AgentConfigExportBody>,
+ ) -> Result<Json<crate::agent_config::AgentConfigBundle>, (StatusCode, String)> {
+     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
+     let mut bundle = crate::agent_config::build_bundle(&state.db_path, body.include_secrets)
+         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     bundle.exported_at = Some(crate::db::now());
+     bundle.exported_by = Some(claims.username.clone());
+     Ok(Json(bundle))
+ }
+
+ #[derive(Debug, Deserialize)]
+ #[serde(rename_all = "camelCase")]
+ struct AgentConfigImportBody {
+     bundle: crate::agent_config::AgentConfigBundle,
+     #[serde(default)]
+     auto_install: Option<bool>,
+     #[serde(default)]
+     overwrite: Option<bool>,
+ }
+
+ async fn agent_config_import_web(
+     State(state): State<Arc<AppState>>,
+     ClaimsExtractor(claims): ClaimsExtractor,
+     Json(body): Json<AgentConfigImportBody>,
+ ) -> Result<(StatusCode, Json<crate::agent_config::ImportReport>), (StatusCode, String)> {
+     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
+     let report =
+         crate::agent_config::import(&state.db_path, body.bundle, body.auto_install, body.overwrite)
+             .await;
+     let status = if report.ok {
+         StatusCode::OK
+     } else {
+         StatusCode::BAD_REQUEST
+     };
+     Ok((status, Json(report)))
+ }
+
+ async fn agent_config_install_web(
+     State(state): State<Arc<AppState>>,
+     ClaimsExtractor(claims): ClaimsExtractor,
+     Path(cli): Path<String>,
+ ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
+     let (ok, detail) = crate::agent_config::run_install(&cli).await;
+     Ok(Json(json!({
+         "cli": cli,
+         "ok": ok,
+         "detail": detail,
+     })))
+ }
+
  async fn metrics_latest_web(
      State(state): State<Arc<AppState>>,
  ) -> Result<Json<crate::metrics::Sample>, (StatusCode, String)> {
@@ -2448,6 +2523,11 @@ pub fn build_router(state: Arc<AppState>) -> Router {
          .route("/api/agent-models", get(get_agent_models_web))
          .route("/api/agent-models/refresh", post(refresh_agent_models_web))
          .route("/api/metrics/latest", get(metrics_latest_web))
+         // Agent Config（一键导入 / 导出 / 自检 / 安装；仅管理员）
+         .route("/api/agent-config/status", get(agent_config_status_web))
+         .route("/api/agent-config/export", post(agent_config_export_web))
+         .route("/api/agent-config/import", post(agent_config_import_web))
+         .route("/api/agent-config/install/{cli}", post(agent_config_install_web))
          // OCR
          .route("/api/ocr", post(ocr_image_web))
          .route("/api/ocr/base64", post(ocr_base64_web))

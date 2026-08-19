@@ -901,6 +901,102 @@ pub fn set_member_model(connection: &Connection, member_id: &str, model: Option<
     Ok(())
 }
 
+/// Set the stored API key for an agent member profile (never returned to UI as raw value).
+pub fn set_member_api_key(
+    connection: &Connection,
+    member_id: &str,
+    key: Option<&str>,
+) -> AppResult<()> {
+    let n = connection
+        .execute(
+            "UPDATE agent_profiles SET api_key=?1, updated_at=?2 WHERE member_id=?3",
+            params![key.map(str::trim).filter(|s| !s.is_empty()), now(), member_id],
+        )
+        .map_err(|e| e.to_string())?;
+    if n == 0 {
+        return Err("找不到 Agent 配置。".into());
+    }
+    Ok(())
+}
+
+/// Set the executable path override for an agent member profile.
+pub fn set_member_executable(
+    connection: &Connection,
+    member_id: &str,
+    executable: Option<&str>,
+) -> AppResult<()> {
+    let n = connection
+        .execute(
+            "UPDATE agent_profiles SET executable_path=?1, updated_at=?2 WHERE member_id=?3",
+            params![
+                executable.map(str::trim).filter(|s| !s.is_empty()),
+                now(),
+                member_id
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    if n == 0 {
+        return Err("找不到 Agent 配置。".into());
+    }
+    Ok(())
+}
+
+/// All agent member profiles (id, group, adapter, display name, model, executable, key set, locked).
+/// Used by the agent-config import to provision existing members without creating new ones.
+pub fn list_agent_profiles(connection: &Connection) -> AppResult<Vec<crate::agent_config::AgentProfileRow>> {
+    let mut stmt = connection
+        .prepare(
+            "SELECT m.id, m.group_id, m.display_name, p.adapter, p.model, p.executable_path,
+                    (p.api_key IS NOT NULL AND p.api_key <> '') AS key_set,
+                    COALESCE(p.system_locked,0) AS locked
+             FROM members m
+             JOIN agent_profiles p ON p.member_id = m.id
+             WHERE m.kind='agent' AND m.is_active=1
+             ORDER BY m.group_id, m.created_at",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(crate::agent_config::AgentProfileRow {
+                member_id: row.get(0)?,
+                group_id: row.get(1)?,
+                display_name: row.get(2)?,
+                adapter: row.get(3)?,
+                model: row.get(4)?,
+                executable_path: row.get(5)?,
+                api_key_set: row.get::<_, i64>(6)? != 0,
+                system_locked: row.get::<_, i64>(7)? != 0,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(rows)
+}
+
+/// Generic app_settings string read (None when absent).
+pub fn get_setting_str(connection: &Connection, key: &str) -> AppResult<Option<String>> {
+    Ok(connection
+        .query_row(
+            "SELECT value FROM app_settings WHERE key=?1",
+            params![key],
+            |r| r.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?)
+}
+
+/// Generic app_settings upsert.
+pub fn set_setting_str(connection: &Connection, key: &str, value: &str) -> AppResult<()> {
+    connection
+        .execute(
+            "INSERT INTO app_settings(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            params![key, value],
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 pub fn set_group_announcement(
     connection: &Connection,
     group_id: &str,

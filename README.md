@@ -58,6 +58,7 @@ export CARGO_BUILD_JOBS=1 NODE_OPTIONS=--max-old-space-size=1024
 | [`docs/superpowers/specs/2026-08-16-widget-capability-placement.md`](docs/superpowers/specs/2026-08-16-widget-capability-placement.md) | **小组件形态判定与收敛路线（widget=页签/能力，不单独建群）** |
 | [`docs/release-runbook-2026-08-16-dsh-self-bootstrap.md`](docs/release-runbook-2026-08-16-dsh-self-bootstrap.md) | **发布 Runbook：本地验证 → GitHub → ECS 灰度 :8081 → 生产 :8080** |
 | [`docs/release-manifest-2026-08-16.md`](docs/release-manifest-2026-08-16.md) | **本次发布变更清单（逐文件核对 + 达成标准）** |
+| [`docs/superpowers/specs/2026-08-18-agent-config-one-click-import.md`](docs/superpowers/specs/2026-08-18-agent-config-one-click-import.md) | **Agent 配置一键导入 / 导出 / 自检 / CLI 自动安装（开箱即用）** |
 | [`docs/api-web.md`](docs/api-web.md) | Web API 薄索引 |
 | [`docs/testing-strategy.md`](docs/testing-strategy.md) | 测试金字塔与门禁 |
 | [`docs/release-checklist.md`](docs/release-checklist.md) | 发版检查（含前端壳） |
@@ -71,7 +72,7 @@ export CARGO_BUILD_JOBS=1 NODE_OPTIONS=--max-old-space-size=1024
 | **v1.3.0** | 版本页 + Ask / Wave 工作流（控制面；Wave 执行仍走管理员 kickoff） |
 | **v1.2.0** | 豆包语音 UX + Live 会话/聊天一致（生产基线 `0750306`） |
 | **v1.1.0** | 聊天默认响应者、成员排队可见、PanelLive 宿主、promote 审批 |
-| **1.3.0+**（未另打 tag） | 发版 drain、交接运行时注入（epitaph 摘要）、群设置入口、DSH headless P0 |
+| **1.3.0+**（未另打 tag） | 发版 drain、交接运行时注入（epitaph 摘要）、群设置入口、DSH headless P0、**Agent 配置一键导入（开箱即用）** |
 
 - 发版：灰度 `:8081` → docs → commit → **人批准** 才能 promote `:8080`；Agent 不得伪造令牌或绕过审批。
 - DSH：外挂运行时（锁版本、进程隔离），**不是**本仓编译期内核；群聊不是唯一事实源。
@@ -102,6 +103,17 @@ export CARGO_BUILD_JOBS=1 NODE_OPTIONS=--max-old-space-size=1024
 | `cursor` | `agent`（回退 `cursor-agent`） | Cursor CLI |
 | `dsh` | `dsh`（npm `@deepseek-ai/dsh`） | DeepSeek Harness headless：`dsh --profile headless "task"`；成员栏可「跳转 DSH Web」嵌入 `:3080` Web UI |
 | `chatbot-*` | HTTP（curl） | 聊天群轻量机器人，无工具 |
+
+## Agent 配置一键导入（v1.3.0+ 增量，release 开箱即用）
+
+服务器（已 vibecoding 配好 Agent）在顶部「Agent 配置」页 **导出配置包** → 本地 / 新安装
+顶部「Agent 配置」页 **一键导入**：自动写 `~/.codex`（auth.json + 最小 provider）、
+`~/.claude/settings.json`、`~/.cursor`（cli-config / mcp）、通用 `files`（备份后合并）→
+同步成员（agent_profiles）→ 持久化并随启动**幂等重放**；缺失 CLI 可一键**自动安装**
+（codex / claude / opencode / dsh 走 `npm -g`，cursor 走官方安装器；best-effort 不阻塞），并带**环境自检**。
+新增用户从此**无需重新 vibecoding**。仅管理员可见。详见
+[spec](docs/superpowers/specs/2026-08-18-agent-config-one-click-import.md) 与
+[epitaph](docs/epitaph/2026-08-18-agent-config-import.md)。
 
 ### 安装 Cursor CLI
 

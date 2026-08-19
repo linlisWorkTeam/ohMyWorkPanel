@@ -7,7 +7,7 @@ source "$(dirname "$0")/release-layout.sh"
 BUILD="${1:-auto}" # auto | skip
 
 echo "==> deploy-canary: slot=${CANARY_SLOT} port=${CANARY_PORT}"
-mkdir -p "${CANARY_SLOT}/bin" "${CANARY_SLOT}/dist" "${CANARY_SLOT}/meta" "${CANARY_DATA}"
+mkdir -p "${CANARY_SLOT}/bin" "${CANARY_SLOT}/dist" "${CANARY_SLOT}/meta" "${CANARY_SLOT}/scripts" "${CANARY_DATA}"
 
 # Quality gate before any build/install (also runs when BUILD=skip).
 # Break-glass: LINLIS_SKIP_TEST_GATE=1
@@ -39,6 +39,10 @@ fi
 chmod +x "${CANARY_SLOT}/bin/linlis-work-panel-server"
 rm -rf "${CANARY_SLOT}/dist"
 /bin/cp -a "${WORKSPACE_DIST}" "${CANARY_SLOT}/dist"
+# Self-contained slot: ship the Codex shim script next to the binary (开箱即用)。
+if [[ -f "${LINLIS_ROOT}/scripts/codex-deepseek-proxy.cjs" ]]; then
+  /bin/cp -f "${LINLIS_ROOT}/scripts/codex-deepseek-proxy.cjs" "${CANARY_SLOT}/scripts/codex-deepseek-proxy.cjs"
+fi
 
 STAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 SHA="$(sha256sum "${CANARY_SLOT}/bin/linlis-work-panel-server" | awk '{print $1}')"
