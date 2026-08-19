@@ -1098,3 +1098,81 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 @media (prefers-reduced-motion: reduce) {
   .auth-card, .theme-swatch, .send-button, .avatar.responding, .typing-dots i, .stream-caret { animation: none !important; transition: none !important; }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   P1 家具视觉升级（DSH 设计语言；全部消费 --lp-* 语义 token）
+   ══════════════════════════════════════════════════════════════ */
+.message-row { gap: 12px; }
+.message-content { min-width: 0; }
+.message-meta { height: auto; margin-bottom: 5px; gap: 8px; }
+.bubble {
+  border: 1px solid var(--lp-border-l1);
+  box-shadow: 0 1px 0 color-mix(in srgb, #fff 34%, transparent), 0 6px 18px color-mix(in srgb, #000 6%, transparent);
+}
+.own .bubble { border-color: color-mix(in srgb, var(--lp-accent) 28%, var(--lp-border-l1)); }
+.bubble.streaming { border-color: color-mix(in srgb, var(--lp-accent) 42%, var(--lp-border-l1)); }
+
+/* 悬停操作条（复制/停止/重试；移动端常显） */
+.m-actions { display: none; align-items: center; gap: 4px; margin-top: 5px; padding-left: 2px; }
+.message-row:hover .m-actions { display: flex; }
+.mini-btn {
+  border: 0; background: transparent; color: var(--lp-text-tertiary);
+  font-size: 11px; padding: 3px 9px; border-radius: 999px; cursor: pointer;
+}
+.mini-btn:hover { background: var(--lp-bg-hover); color: var(--lp-text-primary); }
+.mini-sep { width: 1px; height: 12px; background: var(--lp-border-l1); margin: 0 2px; }
+@media (hover: none) { .message-row .m-actions { display: flex; } }
+
+/* Agent 思考/产物卡片化 */
+.part-thinking, .part-artifact {
+  border: 1px solid var(--lp-border-l1);
+  border-radius: 10px;
+  background: var(--lp-bg-elevated);
+  padding: 8px 11px;
+  margin: 6px 0;
+  color: var(--lp-text-secondary);
+}
+.part-thinking > summary, .part-artifact > summary {
+  font-weight: 600; font-size: 12px; color: var(--lp-text-secondary);
+  cursor: pointer; user-select: none; list-style: none;
+}
+.part-thinking > summary::-webkit-details-marker, .part-artifact > summary::-webkit-details-marker { display: none; }
+.part-thinking > summary::before { content: "≡ "; color: var(--lp-accent); }
+.part-artifact > summary::before { content: "◈ "; color: var(--lp-accent); }
+.part-artifact { border-left: 3px solid var(--lp-accent); }
+.part-thinking pre, .part-artifact pre { margin: 6px 0 0; color: var(--lp-text-secondary); }
+.message-parts { gap: 8px; }
+
+/* 成员行 + 队列卡片 */
+.member-row { border: 1px solid transparent; border-radius: 10px; padding: 8px 9px; transition: border-color .15s ease, background .15s ease; }
+.member-row:hover { border-color: var(--lp-border-l1); }
+.member-row.is-responding { border-color: color-mix(in srgb, var(--lp-accent) 30%, transparent); background: var(--lp-bg-active); }
+.member-queue-toggle { text-decoration: underline dotted; }
+.member-queue-list { gap: 6px; margin: 6px 0 0; }
+.member-queue-list li {
+  border: 1px solid var(--lp-border-l1);
+  border-radius: 8px;
+  background: var(--lp-bg-elevated);
+  padding: 6px 8px;
+  font-size: 11px;
+  color: var(--lp-text-secondary);
+}
+.member-queue-list li button { border-radius: 999px; padding: 2px 8px; }
+.member-model-select {
+  border-color: var(--lp-border-l1);
+  background: var(--lp-bg-elevated);
+  color: var(--lp-text-primary);
+  border-radius: 7px;
+  font-size: 11px;
+  padding: 3px 6px;
+  outline-color: var(--lp-ring);
+}
+
+/* composer 升级 */
+.composer-wrap { border-radius: 16px 16px 0 0; padding: 14px 20px 12px; }
+.composer-wrap textarea { height: auto; min-height: 58px; }
+.composer-actions { padding-top: 6px; gap: 8px; }
+
+/* 状态/复审徽标统一胶囊 */
+.status, .review-badge { border-radius: 999px; padding: 2px 9px; font-size: 10px; }
+

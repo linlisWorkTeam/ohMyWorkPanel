@@ -176,6 +176,25 @@ export function App() {
   const frame = useAppFrame({ rightOpen: showMembers, onRightClose: closeMembers });
   currentGroupIdRef.current = current?.group.id;
 
+  // P1: composer 草稿按群持久化（localStorage；草稿/几何不进 DB）
+  const draftKeyFor = (groupId: string | undefined) => (groupId ? `lp.composer.${groupId}` : null);
+  useEffect(() => {
+    const key = draftKeyFor(current?.group.id);
+    if (!key) return;
+    let value = "";
+    try { value = localStorage.getItem(key) ?? ""; } catch { /* ignore */ }
+    setComposer(value);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.group.id]);
+  useEffect(() => {
+    const key = draftKeyFor(current?.group.id);
+    if (!key) return;
+    const timer = window.setTimeout(() => {
+      try { localStorage.setItem(key, composer); } catch { /* ignore */ }
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [composer, current?.group.id]);
+
   const scrollMessagesToBottom = (force = false) => {
     const node = messageListRef.current;
     if (!node) return;
@@ -1674,6 +1693,26 @@ const MessageBubble = memo(function MessageBubble({
   );
   const showPlay = Boolean(voiceUxEnabled && hasContent && !responding && onPlayVoice);
   const playing = playingMessageId === message.id;
+  const [copied, setCopied] = useState(false);
+  const copyMessage = async () => {
+    const text = message.content || "";
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+      } catch {
+        /* ignore */
+      }
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1400);
+  };
   return (
     <article className={`message-row ${own ? "own" : ""} ${responding ? "is-responding" : ""}`}>
       <Avatar member={sender} responding={responding && !own} />
@@ -1712,13 +1751,19 @@ const MessageBubble = memo(function MessageBubble({
             </button>
           )}
         </div>
+        <div className="m-actions">
+          <button type="button" className="mini-btn" onClick={() => void copyMessage()}>{copied ? "已复制 ✓" : "复制"}</button>
+          {run && (
+            <span className="mini-sep" />
+          )}
+          {(run?.status === "running" || run?.status === "queued") && (
+            <button type="button" className="mini-btn" onClick={() => onRun(run, "cancel")}>停止</button>
+          )}
+          {run && ["failed", "cancelled", "interrupted", "changes_requested"].includes(run.status) && (
+            <button type="button" className="mini-btn" onClick={() => onRun(run, "retry")}>重试</button>
+          )}
+        </div>
         {run?.errorMessage && <p className="run-error">{run.errorMessage}</p>}
-        {run && (
-          <div className="run-actions">
-            {(run.status === "running" || run.status === "queued") && <button onClick={() => onRun(run, "cancel")}>停止</button>}
-            {["failed", "cancelled", "interrupted", "changes_requested"].includes(run.status) && <button onClick={() => onRun(run, "retry")}>重试</button>}
-          </div>
-        )}
       </div>
     </article>
   );
