@@ -7,7 +7,7 @@ import { modelsForAdapter } from "../agentModels";
 import { agentBusyLabel, queueCounts, runsForAgentActive } from "../queueCounts";
 import { memberRosterAction } from "../memberForm";
 import { PHASE_LABEL, time, dayLabel, readError } from "./uiShared";
-import type { Group, GroupState, Member, MessageFeedback, TaskRun } from "../types";
+import type { Group, GroupState, Member, MessageFeedback, RunPhaseEntry, TaskRun } from "../types";
 
 /* ============================================================
    WorkPanel UI furniture: 从 App.tsx 抽取的消息/成员/状态组件（P1 组件化）
@@ -322,6 +322,43 @@ export function TypingIndicator({ label }: { label: string }) {
   );
 }
 
+export /** run 阶段轨迹（P2）：懒加载展开阶段时间线。 */
+function PhaseTrail({ runId }: { runId: string }) {
+  const [open, setOpen] = useState(false);
+  const [entries, setEntries] = useState<RunPhaseEntry[] | null>(null);
+  const toggle = async () => {
+    const next = !open;
+    setOpen(next);
+    if (next && entries === null) {
+      try {
+        setEntries(await api.getRunPhases(runId));
+      } catch {
+        setEntries([]);
+      }
+    }
+  };
+  return (
+    <div className="qc-trail">
+      <button type="button" className="mini-btn qc-trail-toggle" onClick={() => void toggle()}>
+        {open ? "▲ 收起轨迹" : "▼ 展开轨迹"}
+      </button>
+      {open && (
+        <ol className="phase-trail">
+          {(entries ?? []).map((entry, i) => (
+            <li key={i}>
+              <code>{entry.phase}</code>
+              {entry.note ? <span className="pt-note">{entry.note}</span> : null}
+              <time>{time(entry.createdAt)}</time>
+            </li>
+          ))}
+          {entries === null && <li className="phase-empty">加载中…</li>}
+          {entries !== null && entries.length === 0 && <li className="phase-empty">暂无阶段记录</li>}
+        </ol>
+      )}
+    </div>
+  );
+}
+
 export function RunQueuePane({ runs, members, onCancel, onReview }: {
   runs: TaskRun[];
   members: Member[];
@@ -352,6 +389,7 @@ export function RunQueuePane({ runs, members, onCancel, onReview }: {
             <span>{time(run.createdAt)}</span>
             <button type="button" className="mini-btn qc-cancel" onClick={() => onCancel(run)}>取消</button>
           </div>
+          <PhaseTrail runId={run.id} />
         </div>
       ))}
       {review.length > 0 && (

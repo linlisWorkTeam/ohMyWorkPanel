@@ -152,6 +152,12 @@ export interface MessageFeedback {
   myVote?: "up" | "down" | null;
 }
 
+export interface RunPhaseEntry {
+  phase: string;
+  note: string;
+  createdAt: number;
+}
+
 export interface GroupState {
   group: Group;
   members: Member[];

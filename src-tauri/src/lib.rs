@@ -87,6 +87,7 @@ pub fn run() {
             commands::set_run_review,
             commands::vote_message,
             commands::get_message_feedback,
+            commands::get_run_phases,
             commands::detect_agent,
             commands::ocr_image,
             commands::ocr_image_base64,

@@ -86,6 +86,11 @@ pub fn init_db(path: &Path) -> AppResult<()> {
           created_at INTEGER NOT NULL,
           PRIMARY KEY(message_id, member_id)
         );
+        CREATE TABLE IF NOT EXISTS run_phase_log (
+          id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES task_runs(id) ON DELETE CASCADE,
+          phase TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_run_phase_log_run ON run_phase_log(run_id, created_at);
         CREATE INDEX IF NOT EXISTS idx_messages_group_created ON messages(group_id, created_at);
         CREATE INDEX IF NOT EXISTS idx_runs_group_status ON task_runs(group_id, status, created_at);
  
@@ -1039,6 +1044,31 @@ pub fn update_group_workspace(
     get_group(connection, group_id)
 }
 
+pub fn append_run_phase(conn: &Connection, run_id: &str, phase: &str, note: &str) -> AppResult<()> {
+    conn.execute(
+        "INSERT INTO run_phase_log(id,run_id,phase,note,created_at) VALUES(?1,?2,?3,?4,?5)",
+        params![Uuid::new_v4().to_string(), run_id, phase, note, now()],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn list_run_phases(conn: &Connection, run_id: &str) -> AppResult<Vec<crate::models::RunPhaseEntry>> {
+    let mut stmt = conn
+        .prepare("SELECT phase,note,created_at FROM run_phase_log WHERE run_id=?1 ORDER BY created_at, id")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![run_id], |row| {
+            Ok(crate::models::RunPhaseEntry { phase: row.get(0)?, note: row.get(1)?, created_at: row.get(2)? })
+        })
+        .map_err(|e| e.to_string())?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(out)
+}
+
 pub fn set_run_phase(connection: &Connection, run_id: &str, phase: &str) -> AppResult<(i64, i64)> {
     let ts = now();
     let created: i64 = connection
@@ -1067,6 +1097,7 @@ pub fn set_run_phase(connection: &Connection, run_id: &str, phase: &str) -> AppR
     let total = ts - created;
     let payload = serde_json::json!({"phase": phase, "elapsedMs": elapsed, "totalMs": total});
     insert_run_event(connection, run_id, "phase", &payload.to_string())?;
+    append_run_phase(connection, run_id, phase, "")?;
     Ok((elapsed, total))
 }
 
@@ -2110,6 +2141,38 @@ mod tests {
         let (up4, down4, mine4) = vote_message(&conn, "m", "u", None).unwrap();
         assert_eq!((up4, down4), (0, 0));
         assert_eq!(mine4, None);
+    }
+
+    #[test]
+    fn run_phase_log_records_transitions_in_order() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        init_db(file.path()).unwrap();
+        let conn = open_db(file.path()).unwrap();
+        conn.execute(
+            "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at) VALUES('g','g','.', 'u',NULL,1)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,tags) VALUES('u','g','user','u','#000','',1,1,'')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,tags) VALUES('a','g','agent','a','#000','',1,1,'')",
+            [],
+        ).unwrap();
+        conn.execute("INSERT INTO messages VALUES('m','g','u',NULL,'x','completed',1)", []).unwrap();
+        conn.execute(
+            "INSERT INTO task_runs(id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,created_at) VALUES('r','g','m','a',NULL,0,'running',1)",
+            [],
+        ).unwrap();
+
+        set_run_phase(&conn, "r", "starting").unwrap();
+        set_run_phase(&conn, "r", "streaming").unwrap();
+        let phases = list_run_phases(&conn, "r").unwrap();
+        assert_eq!(phases.len(), 2);
+        assert_eq!(phases[0].phase, "starting");
+        assert_eq!(phases[1].phase, "streaming");
+        assert!(phases[0].created_at <= phases[1].created_at);
     }
 
     #[test]

@@ -67,6 +67,7 @@ export const api = {
     invoke<import("./types").MessageFeedback>("vote_message", { messageId, memberId, vote }),
   getMessageFeedback: (messageId: string, memberId: string) =>
     invoke<import("./types").MessageFeedback>("get_message_feedback", { messageId, memberId }),
+  getRunPhases: (runId: string) => invoke<import("./types").RunPhaseEntry[]>("get_run_phases", { runId }),
   detectAgent: (memberId: string) => invoke<string>("detect_agent", { memberId }),
   getSettings: () => invoke<RuntimeSettings>("get_runtime_settings"),
   getAgentModels: async () => ({

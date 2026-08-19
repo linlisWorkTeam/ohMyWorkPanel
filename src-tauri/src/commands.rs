@@ -1059,3 +1059,14 @@ pub async fn get_message_feedback(
     let res = crate::db::get_message_feedback(&conn, &message_id, &member_id)?;
     Ok(build_feedback(res))
 }
+
+/// 读取 run 的阶段轨迹（时间线，P2 run 轨迹视图）。
+#[tauri::command]
+pub async fn get_run_phases(
+    run_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<crate::models::RunPhaseEntry>> {
+    let state = state.inner().clone();
+    let conn = open_db(&state.db_path)?;
+    crate::db::list_run_phases(&conn, &run_id)
+}

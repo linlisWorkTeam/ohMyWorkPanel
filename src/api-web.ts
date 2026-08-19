@@ -255,6 +255,9 @@ export const api = {
   getMessageFeedback: (messageId: string, memberId: string) =>
     apiFetch<import("./types").MessageFeedback>(`/api/messages/${messageId}/feedback?member_id=${encodeURIComponent(memberId)}`),
 
+  getRunPhases: (runId: string) =>
+    apiFetch<import("./types").RunPhaseEntry[]>(`/api/runs/${runId}/phases`),
+
   getSettings: () => apiFetch<RuntimeSettings>("/api/settings"),
   getAgentModels: () =>
     apiFetch<{

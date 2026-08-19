@@ -1326,6 +1326,37 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .qc-approve:hover { filter: brightness(1.1); }
 .qc-reject:hover { filter: brightness(1.1); }
 
+/* run 阶段轨迹（P2） */
+.qc-trail { margin-top: 6px; }
+.qc-trail-toggle { padding: 2px 8px; }
+.phase-trail {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.phase-trail li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--lp-text-secondary);
+  border-left: 2px solid var(--lp-accent);
+  padding-left: 8px;
+}
+.phase-trail li code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  background: var(--lp-bg-hover);
+  color: var(--lp-accent);
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 10.5px;
+}
+.phase-trail li time { margin-left: auto; color: var(--lp-text-tertiary); font-variant-numeric: tabular-nums; }
+.phase-trail .pt-note { color: var(--lp-text-tertiary); }
+.phase-empty { color: var(--lp-text-tertiary); border-left: 2px solid transparent; }
+
 
 /* composer 工具行 + goal bar 交互 */
 .composer-tools { display: flex; align-items: center; gap: 10px; padding: 0 2px 7px; }

@@ -1241,6 +1241,17 @@ async fn get_message_channel_part_web(
      Ok(Json(to_feedback(res)))
  }
 
+ async fn get_run_phases_web(
+     State(state): State<Arc<AppState>>,
+     ClaimsExtractor(_claims): ClaimsExtractor,
+     Path(run_id): Path<String>,
+ ) -> Result<Json<Vec<crate::models::RunPhaseEntry>>, (StatusCode, String)> {
+     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     crate::db::list_run_phases(&conn, &run_id)
+         .map(Json)
+         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+ }
+
  // === Settings ===
 
  async fn get_agent_models_web(
@@ -2602,6 +2613,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
          .route("/api/runs/{run_id}/cancel", post(cancel_run_web))
          .route("/api/runs/{run_id}/retry", post(retry_run_web))
          .route("/api/runs/{run_id}/review", post(set_run_review_web))
+         .route("/api/runs/{run_id}/phases", get(get_run_phases_web))
          // Settings / metrics
          .route("/api/settings", get(get_settings_web))
          .route("/api/settings", put(update_settings_web))

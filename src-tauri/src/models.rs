@@ -461,3 +461,12 @@ pub struct RoadmapOrchestration {
      #[serde(skip_serializing_if = "Option::is_none")]
      pub my_vote: Option<String>,
  }
+
+ /// run 阶段轨迹条目（时间线）。
+ #[derive(Debug, Clone, Serialize)]
+ #[serde(rename_all = "camelCase")]
+ pub struct RunPhaseEntry {
+     pub phase: String,
+     pub note: String,
+     pub created_at: i64,
+ }
