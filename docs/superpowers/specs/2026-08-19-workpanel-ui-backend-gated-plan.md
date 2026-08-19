@@ -1,8 +1,15 @@
 ---
 date: 2026-08-19
 topic: workpanel-ui-backend-gated-plan
-status: draft-for-review
+status: implemented-2026-08-20
 ---
+
+> **实施状态（2026-08-20）**：四个方案全部落地并灰度验证——
+> 1. ✅ run 审批内联（`set_run_review` + `/api/runs/{id}/review`，cargo 单测）
+> 2. ✅ 消息反馈 👍/👎（`message_feedback` 表 + `/api/messages/{id}/vote`，单测）
+> 3. ✅ run 轨迹（`run_phase_log` 表 + `/api/runs/{id}/phases`，单测）
+> 4. ✅ 斜杠命令→决策卡（`/board /approve /wave`，`workflow::try_slash_command` + 单测；项目群 + 用户成员，纯 conn 不产生 run；composer `/` 提示）
+> 均为增量命令/表，未破坏既有 schema/签名；cargo test 122 passed、vitest 72 passed、双构建通过。
 
 # 设计：剩余 P2 的后端最小扩展方案（run 审批 / 决策卡 / 消息反馈 / run 轨迹）
 

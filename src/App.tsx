@@ -145,6 +145,7 @@ export function App() {
   const [sending, setSending] = useState(false);
   const [detecting, setDetecting] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
+  const [slashOpen, setSlashOpen] = useState(false);
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const stickToBottom = useRef(true);
   const forceScrollGroupId = useRef<string | null>(null);
@@ -947,10 +948,11 @@ export function App() {
     }
     if (shouldSendOnKey(sendKeyMode, event.key, event.shiftKey, event.ctrlKey, event.metaKey)) {
       event.preventDefault();
+      setSlashOpen(false);
       void send();
     }
   };
-  const selectMention = (member: Member) => setComposer((value) => value.replace(/@([^\s@]*)$/u, `@${member.displayName} `));
+  const selectMention = (member: Member) => { setComposer((value) => value.replace(/@([^\s@]*)$/u, `@${member.displayName} `)); setSlashOpen(false); };
   const insertAt = () => {
     composerRef.current?.focus();
     setComposer((value) => value + "@");
@@ -958,6 +960,17 @@ export function App() {
       const ta = composerRef.current;
       if (ta) ta.setSelectionRange(ta.value.length, ta.value.length);
     });
+  };
+  // 斜杠命令：仅列后端真实支持的（/board /approve /wave）；发送后在群内回显结果。
+  const SLASH_COMMANDS = [
+    { cmd: "/board", hint: "查看版本 / Wave 进度" },
+    { cmd: "/approve", hint: "批准当前 Ask 版本（生成默认 Wave）" },
+    { cmd: "/wave", hint: "重设当前版本 Wave：/wave <标题>" },
+  ];
+  const selectSlash = (cmd: string) => {
+    setComposer(cmd + (cmd === "/wave" ? " " : ""));
+    setSlashOpen(false);
+    composerRef.current?.focus();
   };
 
   const toggleExtension = async (extId: string, enabled: boolean) => {
@@ -1350,6 +1363,16 @@ export function App() {
         )}
         </div>
         <footer className="composer-wrap">
+          {slashOpen && (
+            <div className="mention-menu slash-menu">
+              {SLASH_COMMANDS.map((c) => (
+                <button key={c.cmd} type="button" onClick={() => selectSlash(c.cmd)}>
+                  <code>{c.cmd}</code>
+                  <small>{c.hint}</small>
+                </button>
+              ))}
+            </div>
+          )}
           {mentionSuggestions.length > 0 && (
             <div className="mention-menu">
               {mentionSuggestions.map((member, index) => (
@@ -1366,7 +1389,7 @@ export function App() {
               <kbd>@</kbd> 提及成员 · <kbd>Enter</kbd> 发送 · 草稿自动保存（本机）
             </span>
           </div>
-          <textarea ref={composerRef} value={composer} onChange={(event) => setComposer(event.target.value)} onKeyDown={composerKeyDown} onPaste={handlePaste} placeholder={`发送消息，输入 @ 选择成员。${sendKeyHint(sendKeyMode)}`} />
+          <textarea ref={composerRef} value={composer} onChange={(event) => { const value = event.target.value; setComposer(value); setSlashOpen(value.startsWith("/") && !value.includes(" ")); }} onKeyDown={composerKeyDown} onPaste={handlePaste} placeholder={`发送消息，输入 @ 选择成员。${sendKeyHint(sendKeyMode)}`} />
           <div className="composer-actions">
             <span>{sending ? "发送中…" : (isChatGroup ? "聊天模式" : "Agent 在服务器工作目录中运行")}</span>
             <span className="composer-actions-right">

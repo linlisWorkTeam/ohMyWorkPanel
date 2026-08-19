@@ -507,12 +507,42 @@ pub async fn send_message(
             params![message.id, mentioned, group_id],
         );
     }
-    let target_agents = resolve_target_agent_ids(
-        &conn,
-        &group_id,
-        group.admin_member_id.as_deref(),
-        &mention_member_ids,
-    )?;
+    let mut slash_reply: Option<(String, crate::models::Message)> = None;
+    let group_kind: String = conn
+        .query_row("SELECT group_kind FROM groups WHERE id=?1", params![&group_id], |r| r.get(0))
+        .map_err(|e| e.to_string())?;
+    let sender_kind: String = conn
+        .query_row("SELECT kind FROM members WHERE id=?1 AND group_id=?2", params![&sender_member_id, &group_id], |r| r.get(0))
+        .map_err(|e| e.to_string())?;
+    if let Some(reply_text) = crate::workflow::try_slash_command(&conn, &group_id, &group_kind, &sender_kind, &message.content)? {
+        let reply = crate::models::Message {
+            id: id(),
+            group_id: group_id.clone(),
+            sender_member_id: group.admin_member_id.clone().unwrap_or_else(|| sender_member_id.clone()),
+            parent_run_id: None,
+            content: reply_text,
+            status: "completed".into(),
+            created_at: now(),
+            has_thinking: false,
+            has_artifact: false,
+        };
+        conn.execute(
+            "INSERT INTO messages(id,group_id,sender_member_id,parent_run_id,content,status,created_at) VALUES(?1,?2,?3,NULL,?4,'completed',?5)",
+            params![reply.id, reply.group_id, reply.sender_member_id, reply.content, reply.created_at],
+        )
+        .map_err(|e| e.to_string())?;
+        slash_reply = Some((reply.id.clone(), reply));
+    }
+    let target_agents = if slash_reply.is_none() {
+        resolve_target_agent_ids(
+            &conn,
+            &group_id,
+            group.admin_member_id.as_deref(),
+            &mention_member_ids,
+        )?
+    } else {
+        Vec::new()
+    };
     let mut run_ids = Vec::new();
     for agent_id in target_agents {
         run_ids.push(create_task_run(
@@ -543,6 +573,25 @@ pub async fn send_message(
             rss_mib: None,
         },
     );
+    if let Some((reply_id, _)) = slash_reply {
+        let _ = app.emit("chat-event", ChatEvent {
+            kind: "message_created".into(),
+            group_id: group_id.clone(),
+            run_id: None,
+            message_id: Some(reply_id),
+            delta: None,
+            status: Some("completed".into()),
+            error: None,
+            channel: None,
+            replace: None,
+            phase: None,
+            elapsed_ms: None,
+            total_ms: None,
+            seq: None,
+            delta_count: None,
+            rss_mib: None,
+        });
+    }
     schedule_group(to_scheduler(&state, &app), group_id.clone());
     Ok(SendResult { message, run_ids })
 }

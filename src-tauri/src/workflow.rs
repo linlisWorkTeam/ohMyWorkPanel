@@ -742,11 +742,139 @@ pub fn build_wave_kickoff_prompt(v: &ProjectVersion, w: &Wave) -> String {
     )
 }
 
+/// 处理 / 斜杠命令（项目群 + 用户成员；纯 conn，不产生 run）。
+/// 返回 Some(回显文本) 表示已处理；None 表示普通消息（含未知命令，避免误伤）。
+pub fn try_slash_command(
+    conn: &Connection,
+    group_id: &str,
+    group_kind: &str,
+    member_kind: &str,
+    content: &str,
+) -> AppResult<Option<String>> {
+    if group_kind != "project" || member_kind != "user" {
+        return Ok(None);
+    }
+    let trimmed = content.trim();
+    let Some(rest) = trimmed.strip_prefix('/') else {
+        return Ok(None);
+    };
+    if rest.is_empty() {
+        return Ok(None);
+    }
+    let (cmd, arg) = match rest.split_once(char::is_whitespace) {
+        Some((c, a)) => (c.trim(), a.trim()),
+        None => (rest, ""),
+    };
+    match cmd {
+        "board" => {
+            let mut versions = list_versions(conn, group_id)?;
+            versions.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+            let Some(v) = versions.first() else {
+                return Ok(Some("当前没有已建立的版本。".into()));
+            };
+            let waves = list_waves(conn, &v.id)?;
+            let done = waves
+                .iter()
+                .filter(|w| w.status == "done" || w.status == "skipped")
+                .count();
+            let mut text = format!("版本 {}（{}）", v.name, v.status);
+            if let Some(w) = waves.iter().find(|w| w.status == "running" || w.status == "paused") {
+                text.push_str(&format!(
+                    "\n→ Wave {}{}：{}",
+                    w.idx,
+                    if w.status == "running" { " · 进行中" } else { " · 已暂停" },
+                    w.title
+                ));
+            } else if !waves.is_empty() {
+                text.push_str(&format!("\n→ 无进行中 Wave（完成 {}/{}）", done, waves.len()));
+            }
+            Ok(Some(text))
+        }
+        "approve" => {
+            let versions = list_versions(conn, group_id)?;
+            let Some(v) = versions.iter().find(|v| v.status == "asking") else {
+                return Ok(Some("没有处于 Ask 待批准的版本。".into()));
+            };
+            let input = ApproveWavesInput { waves: default_waves_from_roadmap(v) };
+            let (version, waves) = approve_waves(conn, &v.id, &input)?;
+            let titles: Vec<&str> = waves.iter().map(|w| w.title.as_str()).collect();
+            Ok(Some(format!("已批准版本 {}，生成 {} 个 Wave：{}", version.name, waves.len(), titles.join(" / "))))
+        }
+        "wave" => {
+            if arg.is_empty() {
+                return Ok(Some("用法：/wave <Wave 标题>".into()));
+            }
+            let mut versions = list_versions(conn, group_id)?;
+            versions.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+            let Some(v) = versions.first() else {
+                return Ok(Some("还没有版本，无法创建 Wave。".into()));
+            };
+            let input = ApproveWavesInput { waves: vec![ApproveWaveItem { title: arg.to_string() }] };
+            let (version, waves) = approve_waves(conn, &v.id, &input)?;
+            let titles: Vec<&str> = waves.iter().map(|w| w.title.as_str()).collect();
+            Ok(Some(format!("版本 {} 的 Wave 已更新为 {} 个：{}", version.name, waves.len(), titles.join(" / "))))
+        }
+        _ => Ok(None),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::db::init_db;
     use tempfile::NamedTempFile;
+
+    #[test]
+    fn slash_command_board_wave_approve() {
+        let file = NamedTempFile::new().unwrap();
+        init_db(file.path()).unwrap();
+        let conn = open_db(file.path()).unwrap();
+        ensure_workflow_tables(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at,group_kind) VALUES('g','g','.','o','admin',1,'project')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,tags) VALUES('o','g','user','o','#000','',1,1,'')",
+            [],
+        )
+        .unwrap();
+        let group = crate::db::get_group(&conn, "g").unwrap();
+        let v = create_version(
+            &conn,
+            &group,
+            &CreateVersionInput {
+                group_id: "g".into(),
+                name: Some("v0.1.0".into()),
+                what: Some("做版本页".into()),
+                who: Some("团队".into()),
+                how: Some("分两波".into()),
+                one_liner: Some("版本页 MVP".into()),
+                requester_member_id: Some("o".into()),
+                mode: Some("create".into()),
+            },
+        )
+        .unwrap();
+
+        // 群类型 / 成员类型 / 未知命令 → None（不劫持普通消息）
+        assert!(try_slash_command(&conn, "g", "chat", "user", "/board").unwrap().is_none());
+        assert!(try_slash_command(&conn, "g", "project", "agent", "/board").unwrap().is_none());
+        assert!(try_slash_command(&conn, "g", "project", "user", "/frobnicate").unwrap().is_none());
+
+        // /board → 摘要
+        let b = try_slash_command(&conn, "g", "project", "user", "/board").unwrap().unwrap();
+        assert!(b.contains("v0.1.0"));
+
+        // /wave <title> → 生成 1 个 Wave 并置 ready
+        let w = try_slash_command(&conn, "g", "project", "user", "/wave 第一波").unwrap().unwrap();
+        assert!(w.contains("第一波"));
+        assert_eq!(list_waves(&conn, &v.id).unwrap().len(), 1);
+
+        // /approve 无 asking → 提示
+        let a = try_slash_command(&conn, "g", "project", "user", "/approve").unwrap().unwrap();
+        assert!(a.contains("没有处于 Ask"));
+    }
 
     #[test]
     fn create_and_approve_waves() {

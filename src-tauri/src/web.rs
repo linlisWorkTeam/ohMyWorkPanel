@@ -481,16 +481,52 @@ async fn send_message_web(
          );
      }
 
+     // 斜杠命令（项目群 + 用户成员）：/board /approve /wave <标题> → 回显结果，不派发 Agent
+     let mut slash_reply: Option<(String, String)> = None; // (reply_id, 文本)
+     let group_kind: String = conn
+         .query_row("SELECT group_kind FROM groups WHERE id=?1", params![&input.group_id], |r| r.get(0))
+         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+     let sender_kind: String = conn
+         .query_row("SELECT kind FROM members WHERE id=?1 AND group_id=?2", params![&msg.sender_member_id, &input.group_id], |r| r.get(0))
+         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+     let reply_text =
+         crate::workflow::try_slash_command(&conn, &input.group_id, &group_kind, &sender_kind, &msg.content)
+             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     if let Some(text) = reply_text {
+         let reply = Message {
+             id: id(),
+             group_id: input.group_id.clone(),
+             sender_member_id: group.admin_member_id.clone().unwrap_or_else(|| msg.sender_member_id.clone()),
+             parent_run_id: None,
+             content: text,
+             status: "completed".into(),
+             created_at: now(),
+             has_thinking: false,
+             has_artifact: false,
+         };
+         conn.execute(
+             "INSERT INTO messages(id,group_id,sender_member_id,parent_run_id,content,status,created_at) VALUES(?1,?2,?3,NULL,?4,'completed',?5)",
+             params![reply.id, reply.group_id, reply.sender_member_id, reply.content, reply.created_at],
+         )
+         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+         slash_reply = Some((reply.id.clone(), reply.sender_member_id.clone()));
+         logger::info(&conn, "slash", &format!("slash command handled: {}", msg.content), None);
+     }
+
      // Find target agents: only @agent/@chatbot run.
      // If the message @mentioned someone but no agent was tagged (e.g. only @user),
      // do NOT fall back to the group admin agent.
-     let target_agents = resolve_target_agent_ids(
-         &conn,
-         &input.group_id,
-         group.admin_member_id.as_deref(),
-         &input.mention_member_ids,
-     )
-     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     let target_agents: Vec<String> = if slash_reply.is_none() {
+         resolve_target_agent_ids(
+             &conn,
+             &input.group_id,
+             group.admin_member_id.as_deref(),
+             &input.mention_member_ids,
+         )
+         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
+     } else {
+         Vec::new()
+     };
 
      // Create task runs for target agents (Ask-gate: ignore idle chatter toward admin)
      let drain_active = crate::release_drain::is_enabled(&conn).unwrap_or(false);
@@ -528,6 +564,18 @@ async fn send_message_web(
          Some("completed"),
          None,
      );
+
+     if let Some((reply_id, _sender)) = slash_reply {
+         web_emit(
+             &state.tx,
+             &input.group_id,
+             "message_created",
+             Some(&reply_id),
+             None,
+             Some("completed"),
+             None,
+         );
+     }
 
      if !run_ids.is_empty() {
          scheduler::schedule_group(state.sched.clone(), input.group_id.clone());

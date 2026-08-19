@@ -969,6 +969,14 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 }
 .day-divider::before, .day-divider::after { content: ""; flex: 1; height: 1px; background: var(--border-soft); }
 .mention-menu button.mention-active { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.slash-menu code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--lp-accent);
+  background: var(--lp-bg-hover);
+  border-radius: 5px;
+  padding: 1px 6px;
+  font-size: 11px;
+}
 .empty-chat-sub { color: var(--text-faint); font-size: 11px; }
 
 /* ── Preset roles picker (create group) ── */
