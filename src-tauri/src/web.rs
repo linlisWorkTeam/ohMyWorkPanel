@@ -1159,6 +1159,43 @@ async fn get_message_channel_part_web(
      Ok(Json(new_id))
  }
 
+ #[derive(serde::Deserialize)]
+ struct SetRunReviewBody {
+     decision: String,
+ }
+
+ async fn set_run_review_web(
+     State(state): State<Arc<AppState>>,
+     ClaimsExtractor(_claims): ClaimsExtractor,
+     Path(run_id): Path<String>,
+     Json(body): Json<SetRunReviewBody>,
+ ) -> Result<Json<(String, String)>, (StatusCode, String)> {
+     let review = match body.decision.as_str() {
+         "approved" | "rejected" => body.decision,
+         _ => return Err((StatusCode::BAD_REQUEST, "decision 仅支持 approved / rejected".into())),
+     };
+     let status = if review == "approved" { "completed" } else { "changes_requested" };
+     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     let (group_id, current_status): (String, String) = conn
+         .query_row(
+             "SELECT group_id,status FROM task_runs WHERE id=?1",
+             params![run_id],
+             |row| Ok((row.get(0)?, row.get(1)?)),
+         )
+         .map_err(|e| (StatusCode::NOT_FOUND, format!("run not found: {e}")))?;
+     if current_status != "awaiting_review" {
+         return Err((StatusCode::CONFLICT, format!("run {} 不在待审批状态", run_id)));
+     }
+     if !crate::db::set_run_review(&conn, &run_id, &review, status)
+         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
+     {
+         return Err((StatusCode::CONFLICT, "该任务不在待审批状态（可能已被处理）".into()));
+     }
+     web_emit(&state.tx, &group_id, "run_status", None, Some(&run_id), Some(status), None);
+     logger::info(&conn, "run", &format!("run {} human review: {}", run_id, review), None);
+     Ok(Json((review.to_string(), status.to_string())))
+ }
+
  // === Settings ===
 
  async fn get_agent_models_web(
@@ -2517,6 +2554,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
          .route("/api/groups/{group_id}/runs/active", get(list_active_runs_web))
          .route("/api/runs/{run_id}/cancel", post(cancel_run_web))
          .route("/api/runs/{run_id}/retry", post(retry_run_web))
+         .route("/api/runs/{run_id}/review", post(set_run_review_web))
          // Settings / metrics
          .route("/api/settings", get(get_settings_web))
          .route("/api/settings", put(update_settings_web))

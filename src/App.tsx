@@ -1070,6 +1070,9 @@ export function App() {
   const changeRun = async (run: TaskRun, operation: "cancel" | "retry") => {
     try { if (operation === "cancel") await api.cancelRun(run.id); else await api.retryRun(run.id); await refresh(); } catch (reason) { setError(readError(reason)); }
   };
+  const changeRunReview = async (run: TaskRun, decision: "approved" | "rejected") => {
+    try { await api.setRunReview(run.id, decision); await refresh(); } catch (reason) { setError(readError(reason)); }
+  };
   const saveSettings = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); if (!settings) return;
     try { setSettings(await api.updateSettings(settings)); setShowSettings(false); } catch (reason) { setError(readError(reason)); }
@@ -1553,7 +1556,7 @@ export function App() {
           <div><button type="button" className="quiet-button" onClick={() => setShowAddMember(false)}>取消</button><button type="submit">添加</button></div>
         </form> : isAdmin ? <button className="add-member-button" onClick={() => { setNewMember(emptyMember); setShowAddMember(true); }}>＋ 添加成员</button> : null}
       </> : rightPanelTab === "experiences" ? <ExperiencePanel groupId={current.group.id} members={members} ownerId={current.group.ownerMemberId} onError={(msg) => setError(msg)} />
-      : rightPanelTab === "queue" ? <RunQueuePane runs={current.runs} members={members} onCancel={(run) => void changeRun(run, "cancel")} />
+      : rightPanelTab === "queue" ? <RunQueuePane runs={current.runs} members={members} onCancel={(run) => void changeRun(run, "cancel")} onReview={(run, decision) => void changeRunReview(run, decision)} />
       : <LogsPanel onError={(msg) => setError(msg)} />}
     </aside>}
 

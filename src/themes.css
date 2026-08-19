@@ -1311,6 +1311,19 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   border: 1px solid var(--lp-border-l1);
   border-radius: 999px;
 }
+.qc-actions { display: flex; gap: 6px; margin-top: 8px; }
+.qc-actions .mini-btn {
+  flex: 1;
+  justify-content: center;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 6px 0;
+}
+.qc-approve { background: color-mix(in srgb, var(--lp-success) 16%, transparent) !important; color: var(--lp-success) !important; }
+.qc-reject { background: color-mix(in srgb, var(--lp-error) 14%, transparent) !important; color: var(--lp-error) !important; }
+.qc-approve:hover { filter: brightness(1.1); }
+.qc-reject:hover { filter: brightness(1.1); }
+
 
 /* composer 工具行 + goal bar 交互 */
 .composer-tools { display: flex; align-items: center; gap: 10px; padding: 0 2px 7px; }

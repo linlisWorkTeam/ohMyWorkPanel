@@ -244,6 +244,9 @@ export const api = {
   retryRun: (runId: string) =>
     apiFetch<string>(`/api/runs/${runId}/retry`, { method: "POST" }),
 
+  setRunReview: (runId: string, decision: "approved" | "rejected") =>
+    apiFetch<void>(`/api/runs/${runId}/review`, { method: "POST", body: JSON.stringify({ decision }) }),
+
   getSettings: () => apiFetch<RuntimeSettings>("/api/settings"),
   getAgentModels: () =>
     apiFetch<{

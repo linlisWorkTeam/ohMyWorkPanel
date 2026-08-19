@@ -294,10 +294,11 @@ export function TypingIndicator({ label }: { label: string }) {
   );
 }
 
-export function RunQueuePane({ runs, members, onCancel }: {
+export function RunQueuePane({ runs, members, onCancel, onReview }: {
   runs: TaskRun[];
   members: Member[];
   onCancel: (run: TaskRun) => void;
+  onReview: (run: TaskRun, decision: "approved" | "rejected") => void;
 }) {
   const active = runs
     .filter((r) => r.status === "running" || r.status === "queued")
@@ -327,7 +328,7 @@ export function RunQueuePane({ runs, members, onCancel }: {
       ))}
       {review.length > 0 && (
         <>
-          <div className="sec-title"><span>待审批（治理层接入后操作）</span><span>{review.length}</span></div>
+          <div className="sec-title"><span>待审批</span><span>{review.length}</span></div>
           {review.map((run) => (
             <div key={run.id} className="queue-card review">
               <div className="qc-top">
@@ -335,6 +336,12 @@ export function RunQueuePane({ runs, members, onCancel }: {
                 <span className="st review">待审批</span>
               </div>
               <div className="qc-sub">交由 {run.reviewerMemberId ? nameOf(run.reviewerMemberId) : "审批人"} · 批准后由调度自动继续</div>
+              {run.reviewStatus === "pending" && (
+                <div className="qc-actions">
+                  <button type="button" className="mini-btn qc-approve" onClick={() => onReview(run, "approved")}>✓ 批准</button>
+                  <button type="button" className="mini-btn qc-reject" onClick={() => onReview(run, "rejected")}>✕ 拒绝（返回待修改）</button>
+                </div>
+              )}
             </div>
           ))}
         </>

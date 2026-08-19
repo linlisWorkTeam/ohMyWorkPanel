@@ -976,3 +976,55 @@ pub fn update_member_model_cmd(
     )
     .map_err(|e| e.to_string())
 }
+
+/// 人类对「待审批」任务的裁决（P2：审批内联）。
+/// decision: approved → review_status=approved/status=completed；rejected → rejected/changes_requested。
+#[tauri::command]
+pub async fn set_run_review(
+    run_id: String,
+    decision: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<()> {
+    let review = match decision.as_str() {
+        "approved" | "rejected" => decision.as_str(),
+        _ => return Err("decision 仅支持 approved / rejected".to_string()),
+    };
+    let status = if review == "approved" { "completed" } else { "changes_requested" };
+    let state = state.inner().clone();
+    let conn = open_db(&state.db_path)?;
+    let run: TaskRun = conn
+        .query_row(
+            "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at,phase,phase_updated_at FROM task_runs WHERE id=?1",
+            params![run_id],
+            run_from_row,
+        )
+        .optional()
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "找不到任务。".to_string())?;
+    if run.status != "awaiting_review" {
+        return Err(format!("任务 {} 当前状态 {}，不在待审批状态", run_id, run.status));
+    }
+    if !crate::db::set_run_review(&conn, &run_id, review, status)? {
+        return Err("该任务不在待审批状态（可能已被处理）".to_string());
+    }
+    insert_run_event(&conn, &run_id, &format!("review_{}", review), &format!(r#"{{"reviewer":"human","decision":"{}"}}"#, review))?;
+    let _ = app.emit("chat-event", ChatEvent {
+        kind: "run_status".into(),
+        group_id: run.group_id,
+        run_id: Some(run_id),
+        message_id: run.output_message_id,
+        delta: None,
+        status: Some(status.into()),
+        error: None,
+        channel: None,
+        replace: None,
+        phase: None,
+        elapsed_ms: None,
+        total_ms: None,
+        seq: None,
+        delta_count: None,
+        rss_mib: None,
+    });
+    Ok(())
+}

@@ -2013,9 +2013,69 @@ pub fn delete_experience(conn: &Connection, id: &str) -> AppResult<bool> {
 }
 
 
+/// 裁决处于 pending 审查的任务（人类批准/拒绝与调度器内部 Agent 裁决共用同一状态机）。
+/// 返回是否真正发生了变更（只有 pending → approved/rejected 才算）。
+pub fn set_run_review(conn: &Connection, run_id: &str, review: &str, status: &str) -> AppResult<bool> {
+    let changed = conn.execute(
+        "UPDATE task_runs SET review_status=?1, status=?2 WHERE id=?3 AND review_status='pending'",
+        params![review, status, run_id],
+    ).map_err(|e| e.to_string())?;
+    Ok(changed > 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn set_run_review_only_resolves_pending() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        init_db(file.path()).unwrap();
+        let conn = open_db(file.path()).unwrap();
+        conn.execute(
+            "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at) VALUES('g','g','.', 'u',NULL,1)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,tags) VALUES('u','g','user','u','#000','',1,1,'')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,tags) VALUES('a','g','agent','a','#000','',1,1,'')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at,cli_session_id) VALUES('a','mock',NULL,'unknown',1,NULL)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO messages VALUES('m','g','u',NULL,'x','completed',1)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO task_runs(id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at) VALUES('r','g','m','a',NULL,0,'awaiting_review',NULL,NULL,'pending',NULL,1,NULL,NULL)",
+            [],
+        )
+        .unwrap();
+
+        // 批准 pending → 持久化
+        assert!(set_run_review(&conn, "r", "approved", "completed").unwrap());
+        let (review, status): (String, String) = conn
+            .query_row("SELECT review_status,status FROM task_runs WHERE id='r'", [], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .unwrap();
+        assert_eq!(review, "approved");
+        assert_eq!(status, "completed");
+
+        // 已裁决 → 二次调用为空操作
+        assert!(!set_run_review(&conn, "r", "rejected", "changes_requested").unwrap());
+    }
 
     #[test]
     fn database_requeues_incomplete_runs_after_restart() {
