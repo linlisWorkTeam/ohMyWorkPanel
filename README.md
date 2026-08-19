@@ -2,7 +2,8 @@
 
 本地优先的多 Agent 协作面板：工作群绑定服务器工作区、`@` 触发本机 CLI Agent；也支持**聊天群** + 轻量 **chatbot**（默认响应者、原生窗口上下文与滚动摘要）。桌面（Tauri）与 Web 双模；本机灰度/生产以 Web + systemd 双槽位为主。
 
-当前发布标签：**[`v1.1.0`](https://github.com/linlisWorkTeam/workPanel/releases/tag/v1.1.0)**（相对 Base V1.0.0 的增量见下）。发展方向 SSOT：[`docs/version-pipeline.md`](docs/version-pipeline.md)。  
+当前 Git 标签：**[`v1.3.0`](https://github.com/linlisWorkTeam/workPanel/releases/tag/v1.3.0)**（工作流实现点）；前序 [`v1.2.0`](https://github.com/linlisWorkTeam/workPanel/releases/tag/v1.2.0)、[`v1.1.0`](https://github.com/linlisWorkTeam/workPanel/releases/tag/v1.1.0)。HEAD 上 drain / 群设置 / DSH P0 等为 **1.3.0+** 补丁，尚未另打小版本。`package.json` / Cargo 已对齐 `1.3.0`。  
+发展方向 SSOT：[`docs/version-pipeline.md`](docs/version-pipeline.md)（勿把历史 epitaph「v1.3 双槽位」当成 tag `v1.3.0`）。  
 远端仓库：`https://github.com/linlisWorkTeam/workPanel`（`origin`）。
 
 ## 技术栈
@@ -63,13 +64,18 @@ export CARGO_BUILD_JOBS=1 NODE_OPTIONS=--max-old-space-size=1024
 | [`docs/epitaph/README.md`](docs/epitaph/README.md) | 会话交接墓志铭 |
 | [`AGENTS.md`](AGENTS.md) | Agent 贡献约定 |
 
-## v1.1.0 相对 Base 的要点
+## 当前版本要点
 
-- 聊天群：可设 **默认响应者**（Agent/chatbot）；chatbot **最近 N 条**（默认 12）+ 时间戳 + **滚动摘要**
-- 成员栏：同 Agent **执行中 · 排队 N**，可展开取消
-- 发版：releasing/心跳/metrics、种子群 `is_system`、promote 审批门禁
-- PanelLive：Extension Host + 同源代理 + A2A（禁 PCM）
-- 详情以 `docs/version-pipeline.md` 与 `docs/epitaph/` 为准
+| 标签 | 含义 |
+|---|---|
+| **v1.3.0** | 版本页 + Ask / Wave 工作流（控制面；Wave 执行仍走管理员 kickoff） |
+| **v1.2.0** | 豆包语音 UX + Live 会话/聊天一致（生产基线 `0750306`） |
+| **v1.1.0** | 聊天默认响应者、成员排队可见、PanelLive 宿主、promote 审批 |
+| **1.3.0+**（未另打 tag） | 发版 drain、交接运行时注入（epitaph 摘要）、群设置入口、DSH headless P0 |
+
+- 发版：灰度 `:8081` → docs → commit → **人批准** 才能 promote `:8080`；Agent 不得伪造令牌或绕过审批。
+- DSH：外挂运行时（锁版本、进程隔离），**不是**本仓编译期内核；群聊不是唯一事实源。
+- 详情以 `docs/version-pipeline.md` 与 `docs/epitaph/` 为准。
 
 ## 脚本
 
@@ -116,7 +122,7 @@ curl https://cursor.com/install -fsS | bash
 
 - 桌面：Tauri `app_data_dir` 下 `linlis-work-panel.sqlite3`
 - Web 生产/灰度：见上表数据目录（**切勿混用**）
-- 启动时将未完成的 `queued`/`running` 标为 `interrupted`
+- 启动时将未完成的 `queued`/`running` **重入队**（`phase=recovering`），不再永久标为 `interrupted`
 
 ## 许可证
 
