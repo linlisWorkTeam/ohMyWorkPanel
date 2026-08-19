@@ -146,6 +146,12 @@ export interface TaskRun {
   phaseUpdatedAt?: number | null;
 }
 
+export interface MessageFeedback {
+  up: number;
+  down: number;
+  myVote?: "up" | "down" | null;
+}
+
 export interface GroupState {
   group: Group;
   members: Member[];

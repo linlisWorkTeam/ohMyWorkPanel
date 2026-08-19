@@ -1028,3 +1028,34 @@ pub async fn set_run_review(
     });
     Ok(())
 }
+
+fn build_feedback(res: (i64, i64, Option<String>)) -> crate::models::MessageFeedback {
+    crate::models::MessageFeedback { up: res.0, down: res.1, my_vote: res.2 }
+}
+
+/// 消息反馈：vote 为 "up"/"down" 时覆盖当前成员表决，为 None 时清除；返回聚合计数。
+#[tauri::command]
+pub async fn vote_message(
+    message_id: String,
+    member_id: String,
+    vote: Option<String>,
+    state: State<'_, AppState>,
+) -> AppResult<crate::models::MessageFeedback> {
+    let state = state.inner().clone();
+    let conn = open_db(&state.db_path)?;
+    let res = crate::db::vote_message(&conn, &message_id, &member_id, vote.as_deref())?;
+    Ok(build_feedback(res))
+}
+
+/// 读取某个消息的反馈聚合。
+#[tauri::command]
+pub async fn get_message_feedback(
+    message_id: String,
+    member_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<crate::models::MessageFeedback> {
+    let state = state.inner().clone();
+    let conn = open_db(&state.db_path)?;
+    let res = crate::db::get_message_feedback(&conn, &message_id, &member_id)?;
+    Ok(build_feedback(res))
+}

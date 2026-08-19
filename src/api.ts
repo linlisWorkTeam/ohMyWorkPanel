@@ -63,6 +63,10 @@ export const api = {
   cancelRun: (runId: string) => invoke<void>("cancel_run", { runId }),
   retryRun: (runId: string) => invoke<string>("retry_run", { runId }),
   setRunReview: (runId: string, decision: "approved" | "rejected") => invoke<void>("set_run_review", { runId, decision }),
+  voteMessage: (messageId: string, memberId: string, vote: "up" | "down" | null) =>
+    invoke<import("./types").MessageFeedback>("vote_message", { messageId, memberId, vote }),
+  getMessageFeedback: (messageId: string, memberId: string) =>
+    invoke<import("./types").MessageFeedback>("get_message_feedback", { messageId, memberId }),
   detectAgent: (memberId: string) => invoke<string>("detect_agent", { memberId }),
   getSettings: () => invoke<RuntimeSettings>("get_runtime_settings"),
   getAgentModels: async () => ({

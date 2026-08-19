@@ -79,6 +79,13 @@ pub fn init_db(path: &Path) -> AppResult<()> {
           file_name TEXT NOT NULL, mime_type TEXT NOT NULL, file_data BLOB NOT NULL,
           file_size INTEGER NOT NULL, created_at INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS message_feedback (
+          message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+          member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+          vote TEXT NOT NULL CHECK(vote IN ('up','down')),
+          created_at INTEGER NOT NULL,
+          PRIMARY KEY(message_id, member_id)
+        );
         CREATE INDEX IF NOT EXISTS idx_messages_group_created ON messages(group_id, created_at);
         CREATE INDEX IF NOT EXISTS idx_runs_group_status ON task_runs(group_id, status, created_at);
  
@@ -2023,9 +2030,87 @@ pub fn set_run_review(conn: &Connection, run_id: &str, review: &str, status: &st
     Ok(changed > 0)
 }
 
+fn feedback_counts(conn: &Connection, message_id: &str, member_id: &str) -> AppResult<(i64, i64, Option<String>)> {
+    let up: i64 = conn
+        .query_row("SELECT COUNT(*) FROM message_feedback WHERE message_id=?1 AND vote='up'", params![message_id], |r| r.get(0))
+        .map_err(|e| e.to_string())?;
+    let down: i64 = conn
+        .query_row("SELECT COUNT(*) FROM message_feedback WHERE message_id=?1 AND vote='down'", params![message_id], |r| r.get(0))
+        .map_err(|e| e.to_string())?;
+    let mine: Option<String> = conn
+        .query_row("SELECT vote FROM message_feedback WHERE message_id=?1 AND member_id=?2", params![message_id, member_id], |r| r.get(0))
+        .optional()
+        .map_err(|e| e.to_string())?;
+    Ok((up, down, mine))
+}
+
+/// 投票/取消投票：vote=Some("up"|"down") 覆盖；None 清除。返回聚合 (up, down, my_vote)。
+pub fn vote_message(conn: &Connection, message_id: &str, member_id: &str, vote: Option<&str>) -> AppResult<(i64, i64, Option<String>)> {
+    match vote {
+        Some(v) if v == "up" || v == "down" => {
+            conn.execute(
+                "INSERT INTO message_feedback(message_id,member_id,vote,created_at) VALUES(?1,?2,?3,?4)
+                 ON CONFLICT(message_id,member_id) DO UPDATE SET vote=?3, created_at=?4",
+                params![message_id, member_id, v, now()],
+            ).map_err(|e| e.to_string())?;
+        }
+        _ => {
+            conn.execute(
+                "DELETE FROM message_feedback WHERE message_id=?1 AND member_id=?2",
+                params![message_id, member_id],
+            ).map_err(|e| e.to_string())?;
+        }
+    }
+    feedback_counts(conn, message_id, member_id)
+}
+
+/// 读取反馈聚合（不写）。
+pub fn get_message_feedback(conn: &Connection, message_id: &str, member_id: &str) -> AppResult<(i64, i64, Option<String>)> {
+    feedback_counts(conn, message_id, member_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn message_feedback_vote_toggles_and_counts() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        init_db(file.path()).unwrap();
+        let conn = open_db(file.path()).unwrap();
+        conn.execute(
+            "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at) VALUES('g','g','.', 'u',NULL,1)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,tags) VALUES('u','g','user','u','#000','',1,1,'')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,tags) VALUES('a','g','agent','a','#000','',1,1,'')",
+            [],
+        ).unwrap();
+        conn.execute("INSERT INTO messages VALUES('m','g','u',NULL,'x','completed',1)", []).unwrap();
+
+        let (up, down, mine) = vote_message(&conn, "m", "u", Some("up")).unwrap();
+        assert_eq!((up, down), (1, 0));
+        assert_eq!(mine.as_deref(), Some("up"));
+
+        // 同用户切到 down：up 归零
+        let (up2, down2, mine2) = vote_message(&conn, "m", "u", Some("down")).unwrap();
+        assert_eq!((up2, down2), (0, 1));
+        assert_eq!(mine2.as_deref(), Some("down"));
+
+        // 另一用户查看：聚合 1 down，my_vote None
+        let (up3, down3, mine3) = get_message_feedback(&conn, "m", "a").unwrap();
+        assert_eq!((up3, down3), (0, 1));
+        assert_eq!(mine3, None);
+
+        // 取消表决：清空
+        let (up4, down4, mine4) = vote_message(&conn, "m", "u", None).unwrap();
+        assert_eq!((up4, down4), (0, 0));
+        assert_eq!(mine4, None);
+    }
 
     #[test]
     fn set_run_review_only_resolves_pending() {

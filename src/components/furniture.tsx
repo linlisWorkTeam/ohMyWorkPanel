@@ -7,7 +7,7 @@ import { modelsForAdapter } from "../agentModels";
 import { agentBusyLabel, queueCounts, runsForAgentActive } from "../queueCounts";
 import { memberRosterAction } from "../memberForm";
 import { PHASE_LABEL, time, dayLabel, readError } from "./uiShared";
-import type { Group, GroupState, Member, TaskRun } from "../types";
+import type { Group, GroupState, Member, MessageFeedback, TaskRun } from "../types";
 
 /* ============================================================
    WorkPanel UI furniture: 从 App.tsx 抽取的消息/成员/状态组件（P1 组件化）
@@ -84,6 +84,17 @@ export const MessageBubble = memo(function MessageBubble({
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1400);
   };
+  const [feedback, setFeedback] = useState<MessageFeedback | null>(null);
+  const vote = async (choice: "up" | "down") => {
+    if (!viewerMemberId) return;
+    const next = feedback?.myVote === choice ? null : choice;
+    try {
+      const res = await api.voteMessage(message.id, viewerMemberId, next);
+      setFeedback(res);
+    } catch {
+      /* 静默：投票失败不打扰 */
+    }
+  };
   return (
     <article className={`message-row ${own ? "own" : ""} ${responding ? "is-responding" : ""}`}>
       <Avatar member={sender} responding={responding && !own} />
@@ -124,6 +135,23 @@ export const MessageBubble = memo(function MessageBubble({
         </div>
         <div className="m-actions">
           <button type="button" className="mini-btn" onClick={() => void copyMessage()}>{copied ? "已复制 ✓" : "复制"}</button>
+          {viewerMemberId && (
+            <>
+              <span className="mini-sep" />
+              <button
+                type="button"
+                className={`mini-btn vote${feedback?.myVote === "up" ? " on" : ""}`}
+                title="有用"
+                onClick={() => void vote("up")}
+              >👍 {feedback ? feedback.up : ""}</button>
+              <button
+                type="button"
+                className={`mini-btn vote${feedback?.myVote === "down" ? " on" : ""}`}
+                title="一般"
+                onClick={() => void vote("down")}
+              >👎 {feedback ? feedback.down : ""}</button>
+            </>
+          )}
           {run && (
             <span className="mini-sep" />
           )}

@@ -451,3 +451,13 @@ pub struct RoadmapOrchestration {
      pub features: Vec<Feature>,
      pub tasks: Vec<FeatureTask>,
  }
+
+ /// 消息反馈聚合（👍/👎）。
+ #[derive(Debug, Clone, Serialize)]
+ #[serde(rename_all = "camelCase")]
+ pub struct MessageFeedback {
+     pub up: i64,
+     pub down: i64,
+     #[serde(skip_serializing_if = "Option::is_none")]
+     pub my_vote: Option<String>,
+ }

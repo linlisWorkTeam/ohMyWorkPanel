@@ -1196,6 +1196,51 @@ async fn get_message_channel_part_web(
      Ok(Json((review.to_string(), status.to_string())))
  }
 
+ #[derive(serde::Deserialize)]
+ struct VoteMessageBody {
+     member_id: String,
+     vote: Option<String>,
+ }
+
+ #[derive(serde::Deserialize)]
+ struct FeedbackQuery {
+     member_id: String,
+ }
+
+ fn to_feedback(res: (i64, i64, Option<String>)) -> crate::models::MessageFeedback {
+     crate::models::MessageFeedback { up: res.0, down: res.1, my_vote: res.2 }
+ }
+
+ async fn vote_message_web(
+     State(state): State<Arc<AppState>>,
+     ClaimsExtractor(_claims): ClaimsExtractor,
+     Path(message_id): Path<String>,
+     Json(body): Json<VoteMessageBody>,
+ ) -> Result<Json<crate::models::MessageFeedback>, (StatusCode, String)> {
+     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     let vote = body.vote.as_deref();
+     if let Some(v) = vote {
+         if v != "up" && v != "down" {
+             return Err((StatusCode::BAD_REQUEST, "vote 仅支持 up / down / 空".into()));
+         }
+     }
+     let res = crate::db::vote_message(&conn, &message_id, &body.member_id, vote)
+         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     Ok(Json(to_feedback(res)))
+ }
+
+ async fn get_message_feedback_web(
+     State(state): State<Arc<AppState>>,
+     ClaimsExtractor(_claims): ClaimsExtractor,
+     Path(message_id): Path<String>,
+     axum::extract::Query(query): axum::extract::Query<FeedbackQuery>,
+ ) -> Result<Json<crate::models::MessageFeedback>, (StatusCode, String)> {
+     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     let res = crate::db::get_message_feedback(&conn, &message_id, &query.member_id)
+         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     Ok(Json(to_feedback(res)))
+ }
+
  // === Settings ===
 
  async fn get_agent_models_web(
@@ -2549,6 +2594,8 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             "/api/groups/{group_id}/messages/{message_id}/parts/{channel}",
             get(get_message_channel_part_web),
         )
+        .route("/api/messages/{message_id}/vote", post(vote_message_web))
+        .route("/api/messages/{message_id}/feedback", get(get_message_feedback_web))
          // Runs
          .route("/api/groups/{group_id}/runs", get(list_runs_web))
          .route("/api/groups/{group_id}/runs/active", get(list_active_runs_web))

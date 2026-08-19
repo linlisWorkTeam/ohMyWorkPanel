@@ -247,6 +247,14 @@ export const api = {
   setRunReview: (runId: string, decision: "approved" | "rejected") =>
     apiFetch<void>(`/api/runs/${runId}/review`, { method: "POST", body: JSON.stringify({ decision }) }),
 
+  voteMessage: (messageId: string, memberId: string, vote: "up" | "down" | null) =>
+    apiFetch<import("./types").MessageFeedback>(`/api/messages/${messageId}/vote`, {
+      method: "POST",
+      body: JSON.stringify({ memberId, vote: vote ?? null }),
+    }),
+  getMessageFeedback: (messageId: string, memberId: string) =>
+    apiFetch<import("./types").MessageFeedback>(`/api/messages/${messageId}/feedback?member_id=${encodeURIComponent(memberId)}`),
+
   getSettings: () => apiFetch<RuntimeSettings>("/api/settings"),
   getAgentModels: () =>
     apiFetch<{
