@@ -1352,6 +1352,36 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .chat-header .members-toggle:hover { background: var(--lp-bg-hover); color: var(--lp-text-primary); }
 .chat-header .members-toggle[aria-pressed="true"] { color: var(--lp-accent); background: var(--lp-bg-active); }
 
+/* 无群欢迎页 */
+.empty-home {
+  height: 100%;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  text-align: center;
+  padding: 24px;
+  color: var(--lp-text-secondary);
+}
+.empty-home .eh-mark {
+  width: 58px; height: 58px; border-radius: 16px;
+  display: grid; place-items: center;
+  font-size: 26px; font-weight: 800;
+  background: linear-gradient(135deg, var(--lp-accent-soft), var(--lp-accent));
+  color: var(--lp-text-invert);
+  box-shadow: 0 0 34px var(--lp-accent-soft);
+}
+.empty-home .eh-title { font-size: 18px; color: var(--lp-text-primary); }
+.empty-home .eh-desc { max-width: 46ch; font-size: 12.5px; line-height: 1.7; margin: 0; }
+.empty-home .eh-actions { margin-top: 6px; }
+.empty-home .eh-primary {
+  border: 0; border-radius: 10px; padding: 9px 18px;
+  background: var(--lp-accent); color: var(--lp-text-invert);
+  font-size: 13px; font-weight: 700;
+}
+.empty-home .eh-primary:hover { filter: brightness(1.12); }
+.empty-home .eh-hints { display: flex; gap: 10px; align-items: center; color: var(--lp-text-tertiary); font-size: 11px; margin: 8px 0 0; }
+
 
 
 

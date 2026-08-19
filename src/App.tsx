@@ -43,7 +43,7 @@ import { loadAuthUser, resolveSenderMemberId, saveAuthUser, type AuthUser } from
 import { Divider, useAppFrame } from "./components/ui";
 import { loadSendKeyMode, saveSendKeyMode, sendKeyHint, shouldSendOnKey, type SendKeyMode } from "./sendKey";
 import type { ChatEvent, ExtensionStatus, Group, GroupState, Member, PresetRole, RuntimeSettings, TaskRun } from "./types";
-import { MessageBubble, MemberRow, Avatar, Status, ReviewBadge, TypingIndicator, RunQueuePane } from "./components/furniture";
+import { MessageBubble, MemberRow, Avatar, Status, ReviewBadge, TypingIndicator, RunQueuePane, EmptyHome } from "./components/furniture";
 import { PHASE_LABEL, dayLabel, time, readError } from "./components/uiShared";
 import { ExperiencePanel } from "./ExperiencePanel";
 import { LogsPanel } from "./LogsPanel";
@@ -103,6 +103,7 @@ export function App() {
   // Web: never enter main UI until bootstrap succeeds; stale localStorage token → login.
   const [session, setSession] = useState<Session>(() => (requiresAuth ? "checking" : "ready"));
   const [groups, setGroups] = useState<Group[]>([]);
+  const [groupsLoaded, setGroupsLoaded] = useState(false);
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(() => new Set());
   const [current, setCurrent] = useState<GroupState | null>(null);
   const [composer, setComposer] = useState("");
@@ -362,6 +363,7 @@ export function App() {
         const boot = await api.bootstrap();
         if (disposed) return;
         setGroups(sortGroupsForSidebar(boot.groups));
+        setGroupsLoaded(true);
         try {
           const presence = await api.listPresence();
           if (!disposed) setOnlineUserIds(new Set(presence.onlineUserIds ?? []));
@@ -402,6 +404,7 @@ export function App() {
         const boot = await api.bootstrap();
         if (disposed) return;
         setGroups(boot.groups);
+        setGroupsLoaded(true);
         if (boot.groups[0]) {
           forceScrollGroupId.current = boot.groups[0].id;
           await refresh(boot.groups[0].id);
@@ -1396,7 +1399,9 @@ export function App() {
           </div>
         </footer>
         </>}
-      </> : <div className="loading">正在打开本地群聊…</div>}
+      </> : groups.length === 0 && groupsLoaded ? (
+        <EmptyHome canCreate={isAdmin} onCreate={() => setShowCreate(true)} />
+      ) : <div className="loading">正在打开本地群聊…</div>}
     </section>
 
     <Divider {...frame.rightDivider} />

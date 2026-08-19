@@ -467,3 +467,20 @@ export function Avatar({ member, responding, online }: { member?: Member; respon
 }
 export function Status({ status }: { status: string }) { return <span className={`status ${status}`}>{({ queued: "排队中", running: "运行中", awaiting_review: "待审阅", changes_requested: "待修改", completed: "完成", failed: "失败", cancelled: "已停止", interrupted: "已中断" } as Record<string, string>)[status] ?? status}</span>; }
 export function ReviewBadge({ reviewStatus }: { reviewStatus: string }) { return <span className={`review-badge ${reviewStatus}`}>{({ pending: "审阅中", approved: "已通过", rejected: "被退回" } as Record<string, string>)[reviewStatus] ?? reviewStatus}</span>; }
+
+/** 无群欢迎页（替代永远"正在打开本地群聊…"的空态）。 */
+export function EmptyHome({ canCreate, onCreate }: { canCreate?: boolean; onCreate?: () => void }) {
+  return (
+    <div className="empty-home">
+      <div className="eh-mark">L</div>
+      <strong className="eh-title">欢迎来到 WorkPanel</strong>
+      <p className="eh-desc">这里还没有群聊。项目群绑定服务器工作区、用 @Agent 协作；聊天群则是一组机器人的轻对话。</p>
+      <div className="eh-actions">
+        {canCreate && (
+          <button type="button" className="eh-primary" onClick={onCreate}>＋ 新建群聊</button>
+        )}
+      </div>
+      <p className="eh-hints"><kbd>Ctrl/⌘+1</kbd> 左栏控制轨 · <kbd>Ctrl/⌘+2</kbd> 成员面板</p>
+    </div>
+  );
+}
