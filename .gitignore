@@ -34,3 +34,7 @@ Desktop.ini
 output/
 
 dist.tar.gz
+
+# Local runtime state (agents memory / local panel data) — never commit
+.linlis/
+.local-panel/

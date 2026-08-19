@@ -1,8 +1,11 @@
 ---
 date: 2026-08-16
 topic: dsh-ui-language-workpanel
-status: draft
+status: superseded
+superseded-by: 2026-08-19-workpanel-dsh-ui-design
 ---
+
+> **已被取代**：完整 UI 方案见 [`2026-08-19-workpanel-dsh-ui-design.md`](2026-08-19-workpanel-dsh-ui-design.md)。本文保留为历史草稿（本文 11 条映射表已并入新文档）。
 
 # 借鉴 DeepSeek Harness UI 设计语言：三栏 AppFrame（工作区=群聊，右栏=Agent）
 

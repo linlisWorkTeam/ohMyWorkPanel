@@ -1,0 +1,850 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark light" />
+<title>WorkPanel × DSH UI Demo — 三栏 AppFrame 交互原型</title>
+<style>
+/* ==========================================================================
+   WorkPanel × DeepSeek Harness — 设计演示（单文件、零依赖）
+   ● token 分层：--s-* (static 色板) / --lp-* (alias 语义别名)；组件只用 alias
+   ● 6 套主题各自只定义 token 值，渲染路径唯一的切点是 <body data-theme>
+   ● 三栏 AppFrame：可拖拽分界 / 左栏折叠 56px 控制轨 / 右栏可关 / 窄屏让步
+   ========================================================================== */
+
+:root {
+  --rail-w: 56px;
+  --left-w: 236px;
+  --right-w: 310px;
+  --radius: 10px;
+  --radius-sm: 8px;
+  --font: "Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "SFMono-Regular", "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  --scanline-opacity: 0;
+  --grid-opacity: 0;
+  --glow: 0;
+}
+
+/* ---------- 6 套主题 = static 色板 + alias 语义映射 ---------- */
+
+/* ██ Cyberpunk（默认）— 霓虹夜城 */
+[data-theme="cyberpunk"] {
+  --s-bg0:#0a0014; --s-bg1:#130a22; --s-bg2:#1c1132; --s-bg3:#271845;
+  --s-ink:#0a0014; --s-paper:#f2ecff; --s-muted:#a791c8; --s-faint:#7c6a9e;
+  color-scheme: dark;
+  --lp-bg-app:var(--s-bg0); --lp-bg-surface:var(--s-bg1); --lp-bg-panel:var(--s-bg0);
+  --lp-bg-elev:var(--s-bg2); --lp-bg-hover:rgba(0,240,255,.07); --lp-bg-active:rgba(0,240,255,.15);
+  --lp-border:rgba(0,240,255,.15); --lp-border-strong:rgba(0,240,255,.4);
+  --lp-text:var(--s-paper); --lp-text-dim:var(--s-muted); --lp-text-faint:var(--s-faint); --lp-text-invert:var(--s-ink);
+  --lp-accent:#00f0ff; --lp-accent-strong:#7deeff; --lp-accent-soft:rgba(0,240,255,.12);
+  --lp-success:#34d399; --lp-warn:#fbbf24; --lp-error:#fb7185;
+  --lp-soft-ok:rgba(52,211,153,.14); --lp-soft-warn:rgba(251,191,36,.14); --lp-soft-err:rgba(251,113,133,.14);
+  --lp-bubble-ai:var(--s-bg2); --lp-bubble-user:rgba(0,240,255,.16);
+  --lp-composer:rgba(28,17,50,.74); --lp-rail:var(--s-bg1); --lp-scroll:rgba(0,240,255,.25); --lp-ring:#7deeff;
+  --scanline-opacity:.05; --grid-opacity:.06; --glow:.55;
+}
+/* ██ Atlas — 航图控制室（清爽日间） */
+[data-theme="atlas"] {
+  --s-bg0:#e7eef5; --s-bg1:#f2f7fb; --s-bg2:#ffffff; --s-bg3:#dbe7f1;
+  --s-ink:#0b1f33; --s-paper:#0b1f33; --s-muted:#5b7a94; --s-faint:#8aa3b8;
+  color-scheme: light;
+  --lp-bg-app:var(--s-bg0); --lp-bg-surface:var(--s-bg1); --lp-bg-panel:var(--s-bg0);
+  --lp-bg-elev:var(--s-bg2); --lp-bg-hover:rgba(31,155,184,.08); --lp-bg-active:rgba(31,155,184,.16);
+  --lp-border:rgba(11,31,51,.11); --lp-border-strong:rgba(11,31,51,.26);
+  --lp-text:var(--s-paper); --lp-text-dim:var(--s-muted); --lp-text-faint:var(--s-faint); --lp-text-invert:#fff;
+  --lp-accent:#1f9bb8; --lp-accent-strong:#0f7f98; --lp-accent-soft:rgba(31,155,184,.12);
+  --lp-success:#16a34a; --lp-warn:#d97706; --lp-error:#dc2626;
+  --lp-soft-ok:rgba(22,163,74,.13); --lp-soft-warn:rgba(217,119,6,.14); --lp-soft-err:rgba(220,38,38,.13);
+  --lp-bubble-ai:var(--s-bg2); --lp-bubble-user:rgba(31,155,184,.14);
+  --lp-composer:rgba(255,255,255,.88); --lp-rail:var(--s-bg1); --lp-scroll:rgba(91,122,148,.35); --lp-ring:#1f9bb8;
+  --scanline-opacity:0; --grid-opacity:.05; --glow:0;
+}
+/* ██ Industrial — 机械工坊 */
+[data-theme="industrial"] {
+  --s-bg0:#1a1c20; --s-bg1:#22252b; --s-bg2:#2a2e36; --s-bg3:#343943;
+  --s-ink:#15171a; --s-paper:#eef3f7; --s-muted:#9fb2c1; --s-faint:#7c8e9c;
+  color-scheme: dark;
+  --lp-bg-app:var(--s-bg0); --lp-bg-surface:var(--s-bg1); --lp-bg-panel:var(--s-bg0);
+  --lp-bg-elev:var(--s-bg2); --lp-bg-hover:rgba(245,166,35,.08); --lp-bg-active:rgba(245,166,35,.16);
+  --lp-border:rgba(255,255,255,.1); --lp-border-strong:rgba(245,166,35,.5);
+  --lp-text:var(--s-paper); --lp-text-dim:var(--s-muted); --lp-text-faint:var(--s-faint); --lp-text-invert:var(--s-ink);
+  --lp-accent:#f5a623; --lp-accent-strong:#ffc15e; --lp-accent-soft:rgba(245,166,35,.13);
+  --lp-success:#34d399; --lp-warn:#fbbf24; --lp-error:#fb7185;
+  --lp-soft-ok:rgba(52,211,153,.15); --lp-soft-warn:rgba(251,191,36,.15); --lp-soft-err:rgba(251,113,133,.15);
+  --lp-bubble-ai:var(--s-bg2); --lp-bubble-user:rgba(255,106,0,.19);
+  --lp-composer:rgba(34,37,43,.84); --lp-rail:var(--s-bg1); --lp-scroll:rgba(159,178,193,.32); --lp-ring:#f5a623;
+  --scanline-opacity:.03; --grid-opacity:.05; --glow:.3;
+}
+/* ██ Forge — 炭火工坊 */
+[data-theme="forge"] {
+  --s-bg0:#141114; --s-bg1:#1c1818; --s-bg2:#282019; --s-bg3:#352a22;
+  --s-ink:#17120f; --s-paper:#f5ead9; --s-muted:#b49c82; --s-faint:#8d7a66;
+  color-scheme: dark;
+  --lp-bg-app:var(--s-bg0); --lp-bg-surface:var(--s-bg1); --lp-bg-panel:var(--s-bg0);
+  --lp-bg-elev:var(--s-bg2); --lp-bg-hover:rgba(224,138,60,.08); --lp-bg-active:rgba(224,138,60,.17);
+  --lp-border:rgba(245,234,217,.1); --lp-border-strong:rgba(224,138,60,.45);
+  --lp-text:var(--s-paper); --lp-text-dim:var(--s-muted); --lp-text-faint:var(--s-faint); --lp-text-invert:var(--s-ink);
+  --lp-accent:#e08a3c; --lp-accent-strong:#f0a861; --lp-accent-soft:rgba(224,138,60,.14);
+  --lp-success:#4ade80; --lp-warn:#fbbf24; --lp-error:#f87171;
+  --lp-soft-ok:rgba(74,222,128,.14); --lp-soft-warn:rgba(251,191,36,.14); --lp-soft-err:rgba(248,113,113,.14);
+  --lp-bubble-ai:var(--s-bg2); --lp-bubble-user:rgba(224,138,60,.17);
+  --lp-composer:rgba(28,24,24,.84); --lp-rail:var(--s-bg1); --lp-scroll:rgba(180,156,130,.32); --lp-ring:#e08a3c;
+  --scanline-opacity:.02; --grid-opacity:.04; --glow:.25;
+}
+/* ██ Moss — 苔痕工作室 */
+[data-theme="moss"] {
+  --s-bg0:#e8efe6; --s-bg1:#f2f7ef; --s-bg2:#ffffff; --s-bg3:#dbe6d6;
+  --s-ink:#1f3a2e; --s-paper:#1f3a2e; --s-muted:#56705f; --s-faint:#7d9a86;
+  color-scheme: light;
+  --lp-bg-app:var(--s-bg0); --lp-bg-surface:var(--s-bg1); --lp-bg-panel:var(--s-bg0);
+  --lp-bg-elev:var(--s-bg2); --lp-bg-hover:rgba(106,143,78,.09); --lp-bg-active:rgba(106,143,78,.18);
+  --lp-border:rgba(31,58,46,.11); --lp-border-strong:rgba(31,58,46,.26);
+  --lp-text:var(--s-paper); --lp-text-dim:var(--s-muted); --lp-text-faint:var(--s-faint); --lp-text-invert:#fff;
+  --lp-accent:#6a8f4e; --lp-accent-strong:#557a3c; --lp-accent-soft:rgba(106,143,78,.13);
+  --lp-success:#15803d; --lp-warn:#b45309; --lp-error:#b91c1c;
+  --lp-soft-ok:rgba(21,128,61,.13); --lp-soft-warn:rgba(180,83,9,.14); --lp-soft-err:rgba(185,28,28,.13);
+  --lp-bubble-ai:var(--s-bg2); --lp-bubble-user:rgba(106,143,78,.16);
+  --lp-composer:rgba(255,255,255,.88); --lp-rail:var(--s-bg1); --lp-scroll:rgba(86,112,95,.35); --lp-ring:#6a8f4e;
+  --scanline-opacity:0; --grid-opacity:.04; --glow:0;
+}
+/* ██ Noir — 墨稿夜台 */
+[data-theme="noir"] {
+  --s-bg0:#0c0d10; --s-bg1:#131417; --s-bg2:#1a1b1f; --s-bg3:#222327;
+  --s-ink:#0c0d10; --s-paper:#f2ebe0; --s-muted:#9a9aa2; --s-faint:#6c6c74;
+  color-scheme: dark;
+  --lp-bg-app:var(--s-bg0); --lp-bg-surface:var(--s-bg1); --lp-bg-panel:var(--s-bg0);
+  --lp-bg-elev:var(--s-bg2); --lp-bg-hover:rgba(242,235,224,.06); --lp-bg-active:rgba(242,235,224,.13);
+  --lp-border:rgba(242,235,224,.1); --lp-border-strong:rgba(217,75,61,.48);
+  --lp-text:var(--s-paper); --lp-text-dim:var(--s-muted); --lp-text-faint:var(--s-faint); --lp-text-invert:var(--s-ink);
+  --lp-accent:#d94b3d; --lp-accent-strong:#ff6a5c; --lp-accent-soft:rgba(217,75,61,.13);
+  --lp-success:#4ade80; --lp-warn:#fbbf24; --lp-error:#f87171;
+  --lp-soft-ok:rgba(74,222,128,.13); --lp-soft-warn:rgba(251,191,36,.13); --lp-soft-err:rgba(248,113,113,.14);
+  --lp-bubble-ai:var(--s-bg2); --lp-bubble-user:rgba(242,235,224,.15);
+  --lp-composer:rgba(19,20,23,.86); --lp-rail:var(--s-bg1); --lp-scroll:rgba(154,154,162,.32); --lp-ring:#d94b3d;
+  --scanline-opacity:0; --grid-opacity:.03; --glow:.18;
+}
+
+/* ---------- base ---------- */
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; font-family: var(--font); color: var(--lp-text);
+  background: radial-gradient(1100px 640px at 80% -10%, color-mix(in srgb, var(--lp-accent) 16%, transparent), transparent 60%), var(--lp-bg-app);
+  -webkit-font-smoothing: antialiased; overflow: hidden;
+  transition: background .4s ease;
+}
+body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background-image:
+    repeating-linear-gradient(0deg, transparent 0 3px, rgba(255,255,255,var(--scanline-opacity)) 3px 4px),
+    linear-gradient(rgba(255,255,255,var(--grid-opacity)) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,var(--grid-opacity)) 1px, transparent 1px);
+  background-size: auto, 44px 44px, 44px 44px; }
+button { font: inherit; cursor: pointer; border: 0; background: none; color: inherit; }
+button:focus-visible, textarea:focus-visible { outline: 2px solid var(--lp-ring, currentColor); outline-offset: 2px; }
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-thumb { background: var(--lp-scroll); border-radius: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+[hidden] { display: none !important; }
+
+/* ---------- stage / frame ---------- */
+.stage { display: grid; place-items: center; width: 100vw; height: 100vh; }
+.frame-wrap { height: min(92vh, 860px); transition: width .45s ease; position: relative; z-index: 1;
+  box-shadow: 0 30px 80px -20px rgba(0,0,0,.6), 0 0 0 1px var(--lp-border); border-radius: 16px; overflow: hidden; }
+.frame { display: grid; height: 100%; background: var(--lp-bg-panel);
+  grid-template-columns: var(--left-w) 6px minmax(320px,1fr) 6px var(--right-w); }
+.frame[data-left="rail"]   { grid-template-columns: var(--rail-w) 6px minmax(320px,1fr) 6px var(--right-w); }
+.frame[data-left="closed"] { grid-template-columns: 0 0 minmax(320px,1fr) 6px var(--right-w); }
+.frame[data-right="closed"]{ grid-template-columns: var(--left-w) 6px minmax(320px,1fr) 0 0; }
+.frame[data-left="rail"][data-right="closed"]   { grid-template-columns: var(--rail-w) 6px minmax(320px,1fr) 0 0; }
+.frame[data-left="closed"][data-right="closed"] { grid-template-columns: 0 0 minmax(320px,1fr) 0 0; }
+
+.divider { cursor: col-resize; position: relative; z-index: 5; }
+.divider::after { content:""; position:absolute; left:50%; top:0; bottom:0; width:1px; transform:translateX(-50%);
+  background: var(--lp-border); transition: background .15s, box-shadow .15s; }
+.divider:hover::after, .divider.dragging::after { background: var(--lp-accent); box-shadow: 0 0 12px var(--lp-accent); width: 2px; }
+
+/* ---------- left ---------- */
+.left { background: var(--lp-bg-surface); display:flex; flex-direction:column; min-width:0; overflow:hidden; }
+.brand { height:58px; display:flex; align-items:center; gap:10px; padding:0 15px; flex:none; }
+.brand-mark { width:26px; height:26px; border-radius:8px; display:grid; place-items:center; flex:none;
+  background: linear-gradient(135deg, var(--lp-accent-soft), var(--lp-accent)); color: var(--lp-text-invert);
+  font-weight:800; font-size:12px; box-shadow: 0 0 18px var(--lp-accent-soft); }
+.brand-text { display:flex; flex-direction:column; line-height:1.15; min-width:0; }
+.brand-linlis { font-size:10.5px; color: var(--lp-text-faint); letter-spacing:.06em; }
+.brand-wp { font-size:14px; font-weight:700; white-space:nowrap; }
+.left-head { display:flex; align-items:center; justify-content:space-between; padding:6px 12px 4px 16px;
+  color: var(--lp-text-faint); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; flex:none; }
+.group-list { padding: 0 8px 16px; overflow:auto; flex:1; min-height:0; }
+.group-item { width:100%; border-radius: var(--radius-sm); padding:8px 11px; display:flex; align-items:center; gap:10px;
+  text-align:left; color: var(--lp-text-dim); margin:2px 0; border:1px solid transparent; }
+.group-item:hover { background: var(--lp-bg-hover); color: var(--lp-text); }
+.group-item.selected { background: var(--lp-bg-active); color: var(--lp-text); border-color: var(--lp-border); }
+.group-avatar { width:30px;height:30px;border-radius:9px;display:grid;place-items:center;flex:none;font-size:13px;font-weight:700;
+  background: var(--lp-accent-soft); color: var(--lp-accent); }
+.group-item.selected .group-avatar { background: var(--lp-accent); color: var(--lp-text-invert); }
+.group-meta { min-width:0; flex:1; }
+.group-name { font-size:13px; white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.group-sub { font-size:11px; color: var(--lp-text-faint); white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.unread { flex:none; min-width:18px; height:18px; padding:0 5px; border-radius:9px; background: var(--lp-error);
+  color:#fff; font-size:11px; display:grid; place-items:center; font-weight:600; }
+.left-foot { flex:none; border-top:1px solid var(--lp-border); padding:10px; display:flex; }
+
+.rail { background: var(--lp-rail); width: var(--rail-w); flex:none; display:flex; flex-direction:column;
+  align-items:center; padding:10px 0; gap:4px; border-right:1px solid var(--lp-border); }
+.rail-logo { width:30px;height:30px;border-radius:9px;margin-bottom:6px;font-size:12px;font-weight:800;
+  display:grid;place-items:center;background:linear-gradient(135deg,var(--lp-accent-soft),var(--lp-accent));color:var(--lp-text-invert); }
+.rail-btn { width:40px;height:40px;border-radius:11px;display:grid;place-items:center;position:relative; }
+.rail-btn:hover { background: var(--lp-bg-hover); color: var(--lp-text); }
+.rail-btn.active { background: var(--lp-bg-active); color: var(--lp-accent); }
+.rail-btn.badge::after { content:""; position:absolute; top:8px; right:9px; width:7px;height:7px;border-radius:50%; background: var(--lp-error); }
+.rail-btm { margin-top:auto; }
+
+[data-tip] { position: relative; }
+[data-tip]:hover::after { content:attr(data-tip); position:absolute; left:48px; top:50%; transform:translateY(-50%);
+  background: var(--lp-bg-elev); border:1px solid var(--lp-border); color: var(--lp-text);
+  padding:5px 9px; border-radius:7px; font-size:12px; white-space:nowrap; z-index:40; box-shadow:0 10px 30px rgba(0,0,0,.4); }
+
+/* ---------- middle ---------- */
+.mid { display:flex; flex-direction:column; min-width:0; background: var(--lp-bg-panel); }
+.chat-header { min-height:56px; padding:0 16px; display:flex; align-items:center; gap:12px;
+  border-bottom:1px solid var(--lp-border); flex:none; background: color-mix(in srgb, var(--lp-bg-surface) 52%, transparent); }
+.chat-title { min-width:0; }
+.chat-title h1 { margin:0; font-size:15px; font-weight:700; display:flex; align-items:center; gap:8px; }
+.chat-title p { margin:2px 0 0; font-size:12px; color: var(--lp-text-faint); }
+.chip { font-size:10.5px; padding:2px 8px; border-radius:20px; background: var(--lp-accent-soft); color: var(--lp-accent); font-weight:600; }
+.header-right { margin-left:auto; display:flex; align-items:center; gap:4px; }
+.icon-btn { width:32px;height:32px;border-radius:8px;display:grid;place-items:center;color: var(--lp-text-dim); font-size:15px; }
+.icon-btn:hover { background: var(--lp-bg-hover); color: var(--lp-text); }
+.icon-btn.on { color: var(--lp-accent); background: var(--lp-bg-active); }
+
+.goal-bar { flex:none; display:flex; align-items:center; gap:12px; padding:7px 16px; font-size:12px;
+  background: var(--lp-accent-soft); border-bottom:1px solid var(--lp-border); color: var(--lp-text-dim); }
+.g-flag { font-weight:700; color: var(--lp-accent); letter-spacing:.06em; white-space:nowrap; }
+.progress { flex:1; height:5px; border-radius:3px; background: var(--lp-bg-hover); overflow:hidden; min-width:40px; }
+.progress i { display:block; height:100%; width:60%; background:linear-gradient(90deg,var(--lp-accent),var(--lp-accent-strong)); border-radius:3px; }
+.g-act { white-space:nowrap; }
+
+.message-list { flex:1; overflow-y:auto; min-height:0; padding:22px clamp(18px,4vw,46px) 12px; scroll-behavior:smooth; }
+.m-row { display:flex; gap:12px; margin-bottom:20px; max-width:820px; }
+.m-row.self { flex-direction:row-reverse; margin-left:auto; }
+.avatar { width:34px;height:34px;border-radius:11px;flex:none;display:grid;place-items:center;font-size:14px;font-weight:700;
+  position:relative; background: var(--lp-bg-elev); border:1px solid var(--lp-border); color: var(--lp-text-dim); }
+.m-row.self .avatar { background: var(--lp-accent); color: var(--lp-text-invert); border:0; }
+.avatar .dot { width:8px;height:8px;border-radius:50%;background:var(--lp-success);border:2px solid var(--lp-bg-app); position:absolute; right:-1px; bottom:-1px; }
+.m-body { min-width:0; flex:1; }
+.m-meta { display:flex; align-items:baseline; gap:8px; margin-bottom:4px; }
+.m-row.self .m-meta { flex-direction:row-reverse; }
+.m-name { font-size:13px; font-weight:600; }
+.m-time { font-size:11px; color: var(--lp-text-faint); }
+.bubble { border-radius:4px 14px 14px 14px; padding:10px 13px; font-size:13.5px; line-height:1.65;
+  background: var(--lp-bubble-ai); border:1px solid var(--lp-border); }
+.m-row.self .bubble { border-radius:14px 4px 14px 14px; background: var(--lp-bubble-user); }
+.bubble code { font-family:var(--font-mono); font-size:12px; background:var(--lp-bg-hover); padding:1px 5px; border-radius:5px; }
+.m-actions { display:none; gap:2px; margin-top:4px; }
+.m-row:hover .m-actions { display:flex; }
+.m-row.self .m-actions { justify-content:flex-end; }
+.mini-btn { display:flex;align-items:center;gap:4px;font-size:11px;color:var(--lp-text-faint);padding:3px 7px;border-radius:6px; }
+.mini-btn:hover { background:var(--lp-bg-hover); color:var(--lp-text); }
+.mini-btn.liked { color: var(--lp-accent); }
+
+.parts { margin-top:8px; display:flex; flex-direction:column; gap:6px; }
+.part { display:flex; gap:10px; align-items:flex-start; font-size:12.5px; color:var(--lp-text-dim);
+  border:1px solid var(--lp-border); border-radius:9px; padding:8px 10px; background:var(--lp-bg-hover); }
+.part .ic { width:20px;height:20px;border-radius:6px;flex:none;display:grid;place-items:center;font-size:11px;background:var(--lp-bg-elev); }
+.part .pd { flex:1; min-width:0; }
+.part .pd b { color:var(--lp-text); font-weight:600; display:block; margin-bottom:1px; }
+.part.done { border-color:var(--lp-success); }
+.part.running { border-color:var(--lp-warn); }
+.part.running .pe { color:var(--lp-warn); font-weight:600; }
+.todo-row { display:flex; align-items:center; gap:8px; font-size:12.5px; padding:3px 0; color:var(--lp-text-dim); }
+.todo-row .ck { width:15px;height:15px;border-radius:4px;border:1.5px solid var(--lp-border-strong);flex:none;display:grid;place-items:center;font-size:10px; }
+.todo-row.done .ck { background:var(--lp-success); border-color:var(--lp-success); color:var(--lp-text-invert); }
+.todo-row.done { color:var(--lp-text-faint); text-decoration:line-through; }
+.tool-chip { display:inline-flex; align-items:center; gap:6px; font-size:11.5px; margin:2px 4px 2px 0;
+  padding:3px 8px; border-radius:6px; border:1px solid var(--lp-border); background:var(--lp-bg-elev); color:var(--lp-text-dim); }
+.tool-chip.on { border-color:var(--lp-accent); color:var(--lp-accent); }
+
+.typing { display:inline-flex; gap:4px; align-items:center; padding:2px 0; }
+.typing i { width:5px;height:5px;border-radius:50%;background:var(--lp-text-faint);animation:bl 1.2s infinite; }
+.typing i:nth-child(2){ animation-delay:.15s } .typing i:nth-child(3){ animation-delay:.3s }
+@keyframes bl { 0%,60%,100%{opacity:.3;transform:translateY(0)} 30%{opacity:1;transform:translateY(-3px)} }
+
+.sys-note { text-align:center; font-size:11px; color:var(--lp-text-faint); margin:14px auto; max-width:540px; line-height:1.7; }
+.sys-note b { color:var(--lp-text-dim); }
+.day-sep { display:flex; align-items:center; gap:10px; margin:20px 0; color:var(--lp-text-faint); font-size:11px; }
+.day-sep::before, .day-sep::after { content:""; flex:1; height:1px; background:var(--lp-border); }
+
+/* ---------- composer ---------- */
+.composer-wrap { flex:none; padding:12px 16px 14px; border-top:1px solid var(--lp-border);
+  background: var(--lp-composer); backdrop-filter: blur(12px); }
+.composer { border:1px solid var(--lp-border); border-radius:14px; background: var(--lp-bg-elev); padding:8px 10px 8px; }
+.composer-tools { display:flex; align-items:center; gap:2px; padding-bottom:4px; }
+.tool-btn { width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--lp-text-faint); }
+.tool-btn:hover { background:var(--lp-bg-hover); color:var(--lp-text); }
+.tool-btn.spacer { margin-left:auto; }
+.composer textarea { width:100%; border:0; background:none; resize:none; color:var(--lp-text);
+  font-family:var(--font); font-size:13.5px; line-height:1.6; max-height:140px; outline:none; }
+.composer textarea::placeholder { color:var(--lp-text-faint); }
+.composer-hint { display:flex; align-items:center; gap:10px; padding-top:6px; color:var(--lp-text-faint); font-size:11px; }
+kbd { font-family:var(--font-mono); font-size:10px; border:1px solid var(--lp-border-strong); border-bottom-width:2px;
+  border-radius:5px; padding:1px 5px; background:var(--lp-bg-hover); color:var(--lp-text-dim); }
+.send-btn { margin-left:auto; background:var(--lp-accent); color:var(--lp-text-invert); font-weight:600; font-size:12px;
+  padding:6px 14px; border-radius:8px; display:flex; gap:6px; align-items:center; }
+.send-btn:hover { filter:brightness(1.12); }
+.send-btn:disabled { opacity:.38; cursor:not-allowed; }
+
+/* ---------- right ---------- */
+.right { background:var(--lp-bg-surface); display:flex; flex-direction:column; min-width:0; overflow:hidden; }
+.tabs { display:flex; gap:2px; padding:10px 12px 0; flex:none; }
+.tab { font-size:12px; padding:6px 12px; border-radius:8px 8px 0 0; color:var(--lp-text-dim); border-bottom:2px solid transparent; }
+.tab:hover { color:var(--lp-text); background:var(--lp-bg-hover); }
+.tab.active { color:var(--lp-accent); border-bottom-color:var(--lp-accent); background:var(--lp-bg-hover); }
+.pane { flex:1; overflow-y:auto; padding:10px 12px 14px; min-height:0; }
+.sec-title { font-size:10.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--lp-text-faint); margin:16px 4px 8px; display:flex; justify-content:space-between; align-items:center; }
+
+.member-row { display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:9px; }
+.member-row:hover { background:var(--lp-bg-hover); }
+.member-row .avatar { width:30px;height:30px;border-radius:9px;font-size:13px; }
+.mr-main { flex:1; min-width:0; }
+.mr-name { font-size:12.5px; font-weight:600; display:flex; align-items:center; gap:6px; }
+.tag { font-size:9.5px; padding:1px 6px; border-radius:10px; background:var(--lp-accent-soft); color:var(--lp-accent); }
+.mr-sub { font-size:11px; color:var(--lp-text-faint); white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.state-dot { width:8px;height:8px;border-radius:50%;flex:none; }
+.state-dot.running { background:var(--lp-success); box-shadow:0 0 8px var(--lp-success); animation:pulse 1.5s infinite; }
+.state-dot.queued { background:var(--lp-warn); }
+.state-dot.idle { background:var(--lp-text-faint); }
+@keyframes pulse { 50% { opacity:.5 } }
+
+.queue-card { border:1px solid var(--lp-border); border-radius:11px; padding:9px 11px; margin-bottom:8px; background:var(--lp-bg-elev); }
+.qc-top { display:flex; align-items:center; gap:8px; font-size:12px; font-weight:600; }
+.qc-top .st { margin-left:auto; font-size:10.5px; padding:2px 8px; border-radius:12px; white-space:nowrap; }
+.qc-top .st.queued { background:var(--lp-soft-warn); color:var(--lp-warn); }
+.qc-top .st.running { background:var(--lp-soft-ok); color:var(--lp-success); }
+.qc-bar { height:4px; border-radius:2px; background:var(--lp-bg-hover); margin:8px 0 6px; overflow:hidden; }
+.qc-bar i { display:block; height:100%; width:40%; background:var(--lp-warn); }
+.qc-bar.qc-run i { background:var(--lp-success); width:62%; }
+.qc-sub { font-size:11px; color:var(--lp-text-faint); }
+
+.appr-card { border:1px solid var(--lp-warn); border-radius:11px; padding:10px 11px; margin-bottom:8px; background:var(--lp-soft-warn); }
+.ac-title { font-size:12px; font-weight:700; display:flex; align-items:center; gap:7px; }
+.ac-sub { font-size:11px; color:var(--lp-text-dim); margin:4px 0 8px; }
+.ac-actions { display:flex; gap:6px; }
+.btn { flex:1; font-size:12px; font-weight:700; padding:6px 0; border-radius:8px; }
+.btn.approve { background:var(--lp-success); color:#04120b; }
+.btn.reject { background:var(--lp-soft-err); color:var(--lp-error); border:1px solid var(--lp-error); }
+
+.info-line { display:flex; align-items:center; gap:8px; font-size:11.5px; color:var(--lp-text-dim); padding:5px 4px; }
+.info-line b { font-weight:600; color:var(--lp-text); }
+.info-line .path { font-family:var(--font-mono); font-size:10.5px; color:var(--lp-accent); }
+
+/* ---------- demo bar / popovers / help ---------- */
+.demo-bar { position:fixed; left:50%; bottom:14px; transform:translateX(-50%); z-index:60;
+  display:flex; align-items:center; gap:8px; padding:7px 12px; border-radius:14px; font-size:12px;
+  background:var(--lp-bg-elev); border:1px solid var(--lp-border-strong); box-shadow:0 16px 50px rgba(0,0,0,.5); color:var(--lp-text-dim); }
+.demo-bar .sep { width:1px; height:18px; background:var(--lp-border); margin:0 4px; }
+.demo-bar input[type=range] { width:120px; accent-color:var(--lp-accent); }
+.demo-bar button:hover { color:var(--lp-accent); }
+.demo-bar .k { font-family:var(--font-mono); font-size:10px; border:1px solid var(--lp-border); border-radius:4px; padding:1px 6px; }
+
+.popover { position:fixed; z-index:70; background:var(--lp-bg-elev); border:1px solid var(--lp-border-strong);
+  border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,.5); padding:8px; min-width:230px; display:none; }
+.popover.open { display:block; }
+.pv-item { display:flex; align-items:center; gap:8px; padding:6px 9px; border-radius:8px; font-size:12.5px; color:var(--lp-text-dim); cursor:pointer; }
+.pv-item:hover { background:var(--lp-bg-hover); color:var(--lp-text); }
+.pv-item .chip2 { margin-left:auto; font-size:10px; padding:1px 7px; border-radius:10px; background:var(--lp-bg-hover); color:var(--lp-text-faint); white-space:nowrap; }
+
+.theme-grid { display:grid; grid-template-columns:1fr 1fr; gap:7px; width:252px; }
+.theme-card { border-radius:10px; padding:8px; border:1px solid var(--lp-border); text-align:left; }
+.theme-card:hover { border-color:var(--lp-accent); }
+.theme-card.active { border-color:var(--lp-accent); box-shadow:0 0 0 1px var(--lp-accent); }
+.theme-card .sw { height:30px; border-radius:7px; margin-bottom:6px; }
+.theme-card b { font-size:11.5px; display:block; }
+.theme-card small { font-size:10px; color:var(--lp-text-faint); }
+
+.help-overlay { position:fixed; inset:0; z-index:80; background:rgba(0,0,0,.55); backdrop-filter:blur(3px);
+  display:none; place-items:center; }
+.help-overlay.open { display:grid; }
+.help-box { position:relative; width:min(720px,92vw); max-height:82vh; overflow:auto; border-radius:16px; padding:20px 24px;
+  background:var(--lp-bg-elev); border:1px solid var(--lp-border-strong); color:var(--lp-text); }
+.help-box h2 { margin:0 0 4px; font-size:17px; }
+.help-box .sub { color:var(--lp-text-dim); font-size:12.5px; margin:0 0 14px; }
+.help-box table { width:100%; border-collapse:collapse; font-size:12px; }
+.help-box th, .help-box td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--lp-border); vertical-align:top; }
+.help-box th { color:var(--lp-text-dim); font-weight:600; white-space:nowrap; }
+.help-box code { font-family:var(--font-mono); font-size:11px; background:var(--lp-bg-hover); padding:1px 5px; border-radius:5px; }
+.help-box .close { position:absolute; top:12px; right:14px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation:none !important; transition:none !important; }
+}
+</style>
+</head>
+<body data-theme="cyberpunk">
+
+<div class="stage">
+  <div class="frame-wrap" id="frameWrap">
+    <div class="frame" id="frame">
+
+      <!-- 左栏：群列表 -->
+      <section class="left" id="leftPane">
+        <div class="brand">
+          <span class="brand-mark">L</span>
+          <span class="brand-text"><span class="brand-linlis">Linli's</span><span class="brand-wp">WorkPanel</span></span>
+        </div>
+        <div class="left-head"><span>工作区 · 群</span><button class="icon-btn" data-tip="新建群" style="width:24px;height:24px;font-size:14px">＋</button></div>
+        <div class="group-list" id="groupList"></div>
+        <div class="left-foot"><button class="icon-btn" id="leftRailBtn" data-tip="折叠左栏（56px 控制轨）">◀◀</button></div>
+      </section>
+
+      <!-- 左栏控制轨（折叠态） -->
+      <aside class="rail" id="leftRail" hidden>
+        <span class="rail-logo">L</span>
+        <button class="rail-btn active" data-tip="群列表">◉</button>
+        <button class="rail-btn badge" data-tip="通知 · 公告">◎</button>
+        <button class="rail-btn" data-tip="模型">◇</button>
+        <button class="rail-btn rail-btm" data-tip="设置" id="railSettings">⚙</button>
+        <button class="rail-btn" data-tip="展开左栏" id="railExpand">▶</button>
+      </aside>
+
+      <div class="divider" id="divL"></div>
+
+      <!-- 中栏：群聊 = 工作区 -->
+      <section class="mid">
+        <header class="chat-header">
+          <div class="chat-title">
+            <h1><span id="groupTitle">Linli's WorkPanel 开发</span><span class="chip">project</span></h1>
+            <p id="groupSub">Codex · Claude · OpenCode · Cursor · A2A-Bot · 5 名成员</p>
+          </div>
+          <div class="header-right">
+            <button class="icon-btn" id="btnRight" data-tip="成员 / Agent 面板">☰</button>
+            <button class="icon-btn" id="btnTheme" data-tip="外观主题">🎨</button>
+            <button class="icon-btn" data-tip="版本 · V1.4-Wave">⛭</button>
+            <button class="icon-btn" id="btnHelp" data-tip="交互说明">?</button>
+          </div>
+        </header>
+
+        <!-- goal bar：dsh ui-goal 借鉴 -->
+        <div class="goal-bar">
+          <span class="g-flag">V1.4 · WAVE 12</span>
+          <span>UI 设计语言借鉴 · 三栏壳落地</span>
+          <span class="progress"><i></i></span>
+          <span class="g-act">3 / 5 完成</span>
+        </div>
+
+        <div class="message-list" id="msgList"></div>
+
+        <div class="composer-wrap">
+          <div class="composer">
+            <div class="composer-tools">
+              <button class="tool-btn" id="btnAt" data-tip="提及 Agent">@</button>
+              <button class="tool-btn" data-tip="粘贴即 OCR">🖼</button>
+              <button class="tool-btn" data-tip="按住说话">🎙</button>
+              <button class="tool-btn spacer" data-tip="斜杠命令">/</button>
+            </div>
+            <textarea id="composer" rows="2" placeholder="给群里的 Agent 派活…  @ 提及 · Enter 发送 · 草稿自动保存"></textarea>
+            <div class="composer-hint">
+              <span><kbd>@</kbd> 提及</span><span><kbd>/</kbd> 命令</span><span><kbd>Enter</kbd> 发送</span><span><kbd>Tab</kbd> 动作间移动</span>
+              <button class="send-btn" id="btnSend" disabled>发送 ⏎</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="divider" id="divR"></div>
+
+      <!-- 右栏：成员 = Agent -->
+      <section class="right" id="rightPane">
+        <div class="tabs" id="rightTabs">
+          <button class="tab active" data-tab="members">成员</button>
+          <button class="tab" data-tab="queue">队列</button>
+          <button class="tab" data-tab="details">详情</button>
+        </div>
+        <div class="pane" id="paneMembers"></div>
+        <div class="pane" id="paneQueue" hidden></div>
+        <div class="pane" id="paneDetails" hidden></div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<!-- 演示工具栏：视口仿真 + 快捷交互 -->
+<div class="demo-bar">
+  <span style="color:var(--lp-text);font-weight:600">UX 演示</span>
+  <span class="sep"></span>
+  <span>视口宽</span><input type="range" id="vw" min="620" max="1640" value="1280" /><span id="vwLabel">1280px</span>
+  <span class="sep"></span>
+  <button id="demoLeft">▤ 左栏</button>
+  <button id="demoRight">▥ 右栏</button>
+  <button id="demoCheat" style="color:var(--lp-accent)">✨ 一键看效果</button>
+  <span class="sep"></span>
+  <span>主题</span>
+  <button class="k" data-demo-theme="cyberpunk">赛博</button>
+  <button class="k" data-demo-theme="atlas">Atlas</button>
+  <button class="k" data-demo-theme="industrial">工业</button>
+  <button class="k" data-demo-theme="moss">苔痕</button>
+</div>
+
+<div class="popover" id="mentionPop"></div>
+<div class="popover" id="slashPop"></div>
+<div class="popover" id="themePop"><div class="theme-grid" id="themeGrid"></div></div>
+
+<div class="help-overlay" id="helpOverlay">
+  <div class="help-box">
+    <button class="icon-btn close" id="helpClose">✕</button>
+    <h2>WorkPanel × DeepSeek Harness — 交互原型说明</h2>
+    <p class="sub">不是静态图：这是「三栏 AppFrame + token 设计系统 + 招牌 UX」的可交互演示。每项都对应 dsh 里真实存在的组件，也是 WorkPanel 借鉴的目标。</p>
+    <table>
+      <tr><th>#</th><th>交互 / 设计</th><th>对应 dsh 组件</th><th>本机怎么试</th></tr>
+      <tr><td>1</td><td>三栏拖拽调宽（带最小宽度约束）</td><td>ui-layout ResizablePane</td><td>拖中缝 / 右缝分界</td></tr>
+      <tr><td>2</td><td>左栏折叠 → 56px 控制轨</td><td>ui-layout rail</td><td>底部「左栏」或拖到最窄</td></tr>
+      <tr><td>3</td><td>右栏成员面板可关到 0</td><td>ui-details 折叠</td><td>头部 ☰ 或底部「右栏」</td></tr>
+      <tr><td>4</td><td>窄屏让步（右先收 → 左再轨化）</td><td>ui-layout concession</td><td>拖「视口宽」滑块变窄 / 一键看效果</td></tr>
+      <tr><td>5</td><td>主题 = alias token，组件只用语义色</td><td>ui-theme design-platform</td><td>🎨 或底部主题按钮换 6 套</td></tr>
+      <tr><td>6</td><td>goal bar：Wave 目标常驻（上移）</td><td>ui-goal</td><td>中栏头部下方那条</td></tr>
+      <tr><td>7</td><td>Agent 工作 = parts + todo 行 + tool 行</td><td>ui-trajectory / todo 行 / ui-tool</td><td>输入一句话点发送</td></tr>
+      <tr><td>8</td><td>消息操作 / 反馈（复制·赞·踩·朗读）</td><td>ui-message-feedback</td><td>悬浮任意消息气泡</td></tr>
+      <tr><td>9</td><td>队列卡片 + 审批内联卡</td><td>ui-jobs / approval-composer</td><td>右栏「队列」页签</td></tr>
+      <tr><td>10</td><td>composer：@ 提及 / 斜杠命令 / 草稿</td><td>ui-composer</td><td>输入框敲 @ 或 / 试试</td></tr>
+      <tr><td>11</td><td>成员 = Agent（执行中·排队·模型·工作区）</td><td>ui-sidebar / ui-subagent</td><td>右栏「成员」「详情」页签</td></tr>
+    </table>
+    <p class="sub" style="margin-top:12px">设计约束照搬 dsh 心智：几何临时（面板宽/折叠只存 localStorage，不进 DB）、组件只用 <code>--lp-alias-*</code> 语义 token、主题只是 alias 供给器。业务模型仍是「多群多 Agent 群聊」，不退回单人会话。</p>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ================== 数据 ================== */
+const GROUPS = [
+  { id:"g1", name:"Linli's WorkPanel 开发", kind:"project", sub:"Codex · Claude · OpenCode · Cursor", unread:0, tone:"L" },
+  { id:"g2", name:"Ops 值班", kind:"project", sub:"发布 / 灰度 / 指标", unread:3, tone:"O" },
+  { id:"g3", name:"豆包语音调研", kind:"chat", sub:"Live 语音 UX · 气泡", unread:0, tone:"D" },
+  { id:"g4", name:"聊天闲谈", kind:"chat", sub:"无业务 workspace", unread:1, tone:"聊" },
+];
+const MEMBERS = [
+  { name:"Linli", role:"admin", tag:"管理", model:"—", status:"idle" },
+  { name:"Codex", role:"agent", tag:"Adapter", model:"grok-4.6", status:"running" },
+  { name:"Claude-Code", role:"agent", tag:"Adapter", model:"sonnet-4.5", status:"queued" },
+  { name:"OpenCode", role:"agent", tag:"Adapter", model:"qwen3-coder", status:"idle" },
+  { name:"Cursor", role:"agent", tag:"Adapter", model:"grok-4.6", status:"idle" },
+];
+const THEMES = [
+  { id:"cyberpunk", name:"Cyberpunk", vibe:"霓虹夜城 · 默认", sw:["#0a0014","#00f0ff","#ff2bd6"] },
+  { id:"atlas",     name:"Atlas",     vibe:"航图控制室 · 日间", sw:["#e7eef5","#1f9bb8","#0b1f33"] },
+  { id:"industrial",name:"Industrial",vibe:"机械工坊", sw:["#1a1c20","#f5a623","#ff6a00"] },
+  { id:"forge",     name:"Forge",     vibe:"炭火工坊", sw:["#141114","#e08a3c","#2a211c"] },
+  { id:"moss",      name:"Moss",      vibe:"苔痕工作室 · 日间", sw:["#e8efe6","#6a8f4e","#1f3a2e"] },
+  { id:"noir",      name:"Noir",      vibe:"墨稿夜台", sw:["#0c0d10","#9a9aa2","#d94b3d"] },
+];
+
+const $ = s => document.querySelector(s);
+const frame = $("#frame"), frameWrap = $("#frameWrap"), msgList = $("#msgList"), composer = $("#composer");
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function nowT(){ return new Date().toTimeString().slice(0,5); }
+
+/* ================== 左栏群列表 ================== */
+function renderGroups(){
+  $("#groupList").innerHTML = GROUPS.map(g => `
+    <button class="group-item ${g.selected?'selected':''}" data-id="${g.id}">
+      <span class="group-avatar">${g.tone}</span>
+      <span class="group-meta"><span class="group-name">${g.name}</span>
+        <span class="group-sub">${g.sub}</span></span>
+      ${g.unread ? `<span class="unread">${g.unread}</span>` : ""}
+    </button>`).join("");
+  document.querySelectorAll("#groupList .group-item").forEach(b => b.addEventListener("click", () => {
+    document.querySelectorAll("#groupList .group-item").forEach(x => x.classList.remove("selected"));
+    b.classList.add("selected");
+    const g = GROUPS.find(x => x.id === b.dataset.id);
+    $("#groupTitle").textContent = g.name;
+    $("#groupSub").textContent = g.sub;
+    msgList.insertAdjacentHTML("afterbegin", sysNote(`切换到 <b>${g.name}</b> · 已加载滚动摘要 · <b>${g.unread}</b> 条未读同步`) );
+    msgList.scrollTop = 0;
+  }));
+}
+renderGroups();
+
+/* ================== 消息模板 ================== */
+function sysNote(html){ return `<div class="sys-note">${html}</div>`; }
+function daySep(t){ return `<div class="day-sep"><span>${t}</span></div>`; }
+function msgUser(name, text, time){
+  return `<div class="m-row self">
+    <span class="avatar">${name[0].toUpperCase()}</span>
+    <div class="m-body">
+      <div class="m-meta"><span class="m-name">${esc(name)}</span><span class="m-time">${time}</span></div>
+      <div class="bubble">${text}</div>
+      <div class="m-actions">
+        <button class="mini-btn">复制</button><button class="mini-btn">↻ 重发</button><button class="mini-btn">🎙 朗读</button>
+      </div>
+    </div>
+  </div>`;
+}
+function msgAgent(name, time, bubble, extra=""){
+  return `<div class="m-row">
+    <span class="avatar">${name[0].toUpperCase()}<span class="dot"></span></span>
+    <div class="m-body">
+      <div class="m-meta"><span class="m-name">${esc(name)}</span><span class="m-time">${time}</span><span class="chip">Adapter</span></div>
+      <div class="bubble">${bubble}${extra}</div>
+      <div class="m-actions">
+        <button class="mini-btn">复制</button><button class="mini-btn">👍 有用</button><button class="mini-btn">👎</button><button class="mini-btn">🎙 朗读</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ================== 种子消息 ================== */
+const seed = [
+  sysNote("V1.3.0 工作流已 <b>promote 生产</b>（:8080）· Tag <b>v1.3.0 = 8e3869d</b>"),
+  daySep("今天 · 8 月 19 日"),
+  msgUser("Linli", "请把三栏 AppFrame 的拖拽宽度约束写进最新 spec，并跑一遍 test gate。", "21:02"),
+  msgAgent("Codex", "21:02",
+    `收到。按 <code>ui-layout</code> 心智落地：几何状态只进 localStorage，业务状态不动。`,
+    `<div class="parts">
+      <div class="part done"><span class="ic">✓</span><div class="pd"><b>计划</b>参照 ResizablePane：左 160–340px，右 240–420px，中栏最小 320px。</div></div>
+      <div class="part done"><span class="ic">✓</span><div class="pd"><b>让步顺序</b>宽 ≤1100px 右栏先收 → ≤860px 左栏轨化 → ≤640px 抽屉。</div></div>
+      <div class="part running"><span class="ic">…</span><div class="pd"><b>实现</b><span class="pe">执行中…</span></div></div>
+      <div class="todo-row done"><span class="ck">✓</span>拖拽分界 pointer events</div>
+      <div class="todo-row done"><span class="ck">✓</span> 56px 控制轨 + 折叠记忆</div>
+      <div class="todo-row"><span class="ck"></span>concession 自动化冒烟</div>
+      <div><span class="tool-chip on">∅ edit</span><span class="tool-chip on">∅ pwsh</span><span class="tool-chip">✓ vitest</span></div>
+    </div>`),
+];
+msgList.innerHTML = seed.join("");
+
+/* ================== 发送：模拟 Agent 分步 ================== */
+let seq = 1;
+const AGENTS = ["Codex","Claude-Code","OpenCode"];
+function sendNow(){
+  const text = composer.value.trim(); if (!text) return;
+  const t0 = nowT();
+  msgList.insertAdjacentHTML("beforeend", msgUser("Linli", esc(text), t0));
+  composer.value = ""; updateSend(); msgList.scrollTop = msgList.scrollHeight;
+
+  const who = AGENTS[seq++ % AGENTS.length];
+  const cardId = "card" + Date.now();
+  const parts = [
+    `<div class="part done"><span class="ic">✓</span><div class="pd"><b>解析</b>识别 @ 提及与目标，建立执行计划。</div></div>`,
+    `<div class="part done"><span class="ic">✓</span><div class="pd"><b>执行</b>读写工作区；无破坏性 IPC 改动。</div></div>`,
+    `<div class="part running"><span class="ic">…</span><div class="pd"><b>验证</b><span class="pe">跑 test gate…</span></div></div>`,
+  ];
+  msgList.insertAdjacentHTML("beforeend",
+    msgAgent(who, t0, `<span class="typing"><i></i><i></i><i></i></span>`, `<div class="parts" id="${cardId}"></div>`));
+  msgList.scrollTop = msgList.scrollHeight;
+
+  const partsEl = document.getElementById(cardId);
+  let i = 0;
+  const timer = setInterval(() => {
+    if (i < parts.length) { partsEl.insertAdjacentHTML("beforeend", parts[i]); i++; }
+    else {
+      clearInterval(timer);
+      partsEl.insertAdjacentHTML("beforeend",
+        `<div class="todo-row done"><span class="ck">✓</span>${esc(text.slice(0,26))}${text.length>26?"…":""}</div>
+         <div><span class="tool-chip on">∅ edit</span><span class="tool-chip on">∅ glob</span><span class="tool-chip">✓ gate</span></div>`);
+      const run = partsEl.querySelector(".part.running");
+      if (run){ run.classList.replace("running","done"); run.querySelector(".ic").textContent = "✓";
+        run.querySelector(".pe").textContent = "通过 · 未破坏 tauri::command 签名"; }
+    }
+    msgList.scrollTop = msgList.scrollHeight;
+  }, 620);
+}
+function updateSend(){ $("#btnSend").disabled = !composer.value.trim(); }
+composer.addEventListener("input", updateSend);
+$("#btnSend").addEventListener("click", sendNow);
+composer.addEventListener("keydown", e => { if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); sendNow(); } });
+
+/* ================== @ 提及 / / 命令 ================== */
+const mentionPop = $("#mentionPop"), slashPop = $("#slashPop"), themePop = $("#themePop");
+function closePops(){ ["mentionPop","slashPop","themePop"].forEach(id => $("#"+id).classList.remove("open")); }
+function posFor(el, pop){ const r = el.getBoundingClientRect();
+  pop.style.left = Math.max(8, Math.min(r.left, innerWidth - 270)) + "px";
+  pop.style.top = (r.bottom + 6) + "px"; }
+
+composer.addEventListener("input", () => {
+  const v = composer.value, caret = composer.selectionStart ?? v.length;
+  const at = v.lastIndexOf("@", caret-1);
+  if (at >= 0 && caret - at <= 20 && !v.slice(at, caret).includes(" ")) {
+    const q = v.slice(at+1, caret).toLowerCase();
+    const hits = MEMBERS.filter(m => m.name.toLowerCase().includes(q));
+    mentionPop.innerHTML = (hits.length ? hits : MEMBERS).map(m =>
+      `<div class="pv-item" data-insert="${esc(m.name)}"><span class="avatar" style="width:22px;height:22px;font-size:11px;border-radius:6px">${m.name[0]}</span>${esc(m.name)}<span class="chip2">${m.role}</span></div>`).join("");
+    posFor(composer, mentionPop); mentionPop.classList.add("open"); slashPop.classList.remove("open"); return;
+  }
+  const sl = v.lastIndexOf("/", caret-1);
+  if (sl === 0 && caret - sl <= 16 && !v.slice(sl, caret).includes(" ")) {
+    const cmds = [["ask","Ask 模式"],["wave","Wave 推进"],["propose","出决策卡"],["approve","批准待审"],["release","标记待发布"]];
+    slashPop.innerHTML = cmds.map(c => `<div class="pv-item"><b style="font-family:var(--font-mono)">/${c[0]}</b><span class="chip2">${c[1]}</span></div>`).join("");
+    posFor(composer, slashPop); slashPop.classList.add("open"); mentionPop.classList.remove("open"); return;
+  }
+  if (mentionPop.classList.contains("open") || slashPop.classList.contains("open")) { mentionPop.classList.remove("open"); slashPop.classList.remove("open"); }
+});
+mentionPop.addEventListener("click", e => {
+  const it = e.target.closest("[data-insert]"); if (!it) return;
+  const v = composer.value, at = v.lastIndexOf("@");
+  composer.value = v.slice(0, at) + "@" + it.dataset.insert + " ";
+  composer.focus(); composer.selectionStart = composer.selectionEnd = composer.value.length;
+  closePops(); updateSend();
+});
+slashPop.addEventListener("click", e => {
+  const b = e.target.closest("b"); if (!b) return;
+  composer.value = b.textContent + " "; composer.focus();
+  composer.selectionStart = composer.selectionEnd = composer.value.length;
+  closePops(); updateSend();
+});
+$("#btnAt").addEventListener("click", () => { composer.focus(); composer.value += "@"; composer.setSelectionRange(composer.value.length, composer.value.length); });
+
+/* ================== 主题 ================== */
+function setTheme(id){
+  document.body.setAttribute("data-theme", id);
+  document.querySelectorAll(".theme-card").forEach(c => c.classList.toggle("active", c.dataset.t === id));
+  try { localStorage.setItem("lp_demo_theme", id); } catch {}
+}
+function renderThemes(){
+  $("#themeGrid").innerHTML = THEMES.map(t =>
+    `<button class="theme-card" data-t="${t.id}">
+       <span class="sw" style="background:linear-gradient(135deg,${t.sw[0]} 0%,${t.sw[2]} 50%,${t.sw[1]} 100%)"></span>
+       <b>${t.name}</b><small>${t.vibe}</small></button>`).join("");
+  document.querySelectorAll(".theme-card").forEach(c => c.addEventListener("click", () => { setTheme(c.dataset.t); themePop.classList.remove("open"); }));
+  document.querySelectorAll("[data-demo-theme]").forEach(b => b.addEventListener("click", () => { setTheme(b.dataset.demoTheme); }));
+}
+renderThemes();
+$("#btnTheme").addEventListener("click", e => { posFor(e.currentTarget, themePop); themePop.classList.toggle("open"); });
+try { if (localStorage.getItem("lp_demo_theme")) setTheme(localStorage.getItem("lp_demo_theme")); } catch {}
+
+/* ================== 三栏状态 + 让步 ================== */
+const state = { left:"open", right:"open", leftW:236, rightW:310 };
+function applyFrame(){
+  frame.dataset.left = state.left;
+  frame.dataset.right = state.right;
+  $("#leftPane").hidden = state.left !== "open";
+  $("#leftRail").hidden = state.left !== "rail";
+  $("#rightPane").style.display = state.right === "open" ? "" : "none";
+  document.documentElement.style.setProperty("--left-w", state.leftW + "px");
+  document.documentElement.style.setProperty("--right-w", state.rightW + "px");
+}
+function concession(w){
+  if (w < 900) { if (state.left === "open") state.left = "rail"; }
+  if (w < 1100) { if (state.right === "open") state.right = "closed"; }
+  applyFrame();
+}
+applyFrame();
+
+const vw = $("#vw");
+function setVw(v){ vw.value = v; frameWrap.style.width = v + "px"; $("#vwLabel").textContent = v + "px"; concession(v); }
+vw.addEventListener("input", () => setVw(+vw.value));
+new ResizeObserver(() => concession(frameWrap.clientWidth)).observe(frameWrap);
+setVw(1280);
+
+function toggleLeft(){ state.left = state.left === "open" ? "rail" : "open"; applyFrame(); }
+function toggleRight(){ state.right = state.right === "open" ? "closed" : "open"; applyFrame(); }
+$("#leftRailBtn").addEventListener("click", toggleLeft);
+$("#railExpand").addEventListener("click", () => { state.left = "open"; applyFrame(); });
+$("#btnRight").addEventListener("click", () => { $("#btnRight").classList.toggle("on"); toggleRight(); });
+$("#demoLeft").addEventListener("click", toggleLeft);
+$("#demoRight").addEventListener("click", toggleRight);
+
+/* 一键看效果：窄屏让步动画回放 */
+$("#demoCheat").addEventListener("click", () => {
+  setVw(760);
+  setTimeout(() => { setVw(1280); state.left = "open"; state.right = "open"; applyFrame(); }, 1700);
+});
+
+/* ================== 拖拽分界 ================== */
+function attachDrag(div, side){
+  div.addEventListener("pointerdown", e => {
+    if (e.button !== 0) return; e.preventDefault();
+    div.classList.add("dragging"); document.body.style.cursor = "col-resize"; document.body.style.userSelect = "none";
+    const startX = e.clientX;
+    const startW = side === "left" ? state.leftW : state.rightW;
+    const move = ev => {
+      const d = ev.clientX - startX;
+      if (side === "left")  { state.leftW  = Math.max(160, Math.min(340, startW + d)); state.left  = "open"; }
+      else                 { state.rightW = Math.max(240, Math.min(420, startW - d)); state.right = "open"; }
+      applyFrame();
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up);
+      div.classList.remove("dragging"); document.body.style.cursor = ""; document.body.style.userSelect = "";
+      if (side === "left"  && state.leftW  <= 172) state.left  = "rail";
+      if (side === "right" && state.rightW <= 250) state.right = "closed";
+      applyFrame();
+    };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
+  });
+}
+attachDrag($("#divL"), "left");
+attachDrag($("#divR"), "right");
+
+/* ================== 右栏页签 ================== */
+function renderRight(){
+  $("#paneMembers").innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px">
+      <div style="font-size:12.5px;font-weight:700">成员 · Agent</div>
+      <button class="icon-btn" style="margin-left:auto;width:26px;height:26px" data-tip="添加成员">＋</button>
+    </div>
+    ${MEMBERS.map(m => `
+      <div class="member-row">
+        <span class="avatar" style="width:30px;height:30px;font-size:13px;border-radius:9px">${m.name[0]}<span class="dot" style="display:${m.status==="running"?"block":"none"}"></span></span>
+        <div class="mr-main">
+          <div class="mr-name">${esc(m.name)}<span class="tag">${m.role==="admin"?"管理":"Adapter"}</span></div>
+          <div class="mr-sub">${m.role==="admin" ? "群管 · 可派活 / 改设置" : `模型 ${m.model} · ${m.role}`}</div>
+        </div>
+        <span class="state-dot ${m.status}"></span>
+      </div>`).join("")}
+    <div class="sec-title"><span>执行中 · 排队</span><span>2</span></div>
+    <div class="queue-card">
+      <div class="qc-top">Codex · Wave #12 三栏壳落地 <span class="st running">执行中</span></div>
+      <div class="qc-bar qc-run"><i></i></div>
+      <div class="qc-sub">test gate · AppFrame.tsx</div>
+    </div>
+    <div class="queue-card">
+      <div class="qc-top">Claude-Code · 交接摘要注入 <span class="st queued">排队</span></div>
+      <div class="qc-bar"><i></i></div>
+      <div class="qc-sub">context_seams · 新事件表</div>
+    </div>
+  `;
+  $("#paneQueue").innerHTML = `
+    <div class="sec-title" style="margin-top:4px"><span>后台任务</span></div>
+    <div class="queue-card"><div class="qc-top">发布检查 checklist <span class="st queued">排队</span></div><div class="qc-bar"><i></i></div><div class="qc-sub">灰度 :8081 前端壳冒烟</div></div>
+    <div class="queue-card"><div class="qc-top">release-hardening 心跳 <span class="st running">执行中</span></div><div class="qc-bar qc-run"><i></i></div><div class="qc-sub">metrics 20s 采样</div></div>
+    <div class="sec-title"><span>待审批</span></div>
+    <div class="appr-card">
+      <div class="ac-title">⛭ promote v1.4-canary → 生产</div>
+      <div class="ac-sub">需要 root 批准 · 15 分钟有效 · 不覆盖 DB</div>
+      <div class="ac-actions"><button class="btn approve">批准</button><button class="btn reject">拒绝</button></div>
+    </div>
+    <div class="sec-title"><span>交接摘要</span></div>
+    <div class="info-line"><b>Context Seams</b> · epitaph 摘要已注入下一 Agent 上下文</div>
+  `;
+  $("#paneDetails").innerHTML = `
+    <div class="sec-title" style="margin-top:4px"><span>会话 · 生命周期</span></div>
+    <div class="info-line"><b>运行设置</b> · 流式分区 / keep-alive on</div>
+    <div class="info-line"><b>工作区</b><span class="path">/AI/LinlisWorkPanel</span></div>
+    <div class="info-line"><b>适配器</b> · codex / claude / opencode / cursor</div>
+    <div class="info-line"><b>心跳</b> · 30s 静默重连</div>
+    <div class="sec-title"><span>模型</span></div>
+    <div class="info-line"><b>默认</b> · grok-4.6 · Ask 徽标 on</div>
+    <div class="sec-title"><span>群设置</span></div>
+    <div class="info-line"><b>公告</b> · 已注入全员 prompt</div>
+    <div class="info-line"><b>加载历史</b> · 12 + 时间戳 + 滚动摘要</div>
+  `;
+}
+renderRight();
+document.querySelectorAll("#rightTabs .tab").forEach(t => t.addEventListener("click", () => {
+  document.querySelectorAll("#rightTabs .tab").forEach(x => x.classList.remove("active"));
+  t.classList.add("active");
+  const map = { members:["paneMembers",true], queue:["paneQueue",true], details:["paneDetails",true] };
+  Object.keys(map).forEach(k => { $("#"+map[k][0]).hidden = k !== t.dataset.tab; });
+}));
+
+/* ================== 帮助 / 快捷键 ================== */
+$("#btnHelp").addEventListener("click", () => $("#helpOverlay").classList.add("open"));
+$("#helpClose").addEventListener("click", () => $("#helpOverlay").classList.remove("open"));
+$("#helpOverlay").addEventListener("click", e => { if (e.target === $("#helpOverlay")) $("#helpOverlay").classList.remove("open"); });
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") closePops(), $("#helpOverlay").classList.remove("open");
+});
+
+setVw(1280);
+</script>
+</body>
+</html>

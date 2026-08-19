@@ -95,6 +95,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
+    // bg-app 跟随主题背景（DSH 借鉴：meta theme-color 与页面底色一致）
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) {
+      const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg-app").trim();
+      meta.setAttribute("content", bg || "#202a3a");
+    }
   }, [theme]);
 
   const setTheme = (id: ThemeId) => setThemeState(id);

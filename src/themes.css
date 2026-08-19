@@ -39,6 +39,31 @@
   --selected: #1a4d6e;
   --hover-sidebar: #16324d;
   --ring: #1f9bb866;
+  color-scheme: light;
+  /* 语义状态色（P0.1 新增） */
+  --success: #1f8f5c;
+  --warn: #b7791f;
+  --error: var(--danger);
+  /* ── LP 语义别名层（P0.1 新增，均由既有 token 组合 → 零视觉回归）── */
+  --lp-bg-app: var(--bg-app);
+  --lp-bg-sidebar: var(--bg-sidebar-solid);
+  --lp-bg-panel: var(--bg-chat);
+  --lp-bg-elevated: var(--bg-surface);
+  --lp-bg-overlay: rgba(0, 0, 0, .5);
+  --lp-bg-hover: color-mix(in srgb, var(--text) 8%, transparent);
+  --lp-bg-active: color-mix(in srgb, var(--accent) 16%, transparent);
+  --lp-border-l1: var(--border-soft);
+  --lp-border-l2: var(--border);
+  --lp-text-primary: var(--text);
+  --lp-text-secondary: var(--text-soft);
+  --lp-text-tertiary: var(--text-faint);
+  --lp-text-on-sidebar: var(--text-on-sidebar);
+  --lp-accent: var(--accent);
+  --lp-accent-strong: var(--accent-strong);
+  --lp-ring: var(--ring);
+  --lp-success: var(--success);
+  --lp-warn: var(--warn);
+  --lp-error: var(--error);
 }
 
 [data-theme="forge"] {
@@ -72,6 +97,10 @@
   --selected: #4a2d18;
   --hover-sidebar: #2a1d16;
   --ring: #e08a3c66;
+  color-scheme: dark;
+  --success: #6fae7a;
+  --warn: #d98f4a;
+  --error: var(--danger);
 }
 
 [data-theme="moss"] {
@@ -105,6 +134,10 @@
   --selected: #2d5442;
   --hover-sidebar: #274536;
   --ring: #6a8f4e66;
+  color-scheme: light;
+  --success: #2f8f5f;
+  --warn: #a6752e;
+  --error: var(--danger);
 }
 
 [data-theme="noir"] {
@@ -138,6 +171,10 @@
   --selected: #4a221e;
   --hover-sidebar: #1c1f28;
   --ring: #d94b3d66;
+  color-scheme: dark;
+  --success: #4ade80;
+  --warn: #fbbf24;
+  --error: var(--danger);
 }
 
 [data-theme="cyberpunk"] {
@@ -177,6 +214,10 @@
   --selected: #3a0860;
   --hover-sidebar: #220038;
   --ring: #00f0ff88;
+  color-scheme: dark;
+  --success: #34d399;
+  --warn: #fbbf24;
+  --error: var(--danger);
 }
 
 [data-theme="industrial"] {
@@ -215,6 +256,10 @@
   --selected: #3d3218;
   --hover-sidebar: #2a3038;
   --ring: #f5a62388;
+  color-scheme: dark;
+  --success: #3fb27f;
+  --warn: #f5a623;
+  --error: var(--danger);
 }
 
 /* ── Global chrome rewrite (overrides legacy hardcodes) ── */
@@ -269,11 +314,75 @@ button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .5; }
 
 .app-shell {
+  --left-w: 248px;
+  --right-w: 310px;
+  --rail-w: 56px;
   display: grid;
-  grid-template-columns: 248px minmax(500px, 1fr) 310px;
+  grid-template-columns: var(--left-w) 8px minmax(500px, 1fr) 8px var(--right-w);
   height: 100vh;
   overflow: hidden;
   backdrop-filter: saturate(1.05);
+}
+
+/* ── 三栏分界条（DSH ui-layout 借鉴，P0.3） ── */
+.app-shell .divider {
+  width: 100%;
+  height: 100%;
+  cursor: col-resize;
+  position: relative;
+  z-index: 4;
+  touch-action: none;
+  user-select: none;
+}
+.app-shell .divider::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  transform: translateX(-50%);
+  background: var(--border-soft);
+  transition: background .15s ease, width .15s ease, box-shadow .15s ease;
+}
+.app-shell .divider:hover::after,
+.app-shell .divider.dragging::after {
+  background: var(--accent);
+  width: 2px;
+  box-shadow: 0 0 10px var(--ring);
+}
+
+/* 右栏关闭：右列与右分界归零，中栏占满 */
+.app-shell[data-right="closed"] {
+  grid-template-columns: var(--left-w) 8px minmax(500px, 1fr) 0 0;
+}
+
+/* ── 左栏控制轨（56px，仅宽屏；移动端仍是 Drawer） ── */
+.rail-toggle {
+  color: var(--text-on-sidebar-soft);
+  font-size: 12px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  text-align: left;
+}
+.rail-toggle:hover { color: var(--text-on-sidebar); background: var(--hover-sidebar); }
+
+@media (min-width: 1081px) {
+  .app-shell[data-left="rail"] {
+    grid-template-columns: var(--rail-w) 8px minmax(500px, 1fr) 8px var(--right-w);
+  }
+  .app-shell[data-left="rail"] .group-sidebar { width: var(--rail-w); justify-content: flex-start; }
+  .app-shell[data-left="rail"] .brand { min-height: 64px; padding: 0; justify-content: center; }
+  .app-shell[data-left="rail"] .brand-text,
+  .app-shell[data-left="rail"] .sidebar-heading,
+  .app-shell[data-left="rail"] .group-item .group-name,
+  .app-shell[data-left="rail"] .group-item .unread-badge,
+  .app-shell[data-left="rail"] .group-item-row .group-archive-btn,
+  .app-shell[data-left="rail"] .sidebar-footer > button:not(.rail-toggle) { display: none; }
+  .app-shell[data-left="rail"] .group-list { padding: 0 8px; }
+  .app-shell[data-left="rail"] .group-item { justify-content: center; padding: 9px 0; margin: 2px auto; width: 40px; border-radius: 11px; }
+  .app-shell[data-left="rail"] .group-avatar { width: 28px; height: 28px; font-size: 12px; }
+  .app-shell[data-left="rail"] .sidebar-footer { padding: 8px 0; display: grid; place-items: center; gap: 4px; }
 }
 
 .group-sidebar {
@@ -882,6 +991,59 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 /* ── PM refreshing indicator ── */
 .pm-refreshing { margin-left: auto; font-size: 10px; color: var(--text-faint); font-weight: 600; padding: 6px 4px; }
 
+/* ── P0.4 残留硬编码 → 语义 token（第一片：状态/日志/操作按钮，叠加于 themes.css 不回流 styles.css） ── */
+.status.running, .status.queued, .review-badge.pending, .log-info {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent-strong);
+}
+.status.completed, .review-badge.approved {
+  background: color-mix(in srgb, var(--success) 16%, transparent);
+  color: var(--success);
+}
+.status.failed, .status.cancelled, .status.interrupted, .review-badge.rejected, .log-error {
+  background: color-mix(in srgb, var(--error) 14%, transparent);
+  color: var(--error);
+}
+.status.awaiting_review, .log-warn {
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+  color: var(--warn);
+}
+.status.changes_requested {
+  background: color-mix(in srgb, #7e57c2 18%, transparent);
+  color: #7e57c2;
+}
+.log-debug {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text-secondary);
+}
+.log-row { border-bottom-color: var(--border-l1); }
+.log-message { color: var(--text-primary); }
+.log-details {
+  background: color-mix(in srgb, var(--text) 5%, var(--bg-elevated, var(--bg-surface)));
+  border-color: var(--border-soft);
+  color: var(--text-secondary);
+}
+.run-error { color: var(--error); }
+.log-clear { color: var(--error); }
+.hold-talk-button {
+  border-color: var(--border-l2);
+  background: var(--bg-elevated, var(--bg-surface));
+  color: var(--text-secondary);
+}
+.hold-talk-button:hover:not(:disabled) { background: var(--bg-hover); }
+.hold-talk-button.recording {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+.bubble-play-btn {
+  background: color-mix(in srgb, var(--text) 9%, transparent);
+  color: var(--text-secondary);
+}
+.bubble-play-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 14%, transparent); }
+.own .bubble-play-btn { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+
+
 /* ── Focus visibility (a11y) ── */
 button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, a:focus-visible {
   outline: 2px solid var(--ring);
@@ -891,6 +1053,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 /* ── Mobile / narrow layouts ── */
 @media (max-width: 1080px) {
   .app-shell { grid-template-columns: 1fr; }
+  .app-shell[data-left="rail"],
+  .app-shell[data-right="closed"] { grid-template-columns: 1fr; }
+  .app-shell .divider { display: none; }
   .group-sidebar {
     position: fixed; left: 0; top: 0; bottom: 0; width: min(290px, 86vw); z-index: 30;
     transform: translateX(-100%); transition: transform .22s ease;
