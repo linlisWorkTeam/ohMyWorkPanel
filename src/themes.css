@@ -1312,4 +1312,28 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   border-radius: 999px;
 }
 
+/* composer 工具行 + goal bar 交互 */
+.composer-tools { display: flex; align-items: center; gap: 10px; padding: 0 2px 7px; }
+.composer-tools .tool-btn {
+  width: 28px; height: 28px; border-radius: 8px;
+  display: grid; place-items: center;
+  color: var(--lp-text-secondary);
+  border: 1px solid var(--lp-border-l1);
+  background: var(--lp-bg-elevated);
+  font-weight: 700; font-size: 13px;
+}
+.composer-tools .tool-btn:hover {
+  color: var(--lp-accent);
+  border-color: var(--lp-accent);
+  background: var(--lp-bg-active);
+}
+.composer-hint-text {
+  display: inline-flex; align-items: center; gap: 10px;
+  font-size: 11px; color: var(--lp-text-tertiary);
+}
+.goal-bar { cursor: pointer; }
+.goal-bar:hover { background: color-mix(in srgb, var(--lp-accent) 12%, var(--lp-bg-active)); }
+.goal-bar:focus-visible { outline: 2px solid var(--lp-ring); outline-offset: -2px; }
+
+
 

@@ -961,6 +961,14 @@ export function App() {
     }
   };
   const selectMention = (member: Member) => setComposer((value) => value.replace(/@([^\s@]*)$/u, `@${member.displayName} `));
+  const insertAt = () => {
+    composerRef.current?.focus();
+    setComposer((value) => value + "@");
+    requestAnimationFrame(() => {
+      const ta = composerRef.current;
+      if (ta) ta.setSelectionRange(ta.value.length, ta.value.length);
+    });
+  };
 
   const toggleExtension = async (extId: string, enabled: boolean) => {
     if (!current) return;
@@ -1201,7 +1209,15 @@ export function App() {
           <button className="icon-button mobile-members" onClick={toggleMembers} aria-label="成员面板">成员</button>
         </header>
         {goalBar && (
-          <div className="goal-bar" data-status={goalBar.status}>
+          <div
+            className="goal-bar"
+            data-status={goalBar.status}
+            onClick={() => setMainView("versions")}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setMainView("versions"); } }}
+            title="查看版本 / Wave"
+          >
             <span className="g-flag">{goalBar.versionName}</span>
             <span className="g-wave">{goalBar.waveTitle}</span>
             <span className="progress"><i style={{ width: `${goalBar.total ? Math.round((goalBar.done / goalBar.total) * 100) : 0}%` }} /></span>
@@ -1324,6 +1340,12 @@ export function App() {
               ))}
             </div>
           )}
+          <div className="composer-tools">
+            <button type="button" className="tool-btn" title="提及成员（输入 @ 亦可）" onClick={insertAt}>@</button>
+            <span className="composer-hint-text">
+              <kbd>@</kbd> 提及成员 · <kbd>Enter</kbd> 发送 · 草稿自动保存（本机）
+            </span>
+          </div>
           <textarea ref={composerRef} value={composer} onChange={(event) => setComposer(event.target.value)} onKeyDown={composerKeyDown} onPaste={handlePaste} placeholder={`发送消息，输入 @ 选择成员。${sendKeyHint(sendKeyMode)}`} />
           <div className="composer-actions">
             <span>{sending ? "发送中…" : (isChatGroup ? "聊天模式" : "Agent 在服务器工作目录中运行")}</span>
