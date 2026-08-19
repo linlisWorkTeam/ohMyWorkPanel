@@ -298,6 +298,28 @@ async fn list_presence_web(
     })))
 }
 
+/// HTTP presence for clients that cannot hold `/ws` (WorkPet via Connecter).
+/// Marks `claims.sub` online for 90s; poll `GET /api/presence` or repeat this call.
+const HTTP_PRESENCE_TTL_MS: i64 = 90_000;
+
+async fn heartbeat_presence_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    if claims.sub.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "missing user".into()));
+    }
+    let first = state.presence.touch_http(&claims.sub, HTTP_PRESENCE_TTL_MS);
+    if first {
+        emit_presence(&state.tx, &claims.sub, true);
+    }
+    Ok(Json(json!({
+        "ok": true,
+        "ttlMs": HTTP_PRESENCE_TTL_MS,
+        "onlineUserIds": state.presence.online_user_ids(),
+    })))
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct CreateGroupInputWeb {
@@ -2375,6 +2397,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/api/groups/{id}", get(get_group))
         .route("/api/groups/{id}/read", put(mark_group_read_web))
         .route("/api/presence", get(list_presence_web))
+        .route("/api/presence/heartbeat", post(heartbeat_presence_web))
         .route("/api/groups/{id}/announcement", get(get_announcement_web).put(put_announcement_web))
         .route("/api/groups/{id}/workspace", put(put_workspace_web))
         .route("/api/groups/{id}/archive", put(put_group_archive_web))
