@@ -7,6 +7,7 @@ import { modelsForAdapter } from "../agentModels";
 import { agentBusyLabel, queueCounts, runsForAgentActive } from "../queueCounts";
 import { memberRosterAction } from "../memberForm";
 import { PHASE_LABEL, time, dayLabel, readError } from "./uiShared";
+import { applySelfDetailsToggle } from "../detailsToggle";
 import type { Group, GroupState, Member, MessageFeedback, RunPhaseEntry, TaskRun } from "../types";
 
 /* ============================================================
@@ -113,7 +114,7 @@ export const MessageBubble = memo(function MessageBubble({
             <details
               className="agent-reply-fold"
               open={expanded}
-              onToggle={(event) => setExpanded(event.currentTarget.open)}
+              onToggle={(event) => applySelfDetailsToggle(event, setExpanded)}
             >
               <summary>{responding ? "流式输出中…" : extractReplyPreview(message.content)}</summary>
               {body}
@@ -289,8 +290,8 @@ export function LazyChannelPart({
   return (
     <details
       className={`part-${channel}`}
-      open={open}
-      onToggle={(event) => setOpen(event.currentTarget.open)}
+      onClick={(event) => event.stopPropagation()}
+      onToggle={(event) => applySelfDetailsToggle(event, setOpen)}
     >
       <summary>
         {label}

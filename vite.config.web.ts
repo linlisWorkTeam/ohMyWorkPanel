@@ -26,9 +26,9 @@ export default defineConfig({
         find: "@tauri-apps/api/event",
         replacement: path.resolve(__dirname, "src/stubs/tauri-event.ts"),
       },
-      // Redirect ./api to the web API layer (instead of Tauri invoke)
+      // Redirect every relative import of src/api.ts (App `./api` AND furniture `../api`)
       {
-        find: /^\.\/api$/,
+        find: /^(?:\.\.\/)+api$|^\.\/api$/,
         replacement: path.resolve(__dirname, "src/api-web.ts"),
       },
     ],

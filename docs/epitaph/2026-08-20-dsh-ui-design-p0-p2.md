@@ -58,5 +58,5 @@ status: active
 6. `APP` git：**从不 stash**；每轮验证后直接 commit+push（网络不稳，push 失败要重试几次）。
 
 ## 之后
-- 等视觉模型评审结果，按反馈调样式（都在 `themes.css` 的 `--lp-*`/P1/P2 块与 `furniture.tsx`）。
+- **壳层已按 `ui-demo.html` 落地**（见 [`2026-08-20-ui-demo-chrome-parity.md`](./2026-08-20-ui-demo-chrome-parity.md)）：独立 56px 轨、chip 头、composer 卡片、三页签、常驻 WAVE、去掉城市底图。气泡内部 / 成员行仍待对齐。
 - 上生产仍按老流程（服务器 `git pull` → `deploy-canary.sh` → §F 冒烟 → `approve-prod-release.sh && promote-canary.sh`，需 root 批准）。

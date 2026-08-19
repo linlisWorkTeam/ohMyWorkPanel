@@ -71,7 +71,7 @@ import {
   sttViaProxy,
   ttsPlaybackViaProxy,
 } from "./liveVoice";
-import { Brand, ThemeSwitcher } from "./theme";
+import { Brand, HeaderThemePop, ThemeSwitcher } from "./theme";
 
 type NewMember = {
   kind: "agent" | "user" | "chatbot";
@@ -113,7 +113,9 @@ export function App() {
   const [showMembers, setShowMembers] = useState(() =>
     typeof window === "undefined" || window.matchMedia("(min-width: 1081px)").matches,
   );
-  const [rightPanelTab, setRightPanelTab] = useState<"members" | "experiences" | "logs" | "queue">("members");
+  const [rightPanelTab, setRightPanelTab] = useState<"members" | "queue" | "details">("members");
+  const [detailInner, setDetailInner] = useState<"home" | "experiences" | "logs">("home");
+  const [headerPop, setHeaderPop] = useState<null | "theme" | "help">(null);
   const [mainView, setMainView] = useState<string>("chat");
   const [adminInAsk, setAdminInAsk] = useState(false);
   const [extensions, setExtensions] = useState<ExtensionStatus[]>([]);
@@ -659,6 +661,42 @@ export function App() {
     return () => { cancelled = true; };
   }, [current?.group.id, current?.group.groupKind, mainView]);
 
+  // P2 键盘快捷键：⌘/Ctrl+1 左栏折叠轨、⌘/Ctrl+2 成员面板、Esc 关浮层
+  // Must stay above auth early returns — login→ready must not add hooks (React #310).
+  useEffect(() => {
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      const mod = event.ctrlKey || event.metaKey;
+      if (mod && event.key === "1") { event.preventDefault(); frame.toggleLeft(); }
+      else if (mod && event.key === "2") {
+        event.preventDefault();
+        setShowMembers((open) => {
+          const next = !open;
+          if (next) setShowSidebar(false);
+          return next;
+        });
+      } else if (event.key === "Escape") {
+        if (showCreate || showSettings || showAddMember || headerPop) event.preventDefault();
+        setShowCreate(false);
+        setShowSettings(false);
+        setShowAddMember(false);
+        setHeaderPop(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frame.toggleLeft, showCreate, showSettings, showAddMember, headerPop]);
+
+  useEffect(() => {
+    if (headerPop !== "theme") return;
+    const close = (event: globalThis.PointerEvent) => {
+      const el = event.target as Element | null;
+      if (!el?.closest(".header-right")) setHeaderPop(null);
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [headerPop]);
+
   const handleMessageScroll = () => {
     const node = messageListRef.current;
     if (!node) return;
@@ -729,6 +767,12 @@ export function App() {
     ? resolveSenderMemberId(members, current.group.ownerMemberId, authUser?.userId, isAdmin)
     : null;
   const activeMembers = members.filter((member) => member.isActive);
+  const rosterHint = activeMembers
+    .filter((m) => m.kind === "agent" || m.kind === "chatbot")
+    .map((m) => m.displayName)
+    .slice(0, 5)
+    .join(" · ");
+  const hasUnread = groups.some((g) => (g.unreadCount ?? 0) > 0);
   const addMemberKind = chatbotTaken && newMember.kind === "chatbot" ? "agent" : newMember.kind;
   const activeGroups = sortGroupsForSidebar(groups.filter((g) => !g.archived));
   const archivedGroups = groups.filter((g) => g.archived);
@@ -1102,30 +1146,23 @@ export function App() {
     });
   };
 
-  // P2 键盘快捷键：⌘/Ctrl+1 左栏折叠轨、⌘/Ctrl+2 成员面板、Esc 关浮层
-  useEffect(() => {
-    const onKey = (event: globalThis.KeyboardEvent) => {
-      const mod = event.ctrlKey || event.metaKey;
-      if (mod && event.key === "1") { event.preventDefault(); frame.toggleLeft(); }
-      else if (mod && event.key === "2") { event.preventDefault(); toggleMembers(); }
-      else if (event.key === "Escape") {
-        if (showCreate || showSettings || showAddMember) event.preventDefault();
-        setShowCreate(false);
-        setShowSettings(false);
-        setShowAddMember(false);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frame.toggleLeft, showCreate, showSettings, showAddMember]);
-
   return <main className="app-shell" ref={frame.rootRef} style={frame.rootStyle} data-left={frame.leftMode} data-right={frame.rightOpen ? "open" : "closed"}>
     {showSidebar && <div className="sidebar-backdrop" onClick={() => setShowSidebar(false)} />}
     {showMembers && <div className="members-backdrop" onClick={() => setShowMembers(false)} />}
     <aside className={`group-sidebar ${showSidebar ? "open" : ""}`}>
+      <div className="dsh-rail" aria-label="控制轨">
+        <span className="rail-logo">L</span>
+        <button type="button" className={`rail-btn active${hasUnread ? " badge" : ""}`} title="展开群列表" onClick={() => frame.toggleLeft()}>◉</button>
+        <button type="button" className="rail-btn" title="公告 · 群设置" onClick={() => setMainView("settings")}>◎</button>
+        {isAdmin && (
+          <button type="button" className="rail-btn" title="Agent 配置" onClick={() => setMainView("agent-config")}>◇</button>
+        )}
+        <button type="button" className="rail-btn rail-btm" title="运行设置" onClick={() => setShowSettings(true)}>⚙</button>
+        <button type="button" className="rail-btn" title="展开左栏" onClick={() => frame.toggleLeft()}>▶</button>
+      </div>
+      <div className="left-expanded">
       <Brand />
-      <div className="sidebar-heading"><span>群聊</span>{isAdmin && <button className="icon-button" onClick={() => setShowCreate(true)} aria-label="新建群聊">＋</button>}</div>
+      <div className="sidebar-heading"><span>工作区 · 群</span>{isAdmin && <button className="icon-button" onClick={() => setShowCreate(true)} aria-label="新建群聊">＋</button>}</div>
       <nav className="group-list">
         {activeGroups.map((group) => (
           <div key={group.id} className={`group-item-row ${group.id === current?.group.id ? "selected" : ""} ${(group.unreadCount ?? 0) > 0 ? "has-unread" : ""}`}>
@@ -1169,6 +1206,7 @@ export function App() {
         <button type="button" onClick={() => setShowSettings(true)}>运行设置</button>
         {requiresAuth && <button onClick={() => goLogin(null)}>退出登录{authUser ? `（${authUser.username}）` : ""}</button>}
       </div>
+      </div>
     </aside>
 
     <Divider {...frame.leftDivider} />
@@ -1176,85 +1214,96 @@ export function App() {
     <section className="chat-panel">
       {current ? <>
         <header className="chat-header">
-          <div className="chat-header-main">
-            <button className="icon-button mobile-nav" onClick={openSidebar} aria-label="群列表">☰</button>
-            <div>
-              <div className="group-title-row">
-                <h1>{current.group.name}</h1>
-                <div className="view-toggle" role="group" aria-label="主视图">
-                  <button type="button" className={mainView === "chat" ? "active" : ""} onClick={() => setMainView("chat")}>聊天</button>
-                  {!isChatGroup && (
-                    <button type="button" className={mainView === "versions" ? "active" : ""} onClick={() => setMainView("versions")}>版本</button>
-                  )}
-                  <button type="button" className={mainView === "settings" ? "active" : ""} onClick={() => setMainView("settings")}>设置</button>
-                  {isAdmin && (
-                    <button type="button" className={mainView === "agent-config" ? "active" : ""} onClick={() => setMainView("agent-config")} title="Agent 配置：一键导入/导出、环境自检、CLI 自动安装">
-                      Agent 配置{agentCfgImported ? "✓" : ""}
-                    </button>
-                  )}
-                  {extTabViews.map(({ ext, tab, viewKey }) => {
-                    const ready = Boolean(ext.enabled && ext.healthy);
-                    return (
-                      <button
-                        key={viewKey}
-                        type="button"
-                        className={mainView === viewKey ? "active" : ""}
-                        disabled={!ext.enabled}
-                        title={
-                          !ext.enabled
-                            ? `请先在运行设置中开启 ${ext.name}`
-                            : ready
-                              ? tab.title
-                              : `${ext.name} 未就绪`
-                        }
-                        onClick={() => setMainView(viewKey)}
-                      >
-                        {tab.title}{ext.enabled && !ready ? "·离线" : ""}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <p>
-                {activeMembers.length} 名成员 · {isChatGroup ? "聊天群" : "项目群"}
-                {!isChatGroup && current.group.workspacePath
-                  ? ` · ${current.group.workspacePath}`
-                  : ""}
-                {" · "}
-                <button type="button" className="linkish" onClick={() => setMainView("settings")}>
-                  公告 / 工作目录在「设置」
-                </button>
-                {extTabViews.some((v) => v.ext.enabled)
-                  ? ` · Extend ${extTabViews.filter((v) => v.ext.enabled && v.ext.healthy).length}/${extTabViews.filter((v) => v.ext.enabled).length} 就绪`
-                  : ""}
-              </p>
-            </div>
+          <button className="icon-button mobile-nav" onClick={openSidebar} aria-label="群列表">☰</button>
+          <div className="chat-title">
+            <h1>
+              {current.group.name}
+              <span className="chip">{isChatGroup ? "chat" : "project"}</span>
+            </h1>
+            <p>
+              {rosterHint ? `${rosterHint} · ` : ""}
+              {activeMembers.length} 名成员
+            </p>
           </div>
-          <button
-            type="button"
-            className="members-toggle"
-            onClick={toggleMembers}
-            aria-label="成员 / Agent 面板"
-            aria-pressed={showMembers}
-            title="成员 / Agent 面板（Ctrl/⌘ + 2）"
-          >
-            {showMembers ? "▤" : "▥"} 成员
-          </button>
+          <div className="header-right">
+            <button
+              type="button"
+              className={`icon-btn ${showMembers ? "on" : ""}`}
+              onClick={toggleMembers}
+              aria-label="成员 / Agent 面板"
+              aria-pressed={showMembers}
+              title="成员 / Agent 面板（Ctrl/⌘ + 2）"
+            >
+              ☰
+            </button>
+            <button
+              type="button"
+              className={`icon-btn ${headerPop === "theme" ? "on" : ""}`}
+              onClick={() => setHeaderPop((p) => (p === "theme" ? null : "theme"))}
+              title="外观主题"
+            >
+              🎨
+            </button>
+            {!isChatGroup && (
+              <button
+                type="button"
+                className={`icon-btn ${mainView === "versions" ? "on" : ""}`}
+                onClick={() => setMainView(mainView === "versions" ? "chat" : "versions")}
+                title="版本 · Wave"
+              >
+                ⛭
+              </button>
+            )}
+            {isAdmin && (
+              <button
+                type="button"
+                className={`icon-btn ${mainView === "agent-config" ? "on" : ""}`}
+                onClick={() => setMainView(mainView === "agent-config" ? "chat" : "agent-config")}
+                title={agentCfgImported ? "Agent 配置（已导入）" : "Agent 配置"}
+              >
+                ◇
+              </button>
+            )}
+            {extTabViews.map(({ ext, tab, viewKey }) => {
+              const ready = Boolean(ext.enabled && ext.healthy);
+              return (
+                <button
+                  key={viewKey}
+                  type="button"
+                  className={`icon-btn ${mainView === viewKey ? "on" : ""}`}
+                  disabled={!ext.enabled}
+                  title={!ext.enabled ? `请先在运行设置中开启 ${ext.name}` : ready ? tab.title : `${ext.name} 未就绪`}
+                  onClick={() => setMainView(viewKey)}
+                >
+                  {tab.title.slice(0, 1)}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              className={`icon-btn ${headerPop === "help" ? "on" : ""}`}
+              onClick={() => setHeaderPop((p) => (p === "help" ? null : "help"))}
+              title="交互说明"
+            >
+              ?
+            </button>
+            <HeaderThemePop open={headerPop === "theme"} onPick={() => setHeaderPop(null)} />
+          </div>
         </header>
-        {goalBar && (
+        {!isChatGroup && (
           <div
             className="goal-bar"
-            data-status={goalBar.status}
+            data-status={goalBar?.status ?? "idle"}
             onClick={() => setMainView("versions")}
             role="button"
             tabIndex={0}
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setMainView("versions"); } }}
             title="查看版本 / Wave"
           >
-            <span className="g-flag">{goalBar.versionName}</span>
-            <span className="g-wave">{goalBar.waveTitle}</span>
-            <span className="progress"><i style={{ width: `${goalBar.total ? Math.round((goalBar.done / goalBar.total) * 100) : 0}%` }} /></span>
-            <span className="g-act">{goalBar.done}/{goalBar.total} 完成</span>
+            <span className="g-flag">{goalBar?.versionName ?? "WAVE"}</span>
+            <span className="g-wave">{goalBar?.waveTitle ?? "尚未建立 Wave · 点此到版本页"}</span>
+            <span className="progress"><i style={{ width: `${goalBar && goalBar.total ? Math.round((goalBar.done / goalBar.total) * 100) : 0}%` }} /></span>
+            <span className="g-act">{goalBar ? `${goalBar.done}/${goalBar.total} 完成` : "0/0"}</span>
           </div>
         )}
         {activeExtView ? (
@@ -1383,16 +1432,41 @@ export function App() {
               ))}
             </div>
           )}
-          <div className="composer-tools">
-            <button type="button" className="tool-btn" title="提及成员（输入 @ 亦可）" onClick={insertAt}>@</button>
-            <span className="composer-hint-text">
-              <kbd>@</kbd> 提及成员 · <kbd>Enter</kbd> 发送 · 草稿自动保存（本机）
-            </span>
-          </div>
-          <textarea ref={composerRef} value={composer} onChange={(event) => { const value = event.target.value; setComposer(value); setSlashOpen(value.startsWith("/") && !value.includes(" ")); }} onKeyDown={composerKeyDown} onPaste={handlePaste} placeholder={`发送消息，输入 @ 选择成员。${sendKeyHint(sendKeyMode)}`} />
-          <div className="composer-actions">
-            <span>{sending ? "发送中…" : (isChatGroup ? "聊天模式" : "Agent 在服务器工作目录中运行")}</span>
-            <span className="composer-actions-right">
+          <div className="composer">
+            <div className="composer-tools">
+              <button type="button" className="tool-btn" title="提及成员（输入 @ 亦可）" onClick={insertAt}>@</button>
+              <button type="button" className="tool-btn" disabled={ocrRunning || ocrPasting} title={ocrPasting ? "正在识别粘贴的图片…" : "从图片识别文字"} onClick={() => void handleOcr()}>{ocrPasting ? "…" : "🖼"}</button>
+              {liveReady && (
+                <button
+                  type="button"
+                  className={`tool-btn${voiceHolding ? " on" : ""}`}
+                  disabled={voiceBusy || sending}
+                  title={secureMicAvailable() ? "按住说话，松手发送" : "需要 HTTPS 或 localhost 才能使用麦克风"}
+                  onPointerDown={onHoldTalkStart}
+                  onPointerUp={onHoldTalkEnd}
+                  onPointerCancel={onHoldTalkEnd}
+                  onContextMenu={(e) => e.preventDefault()}
+                >
+                  {voiceBusy ? "…" : "🎙"}
+                </button>
+              )}
+              <button
+                type="button"
+                className="tool-btn spacer"
+                title="斜杠命令 /board /approve /wave"
+                onClick={() => {
+                  setComposer((v) => (v.startsWith("/") ? v : v ? v : "/"));
+                  setSlashOpen(true);
+                  composerRef.current?.focus();
+                }}
+              >
+                /
+              </button>
+            </div>
+            <textarea ref={composerRef} rows={2} value={composer} onChange={(event) => { const value = event.target.value; setComposer(value); setSlashOpen(value.startsWith("/") && !value.includes(" ")); }} onKeyDown={composerKeyDown} onPaste={handlePaste} placeholder={`给群里的 Agent 派活…  @ 提及 · ${sendKeyHint(sendKeyMode)} · 草稿自动保存`} />
+            <div className="composer-hint">
+              <span><kbd>@</kbd> 提及</span>
+              <span><kbd>/</kbd> 命令</span>
               <button
                 type="button"
                 className="quiet-button send-key-toggle"
@@ -1403,25 +1477,10 @@ export function App() {
                   saveSendKeyMode(next);
                 }}
               >
-                {sendKeyMode === "enter" ? "↵ Enter" : "⌃↵ Ctrl"}
+                <kbd>{sendKeyMode === "enter" ? "Enter" : "Ctrl+Enter"}</kbd> 发送
               </button>
-              <button className="ocr-button" disabled={ocrRunning || ocrPasting} title={ocrPasting ? "正在识别粘贴的图片…" : "从图片识别文字"} onClick={() => void handleOcr()}>{ocrPasting ? "…" : "📷"}</button>
-              {liveReady && (
-                <button
-                  type="button"
-                  className={`hold-talk-button${voiceHolding ? " recording" : ""}`}
-                  disabled={voiceBusy || sending}
-                  title={secureMicAvailable() ? "按住说话，松手发送" : "需要 HTTPS 或 localhost 才能使用麦克风"}
-                  onPointerDown={onHoldTalkStart}
-                  onPointerUp={onHoldTalkEnd}
-                  onPointerCancel={onHoldTalkEnd}
-                  onContextMenu={(e) => e.preventDefault()}
-                >
-                  {voiceBusy ? "识别中…" : voiceHolding ? "松开发送" : "按住说话"}
-                </button>
-              )}
-              <button className="send-button" disabled={!composer.trim() || sending} onClick={() => void send()}>{sending ? "发送中" : "发送"}</button>
-            </span>
+              <button className="send-btn" disabled={!composer.trim() || sending} onClick={() => void send()}>{sending ? "发送中" : "发送 ⏎"}</button>
+            </div>
           </div>
         </footer>
         </>}
@@ -1434,15 +1493,12 @@ export function App() {
 
     {current && showMembers && <aside className="member-panel">
       <header>
-        <div className="pm-tab-bar">
-          <button className={`pm-tab-btn ${rightPanelTab === "members" ? "active" : ""}`} onClick={() => setRightPanelTab("members")}>群成员</button>
-          <button className={`pm-tab-btn ${rightPanelTab === "queue" ? "active" : ""}`} onClick={() => setRightPanelTab("queue")}>队列</button>
-          {!isChatGroup && isAdmin && <button className={`pm-tab-btn ${mainView === "versions" ? "active" : ""}`} onClick={() => { setMainView("versions"); }}>版本管理</button>}
-          <button className={`pm-tab-btn ${mainView === "settings" ? "active" : ""}`} onClick={() => { setMainView("settings"); setShowMembers(false); }}>群设置</button>
-          {isAdmin && <button className={`pm-tab-btn ${rightPanelTab === "experiences" ? "active" : ""}`} onClick={() => setRightPanelTab("experiences")}>经验</button>}
-          {isAdmin && <button className={`pm-tab-btn ${rightPanelTab === "logs" ? "active" : ""}`} onClick={() => setRightPanelTab("logs")}>日志</button>}
+        <div className="tabs" role="tablist" aria-label="右栏">
+          <button type="button" className={`tab ${rightPanelTab === "members" ? "active" : ""}`} onClick={() => setRightPanelTab("members")}>成员</button>
+          <button type="button" className={`tab ${rightPanelTab === "queue" ? "active" : ""}`} onClick={() => setRightPanelTab("queue")}>队列</button>
+          <button type="button" className={`tab ${rightPanelTab === "details" ? "active" : ""}`} onClick={() => { setRightPanelTab("details"); setDetailInner("home"); }}>详情</button>
         </div>
-        <button className="icon-button" onClick={() => setShowMembers(false)}>×</button>
+        <button className="icon-btn" onClick={() => setShowMembers(false)} aria-label="关闭右栏">×</button>
       </header>
       {rightPanelTab === "members" ? <>
         {(current.group.announcement ?? "").trim() && (
@@ -1578,9 +1634,23 @@ export function App() {
           </>}
           <div><button type="button" className="quiet-button" onClick={() => setShowAddMember(false)}>取消</button><button type="submit">添加</button></div>
         </form> : isAdmin ? <button className="add-member-button" onClick={() => { setNewMember(emptyMember); setShowAddMember(true); }}>＋ 添加成员</button> : null}
-      </> : rightPanelTab === "experiences" ? <ExperiencePanel groupId={current.group.id} members={members} ownerId={current.group.ownerMemberId} onError={(msg) => setError(msg)} />
-      : rightPanelTab === "queue" ? <RunQueuePane runs={current.runs} members={members} onCancel={(run) => void changeRun(run, "cancel")} onReview={(run, decision) => void changeRunReview(run, decision)} />
-      : <LogsPanel onError={(msg) => setError(msg)} />}
+      </> : rightPanelTab === "queue" ? <RunQueuePane runs={current.runs} members={members} onCancel={(run) => void changeRun(run, "cancel")} onReview={(run, decision) => void changeRunReview(run, decision)} />
+      : <div className="details-pane">
+        {detailInner !== "home" && (
+          <div className="details-links" style={{ paddingBottom: 0 }}>
+            <button type="button" onClick={() => setDetailInner("home")}>← 返回详情</button>
+          </div>
+        )}
+        {detailInner === "home" ? (
+          <div className="details-links">
+            <button type="button" onClick={() => setMainView("settings")}>群设置<small>公告 / 工作目录</small></button>
+            {!isChatGroup && <button type="button" onClick={() => setMainView("versions")}>版本管理<small>Wave / 路线图</small></button>}
+            {isAdmin && <button type="button" onClick={() => setDetailInner("experiences")}>经验<small>可复用的群内笔记</small></button>}
+            {isAdmin && <button type="button" onClick={() => setDetailInner("logs")}>日志<small>运行与排障</small></button>}
+          </div>
+        ) : detailInner === "experiences" ? <ExperiencePanel groupId={current.group.id} members={members} ownerId={current.group.ownerMemberId} onError={(msg) => setError(msg)} />
+        : <LogsPanel onError={(msg) => setError(msg)} />}
+      </div>}
     </aside>}
 
     {showCreate && (
@@ -1716,6 +1786,26 @@ export function App() {
           )}
         </div>
       </Modal>
+    )}
+    {headerPop === "help" && (
+      <div className="help-overlay" onClick={(e) => { if (e.target === e.currentTarget) setHeaderPop(null); }}>
+        <div className="help-box" role="dialog" aria-labelledby="help-title">
+          <button type="button" className="icon-btn close" onClick={() => setHeaderPop(null)} aria-label="关闭">×</button>
+          <h2 id="help-title">交互说明</h2>
+          <p className="sub">与 docs/ui-demo.html 同一套壳层：三栏、控制轨、斜杠命令。</p>
+          <table>
+            <thead><tr><th>操作</th><th>作用</th></tr></thead>
+            <tbody>
+              <tr><td><code>Ctrl/⌘ + 1</code></td><td>左栏展开 / 折叠为 56px 控制轨</td></tr>
+              <tr><td><code>Ctrl/⌘ + 2</code></td><td>打开或关闭右栏（成员 / 队列 / 详情）</td></tr>
+              <tr><td><code>Esc</code></td><td>关闭浮层、设置、主题面板</td></tr>
+              <tr><td><code>@</code></td><td>提及成员</td></tr>
+              <tr><td><code>/</code></td><td>斜杠命令：/board /approve /wave</td></tr>
+              <tr><td>Enter / Ctrl+Enter</td><td>发送（可在输入框下切换）</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     )}
     {releasingBannerText(wsLink.state, wsLink.elapsedMs) && (
       <div className="error-toast" style={{ bottom: error ? 64 : 16 }}>

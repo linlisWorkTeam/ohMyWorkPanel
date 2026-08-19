@@ -199,3 +199,40 @@ export function ThemeSwitcher() {
     </div>
   );
 }
+
+/** Header 🎨 popover — compact 2-up grid matching docs/ui-demo.html */
+export function HeaderThemePop({
+  open,
+  onPick,
+}: {
+  open: boolean;
+  onPick: () => void;
+}) {
+  const { theme, setTheme } = useTheme();
+  if (!open) return null;
+  return (
+    <div className="header-pop theme-pop" role="listbox" aria-label="外观主题">
+      <div className="header-theme-grid">
+        {THEMES.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={`ht-card ${item.id === theme ? "active" : ""}`}
+            aria-selected={item.id === theme}
+            onClick={() => {
+              setTheme(item.id);
+              onPick();
+            }}
+          >
+            <span
+              className="sw"
+              style={{ background: `linear-gradient(135deg, ${item.swatch[0]} 0%, ${item.swatch[2]} 50%, ${item.swatch[1]} 100%)` }}
+            />
+            <b>{item.name}</b>
+            <small>{item.blurb}</small>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}

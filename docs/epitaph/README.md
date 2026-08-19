@@ -8,6 +8,7 @@ Active handoff notes for future agents.
 
 | Date | Topic | Status |
 |------|-------|--------|
+| 2026-08-20 | [按 ui-demo.html 对齐壳层 + 登录/思考过程崩溃](./2026-08-20-ui-demo-chrome-parity.md) | active |
 | 2026-08-20 | [DSH 设计语言落地 P0–P2 + 后端四项](./2026-08-20-dsh-ui-design-p0-p2.md) | active |
 | 2026-08-18 | [Agent 配置一键导入/导出/自检/CLI 自动安装](./2026-08-18-agent-config-import.md) | active |
 | 2026-08-16 | [DSH 自举接入：设计落地 + P0](./2026-08-16-dsh-self-bootstrap-design.md) | active |
