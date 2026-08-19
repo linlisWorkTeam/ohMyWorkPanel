@@ -1176,3 +1176,140 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 /* 状态/复审徽标统一胶囊 */
 .status, .review-badge { border-radius: 999px; padding: 2px 9px; font-size: 10px; }
 
+/* ══════════════════════════════════════════════════════════════
+   P2 goal bar（Wave 常驻条）+ 右栏队列/待审批卡片
+   ══════════════════════════════════════════════════════════════ */
+.goal-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 16px;
+  font-size: 12px;
+  color: var(--lp-text-secondary);
+  background: var(--lp-bg-active);
+  border-bottom: 1px solid var(--lp-border-l2);
+}
+.goal-bar .g-flag {
+  font-weight: 800;
+  color: var(--lp-accent);
+  letter-spacing: .06em;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+.goal-bar .g-wave {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.goal-bar .progress {
+  flex: 1;
+  height: 5px;
+  min-width: 48px;
+  border-radius: 999px;
+  background: var(--lp-bg-hover);
+  overflow: hidden;
+}
+.goal-bar .progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--lp-accent), var(--lp-accent-strong));
+  transition: width .35s ease;
+}
+.goal-bar .g-act {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--lp-text-tertiary);
+}
+
+/* 右栏队列页签 */
+.sec-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 14px 2px 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  color: var(--lp-text-tertiary);
+}
+.queue-empty {
+  margin-top: 12px;
+  padding: 22px 10px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--lp-text-tertiary);
+  border: 1px dashed var(--lp-border-l1);
+  border-radius: 12px;
+}
+.queue-card {
+  border: 1px solid var(--lp-border-l1);
+  border-radius: 11px;
+  padding: 9px 11px;
+  margin-bottom: 8px;
+  background: var(--lp-bg-elevated);
+}
+.queue-card.review { border-color: var(--lp-warn); }
+.qc-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.qc-top .qc-id {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  color: var(--lp-text-tertiary);
+  font-weight: 500;
+}
+.qc-top .st {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.qc-top .st.running { background: var(--lp-soft-ok, color-mix(in srgb, var(--lp-success) 16%, transparent)); color: var(--lp-success); }
+.qc-top .st.queued { background: color-mix(in srgb, var(--lp-warn) 16%, transparent); color: var(--lp-warn); }
+.qc-top .st.review { background: color-mix(in srgb, var(--lp-warn) 18%, transparent); color: var(--lp-warn); }
+.qc-phase {
+  margin: 7px 0 6px;
+  font-size: 11.5px;
+  color: var(--lp-text-secondary);
+}
+.qc-bar {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--lp-bg-hover);
+  overflow: hidden;
+  margin-bottom: 7px;
+}
+.qc-bar i {
+  display: block;
+  height: 100%;
+  width: 38%;
+  border-radius: inherit;
+  background: var(--lp-accent);
+  animation: qc-pulse 1.8s ease-in-out infinite;
+}
+@keyframes qc-pulse { 50% { opacity: .45; } }
+.qc-sub {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--lp-text-tertiary);
+}
+.qc-cancel {
+  border: 1px solid var(--lp-border-l1);
+  border-radius: 999px;
+}
+
+

@@ -125,7 +125,7 @@ export function App() {
   const [showMembers, setShowMembers] = useState(() =>
     typeof window === "undefined" || window.matchMedia("(min-width: 1081px)").matches,
   );
-  const [rightPanelTab, setRightPanelTab] = useState<"members" | "experiences" | "logs">("members");
+  const [rightPanelTab, setRightPanelTab] = useState<"members" | "experiences" | "logs" | "queue">("members");
   const [mainView, setMainView] = useState<string>("chat");
   const [adminInAsk, setAdminInAsk] = useState(false);
   const [extensions, setExtensions] = useState<ExtensionStatus[]>([]);
@@ -194,6 +194,37 @@ export function App() {
     }, 350);
     return () => window.clearTimeout(timer);
   }, [composer, current?.group.id]);
+
+  // P2: goal bar——把当前版本/Wave 上移成 chat 视图常驻条（仅项目群）
+  const [goalBar, setGoalBar] = useState<{ versionName: string; waveTitle: string; done: number; total: number; status: string } | null>(null);
+  useEffect(() => {
+    const gid = current?.group.id;
+    const isProject = current?.group.groupKind !== "chat";
+    setGoalBar(null);
+    if (!gid || !isProject) return;
+    let cancelled = false;
+    api
+      .getVersionBoard(gid)
+      .then((board) => {
+        if (cancelled) return;
+        const versions = [...(board.versions ?? [])].sort((a, b) => b.createdAt - a.createdAt);
+        const version = versions[0];
+        if (!version) { setGoalBar(null); return; }
+        const waves = (board.waves ?? []).filter((w) => w.versionId === version.id).sort((a, b) => a.idx - b.idx);
+        if (waves.length === 0) { setGoalBar(null); return; }
+        const activeWave = waves.find((w) => w.status === "running" || w.status === "paused") ?? waves[waves.length - 1];
+        setGoalBar({
+          versionName: version.name,
+          waveTitle: activeWave.title || `Wave ${activeWave.idx}`,
+          done: waves.filter((w) => w.status === "done" || w.status === "skipped").length,
+          total: waves.length,
+          status: activeWave.status,
+        });
+      })
+      .catch(() => { if (!cancelled) setGoalBar(null); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.group.id, current?.group.groupKind]);
 
   const scrollMessagesToBottom = (force = false) => {
     const node = messageListRef.current;
@@ -1169,6 +1200,14 @@ export function App() {
           </div>
           <button className="icon-button mobile-members" onClick={toggleMembers} aria-label="成员面板">成员</button>
         </header>
+        {goalBar && (
+          <div className="goal-bar" data-status={goalBar.status}>
+            <span className="g-flag">{goalBar.versionName}</span>
+            <span className="g-wave">{goalBar.waveTitle}</span>
+            <span className="progress"><i style={{ width: `${goalBar.total ? Math.round((goalBar.done / goalBar.total) * 100) : 0}%` }} /></span>
+            <span className="g-act">{goalBar.done}/{goalBar.total} 完成</span>
+          </div>
+        )}
         {activeExtView ? (
           <ExtensionPanel
             extension={activeExtView.ext}
@@ -1330,6 +1369,7 @@ export function App() {
       <header>
         <div className="pm-tab-bar">
           <button className={`pm-tab-btn ${rightPanelTab === "members" ? "active" : ""}`} onClick={() => setRightPanelTab("members")}>群成员</button>
+          <button className={`pm-tab-btn ${rightPanelTab === "queue" ? "active" : ""}`} onClick={() => setRightPanelTab("queue")}>队列</button>
           {!isChatGroup && isAdmin && <button className={`pm-tab-btn ${mainView === "versions" ? "active" : ""}`} onClick={() => { setMainView("versions"); }}>版本管理</button>}
           <button className={`pm-tab-btn ${mainView === "settings" ? "active" : ""}`} onClick={() => { setMainView("settings"); setShowMembers(false); }}>群设置</button>
           {isAdmin && <button className={`pm-tab-btn ${rightPanelTab === "experiences" ? "active" : ""}`} onClick={() => setRightPanelTab("experiences")}>经验</button>}
@@ -1472,6 +1512,7 @@ export function App() {
           <div><button type="button" className="quiet-button" onClick={() => setShowAddMember(false)}>取消</button><button type="submit">添加</button></div>
         </form> : isAdmin ? <button className="add-member-button" onClick={() => { setNewMember(emptyMember); setShowAddMember(true); }}>＋ 添加成员</button> : null}
       </> : rightPanelTab === "experiences" ? <ExperiencePanel groupId={current.group.id} members={members} ownerId={current.group.ownerMemberId} onError={(msg) => setError(msg)} />
+      : rightPanelTab === "queue" ? <RunQueuePane runs={current.runs} members={members} onCancel={(run) => void changeRun(run, "cancel")} />
       : <LogsPanel onError={(msg) => setError(msg)} />}
     </aside>}
 
@@ -1920,6 +1961,55 @@ function TypingIndicator({ label }: { label: string }) {
       <span className="typing-label">{label}</span>
       <span className="typing-dots" aria-hidden><i /><i /><i /></span>
     </span>
+  );
+}
+
+function RunQueuePane({ runs, members, onCancel }: {
+  runs: TaskRun[];
+  members: Member[];
+  onCancel: (run: TaskRun) => void;
+}) {
+  const active = runs
+    .filter((r) => r.status === "running" || r.status === "queued")
+    .sort((a, b) => (a.startedAt ?? a.createdAt) - (b.startedAt ?? b.createdAt));
+  const review = runs.filter((r) => r.status === "awaiting_review");
+  const nameOf = (id: string) => members.find((m) => m.id === id)?.displayName ?? "已移除成员";
+  if (active.length === 0 && review.length === 0) {
+    return <div className="queue-empty">当前没有排队或待审批的任务</div>;
+  }
+  return (
+    <>
+      <div className="sec-title"><span>执行中 · 排队</span><span>{active.length}</span></div>
+      {active.map((run) => (
+        <div key={run.id} className="queue-card">
+          <div className="qc-top">
+            <span className="qc-name">{nameOf(run.agentMemberId)}</span>
+            <span className="qc-id">{run.id.slice(0, 8)}</span>
+            <span className={`st ${run.status}`}>{run.status === "running" ? "执行中" : "排队中"}</span>
+          </div>
+          <div className="qc-phase">{run.phase ? (PHASE_LABEL[run.phase] ?? run.phase) : run.status === "queued" ? "等待调度" : "执行中…"}</div>
+          <div className="qc-bar"><i /></div>
+          <div className="qc-sub">
+            <span>{time(run.createdAt)}</span>
+            <button type="button" className="mini-btn qc-cancel" onClick={() => onCancel(run)}>取消</button>
+          </div>
+        </div>
+      ))}
+      {review.length > 0 && (
+        <>
+          <div className="sec-title"><span>待审批（治理层接入后操作）</span><span>{review.length}</span></div>
+          {review.map((run) => (
+            <div key={run.id} className="queue-card review">
+              <div className="qc-top">
+                <span className="qc-name">{nameOf(run.agentMemberId)}</span>
+                <span className="st review">待审批</span>
+              </div>
+              <div className="qc-sub">交由 {run.reviewerMemberId ? nameOf(run.reviewerMemberId) : "审批人"} · 批准后由调度自动继续</div>
+            </div>
+          ))}
+        </>
+      )}
+    </>
   );
 }
 
