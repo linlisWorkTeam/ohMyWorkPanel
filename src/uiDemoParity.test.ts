@@ -34,4 +34,11 @@ describe("ui-demo.html chrome parity", () => {
     expect(themes).toMatch(/\.m-actions\s*\{[^}]*display:\s*flex/);
     expect(themes).not.toMatch(/\.message-row:hover\s+\.m-actions/);
   });
+
+  it("does not put unused thumbs on the bubble action row", () => {
+    const furniture = readFileSync(resolve("src/components/furniture.tsx"), "utf8");
+    expect(furniture).not.toContain("👍");
+    expect(furniture).not.toContain("👎");
+    expect(furniture).not.toContain("voteMessage");
+  });
 });
