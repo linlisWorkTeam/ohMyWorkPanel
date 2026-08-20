@@ -29,4 +29,9 @@ describe("ui-demo.html chrome parity", () => {
     expect(app).not.toContain("className=\"view-toggle\"");
     expect(app).not.toContain("公告 / 工作目录在「设置」");
   });
+
+  it("keeps message action row always visible (no hover layout jump)", () => {
+    expect(themes).toMatch(/\.m-actions\s*\{[^}]*display:\s*flex/);
+    expect(themes).not.toMatch(/\.message-row:hover\s+\.m-actions/);
+  });
 });

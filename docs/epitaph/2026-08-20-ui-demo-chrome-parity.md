@@ -65,6 +65,7 @@ status: active
 - `vite.config.web.ts` 必须同时匹配 `./api` 与 `../api`。
 - 嵌套 details 不得无条件 `setOpen(event.currentTarget.open)`。
 - 不要把城市 SVG 底图加回去；不要恢复胶囊 `view-toggle` 当主头。
+- 气泡 `.m-actions`（复制/赞踩/停止/重试）必须常驻，禁止 hover 才 `display`（会撑开列表抖动）。
 
 ## Open follow-ups
 
