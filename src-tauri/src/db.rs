@@ -86,11 +86,6 @@ pub fn init_db(path: &Path) -> AppResult<()> {
           created_at INTEGER NOT NULL,
           PRIMARY KEY(message_id, member_id)
         );
-        CREATE TABLE IF NOT EXISTS run_phase_log (
-          id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES task_runs(id) ON DELETE CASCADE,
-          phase TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS idx_run_phase_log_run ON run_phase_log(run_id, created_at);
         CREATE INDEX IF NOT EXISTS idx_messages_group_created ON messages(group_id, created_at);
         CREATE INDEX IF NOT EXISTS idx_runs_group_status ON task_runs(group_id, status, created_at);
  
@@ -956,22 +951,20 @@ pub fn update_group_workspace(
     get_group(connection, group_id)
 }
 
-pub fn append_run_phase(conn: &Connection, run_id: &str, phase: &str, note: &str) -> AppResult<()> {
-    conn.execute(
-        "INSERT INTO run_phase_log(id,run_id,phase,note,created_at) VALUES(?1,?2,?3,?4,?5)",
-        params![Uuid::new_v4().to_string(), run_id, phase, note, now()],
-    )
-    .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
 pub fn list_run_phases(conn: &Connection, run_id: &str) -> AppResult<Vec<crate::models::RunPhaseEntry>> {
+    // 阶段时间线从 run_events 的 kind='phase' 事件投影（单一事件源），payload 形如
+    // {"phase": "...", "elapsedMs": n, "totalMs": n}。
     let mut stmt = conn
-        .prepare("SELECT phase,note,created_at FROM run_phase_log WHERE run_id=?1 ORDER BY created_at, id")
+        .prepare("SELECT payload,created_at FROM run_events WHERE run_id=?1 AND kind='phase' ORDER BY COALESCE(seq,0), created_at, id")
         .map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map(params![run_id], |row| {
-            Ok(crate::models::RunPhaseEntry { phase: row.get(0)?, note: row.get(1)?, created_at: row.get(2)? })
+            let payload: String = row.get(0)?;
+            let phase = serde_json::from_str::<serde_json::Value>(&payload)
+                .ok()
+                .and_then(|v| v.get("phase").and_then(|p| p.as_str().map(|s| s.to_string())))
+                .unwrap_or_else(|| "?".to_string());
+            Ok(crate::models::RunPhaseEntry { phase, note: String::new(), created_at: row.get(1)? })
         })
         .map_err(|e| e.to_string())?;
     let mut out = Vec::new();
@@ -1009,7 +1002,6 @@ pub fn set_run_phase(connection: &Connection, run_id: &str, phase: &str) -> AppR
     let total = ts - created;
     let payload = serde_json::json!({"phase": phase, "elapsedMs": elapsed, "totalMs": total});
     insert_run_event(connection, run_id, "phase", &payload.to_string())?;
-    append_run_phase(connection, run_id, phase, "")?;
     Ok((elapsed, total))
 }
 
@@ -1562,7 +1554,7 @@ pub fn insert_run_event(
 ) -> AppResult<()> {
     connection
         .execute(
-            "INSERT INTO run_events(id,run_id,kind,payload,created_at) VALUES(?1,?2,?3,?4,?5)",
+            "INSERT INTO run_events(id,run_id,kind,payload,seq,created_at) VALUES(?1,?2,?3,?4,(SELECT COALESCE(MAX(seq),0)+1 FROM run_events WHERE run_id=?2),?5)",
             params![id(), run_id, kind, payload, now()],
         )
         .map_err(|e| e.to_string())?;
@@ -2056,7 +2048,7 @@ mod tests {
     }
 
     #[test]
-    fn run_phase_log_records_transitions_in_order() {
+    fn run_phase_timeline_projected_from_run_events() {
         let file = tempfile::NamedTempFile::new().unwrap();
         init_db(file.path()).unwrap();
         let conn = open_db(file.path()).unwrap();

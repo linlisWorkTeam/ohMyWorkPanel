@@ -10,7 +10,7 @@ use rusqlite::Connection;
 
 use crate::db::AppResult;
 
-pub const SCHEMA_VERSION: i64 = 2;
+pub const SCHEMA_VERSION: i64 = 3;
 
 /// 运行所有未执行的迁移，并把 `user_version` 升到 `SCHEMA_VERSION`。
 /// 幂等：已是最新版本时直接返回。
@@ -25,6 +25,7 @@ pub fn migrate(connection: &Connection) -> AppResult<()> {
         match version {
             1 => migrate_v1(connection)?,
             2 => migrate_v2(connection)?,
+            3 => migrate_v3(connection)?,
             _ => unreachable!("invalid schema version {}", version),
         }
     }
@@ -87,6 +88,25 @@ fn migrate_v1(connection: &Connection) -> AppResult<()> {
 fn migrate_v2(connection: &Connection) -> AppResult<()> {
     let _ = connection.execute("ALTER TABLE task_runs ADD COLUMN wave_id TEXT", []);
     let _ = connection.execute("ALTER TABLE task_runs ADD COLUMN version_id TEXT", []);
+    Ok(())
+}
+
+/// v3：统一 run 事件源——run_events 增加 per-run 单调 seq（并回填历史），
+/// 删除冗余的 run_phase_log（阶段时间线改从 run_events 投影）。
+fn migrate_v3(connection: &Connection) -> AppResult<()> {
+    let _ = connection.execute("ALTER TABLE run_events ADD COLUMN seq INTEGER", []);
+    connection
+        .execute(
+            "UPDATE run_events SET seq = (
+               SELECT COUNT(*) FROM run_events e2
+               WHERE e2.run_id = run_events.run_id
+                 AND (e2.created_at < run_events.created_at
+                      OR (e2.created_at = run_events.created_at AND e2.rowid <= run_events.rowid))
+             )",
+            [],
+        )
+        .map_err(|e| e.to_string())?;
+    let _ = connection.execute("DROP TABLE IF EXISTS run_phase_log", []);
     Ok(())
 }
 
@@ -168,6 +188,11 @@ mod tests {
         assert!(column_names(&conn, "task_runs").contains(&"version_id".to_string()));
         assert!(column_names(&conn, "agent_profiles").contains(&"api_key".to_string()));
         assert!(column_names(&conn, "groups").contains(&"group_kind".to_string()));
+        assert!(column_names(&conn, "run_events").contains(&"seq".to_string()));
+        let rpl: i64 = conn
+            .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='run_phase_log'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(rpl, 0, "run_phase_log 应已被迁移 v3 删除");
 
         // members DDL 允许 chatbot
         let ddl: String = conn
@@ -222,6 +247,11 @@ mod tests {
         assert!(column_names(&conn, "task_runs").contains(&"version_id".to_string()));
         assert!(column_names(&conn, "agent_profiles").contains(&"api_key".to_string()));
         assert!(column_names(&conn, "groups").contains(&"group_kind".to_string()));
+        assert!(column_names(&conn, "run_events").contains(&"seq".to_string()));
+        let rpl_legacy: i64 = conn
+            .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='run_phase_log'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(rpl_legacy, 0, "老库迁移后 run_phase_log 应被删除");
 
         // members 重建后允许 chatbot 且数据保留
         let ddl: String = conn
