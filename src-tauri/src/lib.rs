@@ -30,6 +30,7 @@ pub mod scheduler;
 pub mod git_inspect;
 pub mod workflow;
 pub mod web;
+pub mod db_migrations;
 
 pub use adapters::manifest::reload_manifests as reload_cli_adapter_manifests;
 use std::{

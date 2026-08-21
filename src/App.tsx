@@ -44,6 +44,8 @@ import { Divider, useAppFrame } from "./components/ui";
 import { loadSendKeyMode, saveSendKeyMode, sendKeyHint, shouldSendOnKey, type SendKeyMode } from "./sendKey";
 import type { ChatEvent, ExtensionStatus, Group, GroupState, Member, PresetRole, RuntimeSettings, TaskRun } from "./types";
 import { MessageBubble, MemberRow, Avatar, Status, ReviewBadge, TypingIndicator, RunQueuePane, EmptyHome } from "./components/furniture";
+import { useGoalBar } from "./hooks/useGoalBar";
+import { useComposerDraft } from "./hooks/useComposerDraft";
 import { PHASE_LABEL, dayLabel, time, readError } from "./components/uiShared";
 import { ExperiencePanel } from "./ExperiencePanel";
 import { LogsPanel } from "./LogsPanel";
@@ -169,54 +171,10 @@ export function App() {
   currentGroupIdRef.current = current?.group.id;
 
   // P1: composer 草稿按群持久化（localStorage；草稿/几何不进 DB）
-  const draftKeyFor = (groupId: string | undefined) => (groupId ? `lp.composer.${groupId}` : null);
-  useEffect(() => {
-    const key = draftKeyFor(current?.group.id);
-    if (!key) return;
-    let value = "";
-    try { value = localStorage.getItem(key) ?? ""; } catch { /* ignore */ }
-    setComposer(value);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current?.group.id]);
-  useEffect(() => {
-    const key = draftKeyFor(current?.group.id);
-    if (!key) return;
-    const timer = window.setTimeout(() => {
-      try { localStorage.setItem(key, composer); } catch { /* ignore */ }
-    }, 350);
-    return () => window.clearTimeout(timer);
-  }, [composer, current?.group.id]);
+  useComposerDraft(current?.group.id, composer, setComposer);
 
   // P2: goal bar——把当前版本/Wave 上移成 chat 视图常驻条（仅项目群）
-  const [goalBar, setGoalBar] = useState<{ versionName: string; waveTitle: string; done: number; total: number; status: string } | null>(null);
-  useEffect(() => {
-    const gid = current?.group.id;
-    const isProject = current?.group.groupKind !== "chat";
-    setGoalBar(null);
-    if (!gid || !isProject) return;
-    let cancelled = false;
-    api
-      .getVersionBoard(gid)
-      .then((board) => {
-        if (cancelled) return;
-        const versions = [...(board.versions ?? [])].sort((a, b) => b.createdAt - a.createdAt);
-        const version = versions[0];
-        if (!version) { setGoalBar(null); return; }
-        const waves = (board.waves ?? []).filter((w) => w.versionId === version.id).sort((a, b) => a.idx - b.idx);
-        if (waves.length === 0) { setGoalBar(null); return; }
-        const activeWave = waves.find((w) => w.status === "running" || w.status === "paused") ?? waves[waves.length - 1];
-        setGoalBar({
-          versionName: version.name,
-          waveTitle: activeWave.title || `Wave ${activeWave.idx}`,
-          done: waves.filter((w) => w.status === "done" || w.status === "skipped").length,
-          total: waves.length,
-          status: activeWave.status,
-        });
-      })
-      .catch(() => { if (!cancelled) setGoalBar(null); });
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current?.group.id, current?.group.groupKind]);
+  const goalBar = useGoalBar(current?.group);
 
   const scrollMessagesToBottom = (force = false) => {
     const node = messageListRef.current;

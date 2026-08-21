@@ -1,0 +1,44 @@
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  gate:
+    name: test-gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libsqlite3-dev pkg-config ripgrep
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend deps (frozen)
+        run: pnpm install --frozen-lockfile
+
+      - name: Frontend unit tests
+        run: pnpm exec vitest run --pool=forks --maxWorkers=2
+
+      - name: Rust lib tests (matches local test-gate)
+        run: cd src-tauri && cargo test --no-default-features --lib
+
+      - name: Extension host purity
+        run: bash scripts/check-extension-purity.sh
+
+      - name: Version / docs SSOT consistency
+        run: bash scripts/check-ssot.sh
