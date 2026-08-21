@@ -312,7 +312,7 @@ pub fn add_member(input: AddMemberInput, state: State<'_, AppState>) -> AppResul
             .unwrap_or("deepseek-v4-flash");
         conn.execute(
             "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at,api_key,warm_status,model) VALUES(?1,?2,NULL,'ready',?3,?4,'cold',?5)",
-            params![member_id, adapter, created_at, api_key, model],
+            params![member_id, adapter, created_at, crate::db::encrypt_secret(api_key)?, model],
         )
         .map_err(|e| e.to_string())?;
     }

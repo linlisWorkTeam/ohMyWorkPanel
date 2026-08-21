@@ -3,8 +3,10 @@ use crate::models::{
     RuntimeSettings, TaskRun,
 };
 use chrono::Utc;
+use rand_core::{OsRng, RngCore};
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use std::path::Path;
+use std::sync::OnceLock;
 use uuid::Uuid;
 
 pub type AppResult<T> = Result<T, String>;
@@ -18,11 +20,77 @@ pub fn id() -> String {
 }
 
 pub fn open_db(path: &Path) -> AppResult<Connection> {
+    let _ = KEY_FILE.set(path.with_extension("key"));
     let connection = Connection::open(path).map_err(|e| e.to_string())?;
     connection
         .execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;")
         .map_err(|e| e.to_string())?;
     Ok(connection)
+}
+
+/// 本机密钥文件：DB 同目录、<db 文件名>.key（首次启动生成 32 随机字节）。
+static KEY_FILE: OnceLock<std::path::PathBuf> = OnceLock::new();
+/// 进程内只计算/加载一次：避免并行测试或并发路径间互相覆写 key 文件。
+static MACHINE_KEY: OnceLock<[u8; 32]> = OnceLock::new();
+
+fn machine_key() -> [u8; 32] {
+    *MACHINE_KEY.get_or_init(|| {
+        let path = KEY_FILE
+            .get()
+            .cloned()
+            .unwrap_or_else(|| std::path::PathBuf::from("linlis.key"));
+        if let Ok(data) = std::fs::read(&path) {
+            if data.len() == 32 {
+                let mut key = [0u8; 32];
+                key.copy_from_slice(&data);
+                return key;
+            }
+        }
+        let mut key = [0u8; 32];
+        OsRng.fill_bytes(&mut key);
+        let _ = std::fs::write(&path, key);
+        key
+    })
+}
+
+/// 加密落库（AES-256-GCM）：`v1:<nonce_b64>:<ct_b64>`；空串原样返回。
+pub fn encrypt_secret(plain: &str) -> AppResult<String> {
+    if plain.is_empty() {
+        return Ok(String::new());
+    }
+    use aes_gcm::aead::Aead;
+    use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
+    use base64::Engine;
+    let cipher = Aes256Gcm::new_from_slice(&machine_key()).map_err(|e| e.to_string())?;
+    let mut nonce_bytes = [0u8; 12];
+    OsRng.fill_bytes(&mut nonce_bytes);
+    let ct = cipher
+        .encrypt(Nonce::from_slice(&nonce_bytes), plain.as_bytes())
+        .map_err(|e| format!("secret encrypt failed: {e}"))?;
+    let enc = base64::engine::general_purpose::STANDARD;
+    Ok(format!("v1:{}:{}", enc.encode(nonce_bytes), enc.encode(ct)))
+}
+
+/// 解密读取；非 `v1:` 前缀的旧明文直通（存量兼容，本机密钥文件不变则始终可解）。
+pub fn decrypt_secret(stored: &str) -> AppResult<String> {
+    if !stored.starts_with("v1:") {
+        return Ok(stored.to_string());
+    }
+    use aes_gcm::aead::Aead;
+    use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
+    use base64::Engine;
+    let mut parts = stored.splitn(3, ':');
+    let _tag = parts.next();
+    let nonce_b64 = parts.next().unwrap_or_default();
+    let ct_b64 = parts.next().unwrap_or_default();
+    let enc = base64::engine::general_purpose::STANDARD;
+    let nonce = enc.decode(nonce_b64).map_err(|e| format!("nonce decode: {e}"))?;
+    let ct = enc.decode(ct_b64).map_err(|e| format!("ct decode: {e}"))?;
+    let cipher = Aes256Gcm::new_from_slice(&machine_key()).map_err(|e| e.to_string())?;
+    let pt = cipher
+        .decrypt(Nonce::from_slice(&nonce), ct.as_ref())
+        .map_err(|e| format!("secret decrypt failed（key 文件被换？）: {e}"))?;
+    String::from_utf8(pt).map_err(|e| e.to_string())
 }
 
 pub fn init_db(path: &Path) -> AppResult<()> {
@@ -826,10 +894,15 @@ pub fn set_member_api_key(
     member_id: &str,
     key: Option<&str>,
 ) -> AppResult<()> {
+    let trimmed = key.map(str::trim).filter(|s| !s.is_empty());
+    let stored = match trimmed {
+        Some(k) => Some(encrypt_secret(k)?),
+        None => None,
+    };
     let n = connection
         .execute(
             "UPDATE agent_profiles SET api_key=?1, updated_at=?2 WHERE member_id=?3",
-            params![key.map(str::trim).filter(|s| !s.is_empty()), now(), member_id],
+            params![stored, now(), member_id],
         )
         .map_err(|e| e.to_string())?;
     if n == 0 {
@@ -1006,15 +1079,19 @@ pub fn set_run_phase(connection: &Connection, run_id: &str, phase: &str) -> AppR
 }
 
 pub fn get_agent_api_key(connection: &Connection, member_id: &str) -> AppResult<Option<String>> {
-    connection
+    let raw: Option<String> = connection
         .query_row(
             "SELECT api_key FROM agent_profiles WHERE member_id=?1",
             params![member_id],
             |r| r.get::<_, Option<String>>(0),
         )
         .optional()
-        .map_err(|e| e.to_string())
-        .map(|v| v.flatten())
+        .map_err(|e| e.to_string())?
+        .flatten();
+    match raw {
+        Some(v) if !v.is_empty() => Ok(Some(decrypt_secret(&v)?)),
+        _ => Ok(None),
+    }
 }
 
 pub fn set_member_workspace(
@@ -2102,6 +2179,37 @@ mod tests {
         let (up4, down4, mine4) = vote_message(&conn, "m", "u", None).unwrap();
         assert_eq!((up4, down4), (0, 0));
         assert_eq!(mine4, None);
+    }
+
+    #[test]
+    fn secret_encrypt_roundtrip_and_legacy_passthrough() {
+        // 1) 纯函数进退
+        let plain = "sk-test-abcdef1234567890";
+        let enc = encrypt_secret(plain).unwrap();
+        assert!(enc.starts_with("v1:"), "落库应为加密格式");
+        assert_eq!(decrypt_secret(&enc).unwrap(), plain);
+        // 密文不可含明文
+        assert!(!enc.contains(plain));
+
+        // 2) 旧明文直通（存量兼容）
+        assert_eq!(decrypt_secret("sk-legacy-plain").unwrap(), "sk-legacy-plain");
+
+        // 3) 经 set/get 全链路（真实表）
+        let file = tempfile::NamedTempFile::new().unwrap();
+        init_db(file.path()).unwrap();
+        let conn = open_db(file.path()).unwrap();
+        conn.execute("INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at) VALUES('g','g','.','u',NULL,1)", []).unwrap();
+        conn.execute("INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,tags) VALUES('a','g','agent','a','#000','',1,1,'')", []).unwrap();
+        conn.execute("INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at) VALUES('a','mock',NULL,'ready',1)", []).unwrap();
+        set_member_api_key(&conn, "a", Some("sk-real-99887766")).unwrap();
+        // 落库原始值为 v1 密文
+        let stored: String = conn.query_row("SELECT api_key FROM agent_profiles WHERE member_id='a'", [], |r| r.get(0)).unwrap();
+        assert!(stored.starts_with("v1:"));
+        // 读回解出原文
+        assert_eq!(get_agent_api_key(&conn, "a").unwrap().as_deref(), Some("sk-real-99887766"));
+        // 清空
+        set_member_api_key(&conn, "a", None).unwrap();
+        assert!(get_agent_api_key(&conn, "a").unwrap().is_none());
     }
 
     #[test]
