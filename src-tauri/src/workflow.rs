@@ -47,9 +47,6 @@ pub fn ensure_workflow_tables(conn: &Connection) -> AppResult<()> {
         "#,
     )
     .map_err(|e| e.to_string())?;
-    // optional link on task_runs
-    let _ = conn.execute("ALTER TABLE task_runs ADD COLUMN wave_id TEXT", []);
-    let _ = conn.execute("ALTER TABLE task_runs ADD COLUMN version_id TEXT", []);
     Ok(())
 }
 

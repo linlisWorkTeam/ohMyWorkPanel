@@ -1,15 +1,16 @@
 //! 版本化 schema 迁移（`PRAGMA user_version` 驱动）。
 //!
 //! 历史遗留的「每启动跑一遍的 ADD COLUMN / 表重建」被收编为受版本控制的迁移：
-//! v1 = 当前 schema（吸收所有已有增量列 + members 表重建以便支持 chatbot/tags）。
+//! v1 = 主体 schema（增量列 + members 表重建支持 chatbot/tags）；
+//! v2 = workflow 域遗留的 task_runs.wave_id/version_id（收口自 workflow.rs 启动期裸 ALTER）。
 //! 之后任何 schema 改动：新增 `migrate_v{N}` + `SCHEMA_VERSION += 1` + 一个升级测试，
-//! 不要再往 `db::init_db` 里裸加 ALTER。
+//! 不要再往 `db::init_db` / 各域 `ensure_*_tables` 里裸加 ALTER。
 
 use rusqlite::Connection;
 
 use crate::db::AppResult;
 
-pub const SCHEMA_VERSION: i64 = 1;
+pub const SCHEMA_VERSION: i64 = 2;
 
 /// 运行所有未执行的迁移，并把 `user_version` 升到 `SCHEMA_VERSION`。
 /// 幂等：已是最新版本时直接返回。
@@ -23,6 +24,7 @@ pub fn migrate(connection: &Connection) -> AppResult<()> {
     for version in (current + 1)..=SCHEMA_VERSION {
         match version {
             1 => migrate_v1(connection)?,
+            2 => migrate_v2(connection)?,
             _ => unreachable!("invalid schema version {}", version),
         }
     }
@@ -77,6 +79,14 @@ fn migrate_v1(connection: &Connection) -> AppResult<()> {
         let _ = connection.execute(col_sql, []);
     }
     migrate_members_allow_chatbot(connection)?;
+    Ok(())
+}
+
+/// v2：把 workflow 域遗留的启动期裸 ALTER 收编进迁移（task_runs 关联版本/Wave）。
+/// 幂等：列已存在时 SQLite 报错，特此忽略。
+fn migrate_v2(connection: &Connection) -> AppResult<()> {
+    let _ = connection.execute("ALTER TABLE task_runs ADD COLUMN wave_id TEXT", []);
+    let _ = connection.execute("ALTER TABLE task_runs ADD COLUMN version_id TEXT", []);
     Ok(())
 }
 
@@ -154,6 +164,8 @@ mod tests {
         assert!(column_names(&conn, "members").contains(&"tags".to_string()));
         assert!(column_names(&conn, "members").contains(&"auth_user_id".to_string()));
         assert!(column_names(&conn, "task_runs").contains(&"review_status".to_string()));
+        assert!(column_names(&conn, "task_runs").contains(&"wave_id".to_string()));
+        assert!(column_names(&conn, "task_runs").contains(&"version_id".to_string()));
         assert!(column_names(&conn, "agent_profiles").contains(&"api_key".to_string()));
         assert!(column_names(&conn, "groups").contains(&"group_kind".to_string()));
 
@@ -206,6 +218,8 @@ mod tests {
         // 增量列全部补上
         assert!(column_names(&conn, "members").contains(&"tags".to_string()));
         assert!(column_names(&conn, "task_runs").contains(&"review_status".to_string()));
+        assert!(column_names(&conn, "task_runs").contains(&"wave_id".to_string()));
+        assert!(column_names(&conn, "task_runs").contains(&"version_id".to_string()));
         assert!(column_names(&conn, "agent_profiles").contains(&"api_key".to_string()));
         assert!(column_names(&conn, "groups").contains(&"group_kind".to_string()));
 
