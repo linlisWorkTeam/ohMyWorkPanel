@@ -136,6 +136,21 @@ async fn auth_middleware(req: Request<axum::body::Body>, next: Next) -> Response
     }
 }
 
+/// 全局 request_id：每个 HTTP 请求生成一个 trace id，回传 `X-Request-Id` 响应头，
+/// 并打一行结构化日志。配合 `run_events` 已带的 run_id/message_id，
+/// 即可把一次 Web 请求 join 到其产生的消息与 run 日志（评审 #10 trace 的务实版）。
+async fn request_id_middleware(req: Request<axum::body::Body>, next: Next) -> Response {
+    let request_id = crate::db::id();
+    let method = req.method().clone();
+    let path = req.uri().path().to_string();
+    let mut res = next.run(req).await;
+    let header = axum::http::HeaderValue::from_str(&request_id)
+        .unwrap_or_else(|_| axum::http::HeaderValue::from_static("-"));
+    res.headers_mut().insert("X-Request-Id", header);
+    eprintln!("[http] rid={request_id} {method} {path} -> {}", res.status().as_u16());
+    res
+}
+
 // === Auth Routes ===
 
 #[derive(Debug, Deserialize)]
@@ -2749,6 +2764,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .merge(auth_routes)
         .merge(extension_public)
         .merge(protected)
+        .layer(middleware::from_fn(request_id_middleware))
         .with_state(state)
 }
 
