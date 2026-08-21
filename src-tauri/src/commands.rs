@@ -261,7 +261,7 @@ pub fn add_member(input: AddMemberInput, state: State<'_, AppState>) -> AppResul
     .map_err(|e| e.to_string())?;
     if input.kind == "agent" {
         let adapter = input.adapter.unwrap_or_else(|| "mock".into());
-        AdapterKind::parse(&adapter)?;
+        crate::adapters::manifest::resolve_adapter(&adapter)?;
         let default_ws = if group.workspace_path.trim().is_empty() {
             None
         } else {
@@ -706,8 +706,8 @@ pub async fn detect_agent(member_id: String, state: State<'_, AppState>) -> AppR
         .optional()
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "找不到 Agent 配置。".to_string())?;
-    let kind = AdapterKind::parse(&record.0)?;
-    if kind == AdapterKind::Mock {
+    let spec = crate::adapters::manifest::resolve_adapter(&record.0)?;
+    if spec.builtin_kind() == Some(AdapterKind::Mock) {
         conn.execute(
             "UPDATE agent_profiles SET runtime_status='ready',updated_at=?1 WHERE member_id=?2",
             params![now(), member_id],
@@ -720,7 +720,7 @@ pub async fn detect_agent(member_id: String, state: State<'_, AppState>) -> AppR
     } else {
         Some(record.1.as_str())
     };
-    let executable = kind.resolve_executable(configured)?;
+    let executable = spec.resolve_executable(configured)?;
     let status = match tokio::time::timeout(
         Duration::from_secs(5),
         Command::new(&executable).arg("--version").output(),

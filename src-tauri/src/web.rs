@@ -834,6 +834,8 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, user_id: Opt
      .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
      if input.kind == "agent" {
          let adapter = input.adapter.unwrap_or_else(|| "mock".into());
+         crate::adapters::manifest::resolve_adapter(&adapter)
+             .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
          let default_ws = if group.workspace_path.trim().is_empty() {
              None
          } else {
@@ -1318,6 +1320,12 @@ async fn get_message_channel_part_web(
      ClaimsExtractor(_claims): ClaimsExtractor,
  ) -> Result<Json<crate::model_catalog::AgentModelsResponse>, (StatusCode, String)> {
      Ok(Json(crate::model_catalog::catalog_response()))
+ }
+
+ async fn list_cli_adapters_web(
+     ClaimsExtractor(_claims): ClaimsExtractor,
+ ) -> Json<Vec<crate::adapters::manifest::AdapterCatalogItem>> {
+     Json(crate::adapters::manifest::catalog())
  }
 
  async fn refresh_agent_models_web(
@@ -2681,6 +2689,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
          .route("/api/settings", get(get_settings_web))
          .route("/api/settings", put(update_settings_web))
          .route("/api/agent-models", get(get_agent_models_web))
+         .route("/api/adapters", get(list_cli_adapters_web))
          .route("/api/agent-models/refresh", post(refresh_agent_models_web))
          .route("/api/metrics/latest", get(metrics_latest_web))
          // Agent Config（一键导入 / 导出 / 自检 / 安装；仅管理员）

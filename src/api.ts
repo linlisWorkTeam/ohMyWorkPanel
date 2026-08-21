@@ -76,6 +76,7 @@ export const api = {
     cursorSyncedAt: null as number | null,
     todos: ["Desktop: live Cursor model sync is Web-server only"] as string[],
   }),
+  listCliAdapters: async () => [] as { id: string; displayName: string }[],
   refreshAgentModels: async () => {
     throw new Error("Desktop mode: agent-models refresh 仅 Web 服务可用");
   },

@@ -71,7 +71,7 @@ import {
   sttViaProxy,
   ttsPlaybackViaProxy,
 } from "./liveVoice";
-import { Brand, HeaderThemePop, ThemeSwitcher } from "./theme";
+import { mergeCliAdapters, FALLBACK_CLI_ADAPTERS, type CliAdapterOption } from "./adaptersCatalog";
 
 type NewMember = {
   kind: "agent" | "user" | "chatbot";
@@ -131,6 +131,7 @@ export function App() {
   const [ocrRunning, setOcrRunning] = useState(false);
   const [ocrPasting, setOcrPasting] = useState(false);
   const [presetRoles, setPresetRoles] = useState<PresetRole[]>([]);
+  const [cliAdapters, setCliAdapters] = useState<CliAdapterOption[]>(FALLBACK_CLI_ADAPTERS);
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [settings, setSettings] = useState<RuntimeSettings | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -696,6 +697,18 @@ export function App() {
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
   }, [headerPop]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (api.listCliAdapters?.() ?? Promise.resolve(null))
+      .then((rows) => {
+        if (!cancelled) setCliAdapters(mergeCliAdapters(rows ?? undefined));
+      })
+      .catch(() => {
+        if (!cancelled) setCliAdapters(FALLBACK_CLI_ADAPTERS);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const handleMessageScroll = () => {
     const node = messageListRef.current;
@@ -1597,13 +1610,9 @@ export function App() {
               const adapter = event.target.value;
               setNewMember((value) => ({ ...value, adapter, model: defaultModelForAdapter(adapter) }));
             }}>
-              <option value="mock">模拟 Agent（推荐体验）</option>
-              <option value="codex">Codex CLI</option>
-              <option value="openclaw">OpenClaw</option>
-              <option value="cursor">Cursor CLI（agent/cursor-agent）</option>
-              <option value="claude-code">Claude Code</option>
-              <option value="opencode">OpenCode</option>
-                <option value="dsh">DeepSeek Harness（dsh）</option>
+            {cliAdapters.map((a) => (
+              <option key={a.id} value={a.id}>{a.displayName}</option>
+            ))}
             </select>
             {modelsForAdapter(newMember.adapter).length > 0 && (
               <select value={newMember.model || defaultModelForAdapter(newMember.adapter)} onChange={(event) => setNewMember((value) => ({ ...value, model: event.target.value }))}>

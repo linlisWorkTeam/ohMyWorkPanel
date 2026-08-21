@@ -266,6 +266,8 @@ export const api = {
       cursorSyncedAt?: number | null;
       todos?: string[];
     }>("/api/agent-models"),
+  listCliAdapters: () =>
+    apiFetch<{ id: string; displayName: string; source?: string }[]>("/api/adapters"),
   refreshAgentModels: () =>
     apiFetch<{
       adapters: Record<string, string[]>;

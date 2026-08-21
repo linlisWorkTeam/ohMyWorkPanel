@@ -167,7 +167,8 @@ cd src-tauri && CARGO_BUILD_JOBS=1 cargo test --no-default-features --lib
 1. **高**：`metrics::PERF_SAMPLE_SECS == 20` 常量锁；`ChatEvent` emit 带 `seq` 的纯函数/单测。  
 2. **高**：Phase 2 最小集成：`GET /api/health`（无鉴权）+ `GET /api/metrics/latest`（鉴权）。  
 3. **中**：Playwright canary：登录后 `#root` 非空（防 #310）；断 WS 前 30s 无横幅文案。  
-4. **低**：`canary-announce-a2a.sh` dry-run（mock HTTP）。
+4. **低**：`canary-announce-a2a.sh` dry-run（mock HTTP）。  
+5. **中**：CLI 适配器 Manifest P0（未知 id、拒绝 `sh -c`、`{prompt}` 独立 argv）——规格 `specs/2026-08-21-cli-adapter-manifest.md` §8；实现时进门禁。
 
 ## Do not regress（测试也要守）
 
