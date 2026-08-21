@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "exportedAt": 1787280000000,
+  "exportedBy": "cursor-agent-pack",
+  "source": "linlis-work-panel/v2.0.0-cursor-pack",
+  "codex": { "enabled": false },
+  "claude": { "enabled": false },
+  "opencode": { "enabled": false },
+  "cursor": {
+    "enabled": true,
+    "executable": "agent",
+    "model": "grok-4.6",
+    "cliConfig": {
+      "permissions": { "allow": ["Shell(ls)"], "deny": [] },
+      "version": 1,
+      "editor": { "vimMode": false },
+      "display": {
+        "showLineNumbers": false,
+        "showThinkingBlocks": false,
+        "showStatusIndicators": false,
+        "showStatusLineRunningTime": false,
+        "mode": "zen"
+      },
+      "notifications": true,
+      "hints": true,
+      "modelSlashCommands": true,
+      "rewind": true,
+      "model": {
+        "modelId": "grok-4.6",
+        "displayModelId": "grok-4.6",
+        "displayName": "Cursor Grok 4.6 High Fast",
+        "displayNameShort": "Cursor Grok 4.6 High Fast",
+        "aliases": [],
+        "maxMode": false
+      },
+      "hasChangedDefaultModel": true,
+      "maxMode": false,
+      "maxModeAutoEnabled": false,
+      "modelParameters": {
+        "default": [],
+        "kimi-k3": [{ "id": "reasoning", "value": "max" }],
+        "grok-4.5": [
+          { "id": "effort", "value": "high" },
+          { "id": "fast", "value": "true" }
+        ],
+        "grok-4.6": [
+          { "id": "effort", "value": "high" },
+          { "id": "fast", "value": "true" }
+        ]
+      },
+      "selectedModel": {
+        "modelId": "grok-4.6",
+        "parameters": [
+          { "id": "effort", "value": "high" },
+          { "id": "fast", "value": "true" }
+        ]
+      },
+      "approvalMode": "unrestricted",
+      "autoAcceptWebSearch": false,
+      "sandbox": {
+        "mode": "disabled",
+        "networkAccess": "user_config_with_defaults"
+      },
+      "showSandboxIntro": false
+    }
+  },
+  "files": {},
+  "agents": [
+    {
+      "adapter": "cursor",
+      "displayName": "Cursor Agent",
+      "memberId": "seed-member-cursor",
+      "model": "grok-4.6",
+      "executable": "agent"
+    }
+  ],
+  "autoInstall": ["cursor"]
+}

@@ -9,14 +9,14 @@ status: active
 > **本文是产品/平台演进的单一事实源（SSOT）。**  
 > 新功能先在本文件占位（轨道 + 阶段），再开 Feature / 写 epitaph；禁止「东改西改」无版本归属的散弹改动。  
 > 细节仍以 `docs/epitaph/*` 与 `docs/superpowers/{specs,plans}/*` 为准；本文件只看**流水线与方向**。  
-> 当前 Git 标签：**`v1.3.0`**（工作流实现点 `8e3869d`）；前序 **`v1.2.0`**（基线 `0750306`）、**`v1.1.0`**。HEAD 上的 drain / 4.6 目录 / 群设置等为 **1.3.0+** 补丁，尚未另打小版本。`package.json` / Cargo 已对齐 **1.3.0**。
+> 当前 Git 标签：**`v2.0.0`**（Cursor 环境包 + DSH 壳层时代）。前序 **`v1.3.0`**（工作流 `8e3869d`）、**`v1.2.0`**（`0750306`）、**`v1.1.0`**。`package.json` / Cargo 已对齐 **2.0.0**。
 
 ## 怎么用（Agent / 人类）
 
 1. 动手前：确认改动属于哪条**轨道**、落在哪个**阶段**（已交付 / 进行中 / 下一站）。
 2. 不在流水线上的需求：先讨论是否立项，写入「下一站」或「暂缓」，再实现。
 3. 发版：灰度 `:8081` → docs → commit →（管理员批）promote `:8080`。嵌套调用 ≤3。
-4. 版本号说明：历史 epitaph 用过平台小步 `v1.2`…`v1.7` 与 `BaseV1.0.0`。Git tag 与 `package.json` 现已对齐产品里程碑（`v1.1.0` / `v1.2.0` / `v1.3.0`）。**勿把历史 epitaph「v1.3 双槽位」当成 tag `v1.3.0`。**
+4. 版本号说明：历史 epitaph 用过平台小步 `v1.2`…`v1.7` 与 `BaseV1.0.0`。Git tag 与 `package.json` 对齐产品里程碑（`v1.1.0` / `v1.2.0` / `v1.3.0` / **`v2.0.0`**）。**勿把历史 epitaph「v1.3 双槽位」当成 tag `v1.3.0`。**
 
 ---
 
@@ -119,6 +119,17 @@ status: active
 | P1 | 平滑发版 Drain + 重启重入队；Cursor 4.6 模型目录；群公告/工作区设置入口恢复 | ✅（前序补丁） |
 | **I1** | **Agent 配置一键导入**：顶部「Agent 配置」页（仅管理员）——服务器导出配置包 → 本地一键导入（写 `~/.codex`/`~/.claude`/`~/.cursor`/通用 `files`，同步 agent_profiles，持久化+启动自动重放）；缺失 CLI 自动安装（best-effort）；环境自检；release 槽位自带 codex shim 脚本（开箱即用，新机无需重新 vibecoding） | ✅ 代码（spec：`specs/2026-08-18-agent-config-one-click-import.md`；本机端到端验证；待 ECS 灰度） |
 
+### 阶段 6 — **WorkPanel V2.0.0**（Cursor 环境包 + DSH 壳层）
+
+> 相对 v1.3.0 的 breaking UX（三栏壳跟 `ui-demo.html`）+ 开箱配置包。**不**把 cursor-agent 二进制或登录态打进 Git。
+
+| 切片 | 内容 | 状态 |
+|---|---|---|
+| 壳层 | DSH 设计语言 P0–P2 + ui-demo 对齐；气泡操作常驻、去掉无下游 👍👎 | ✅ 代码 |
+| 开箱 | Agent 配置导入/导出/自检/CLI 安装（阶段 5.1 I1） | ✅ 代码 |
+| Cursor 包 | [`docs/releases/v2.0.0/`](releases/v2.0.0/) 脱敏 bundle + `scripts/pack-cursor-agent.sh` | ✅ 本阶段 |
+| 发布 | git tag `v2.0.0`；灰度后需人批准才能 promote | 本阶段 |
+
 ---
 
 ## 锁定的产品方向（勿漂移）
@@ -151,7 +162,7 @@ status: active
 1. **交接运行时桥（TOP1 / 轨道 A）**：Context Seams — epitaph 摘要注入 + Logs 记账（本切片）；全文 epitaph / 新事件表 / Wave 闭环不做。
 2. **V1.3.0 扩展宿主 EH**：S0–S5 代码已齐；剩余灰度回归，不与本切片抢并发。
 3. **V1.3.0 工作流已在生产**；后续增量仍灰度 →（批）promote。Wave 闭环为 TOP2，本切片之后再立项。
-4. **Git tag**：`v1.2.0` / `v1.3.0` 已补（2026-08-15）；下一小版本待立项后再打。
+4. **Git tag**：`v2.0.0` 已打（2026-08-21）；下一小版本待立项后再打。
 5. **聊天群 D1（若拍板）** / 质量 E Phase 2 / D3：不与宿主收尾抢并发。
 6. **稳态债（B）**：每次增量仍灰度 → 批准 promote；勿中断 stop→start。
 7. **轨道 G 自举运行时（新占位）**：设计 Spec `2026-08-16-dsh-self-bootstrap-runtime.md` + 群聊治理层 `2026-08-16-group-chat-governance-plane.md`；P0（dsh headless 适配器 + DSH Web 嵌入）✅；P1 ACP 会话回放待立项（先立群聊治理层）。**小组件定位**：见 `specs/2026-08-16-widget-capability-placement.md`（widget=页签/能力，不单独建群；仅治理型项目群例外）。

@@ -1120,9 +1120,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .own .bubble { border-color: color-mix(in srgb, var(--lp-accent) 28%, var(--lp-border-l1)); }
 .bubble.streaming { border-color: color-mix(in srgb, var(--lp-accent) 42%, var(--lp-border-l1)); }
 
-/* 悬停操作条（复制/停止/重试；移动端常显） */
-.m-actions { display: none; align-items: center; gap: 4px; margin-top: 5px; padding-left: 2px; }
-.message-row:hover .m-actions { display: flex; }
+/* 操作条常驻（复制/赞踩/停止/重试）；悬停显示会撑开气泡导致列表抖动 */
+.m-actions { display: flex; align-items: center; gap: 4px; margin-top: 5px; padding-left: 2px; }
 .mini-btn {
   border: 0; background: transparent; color: var(--lp-text-tertiary);
   font-size: 11px; padding: 3px 9px; border-radius: 999px; cursor: pointer;
@@ -1131,7 +1130,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .mini-btn.vote { font-weight: 600; }
 .mini-btn.vote.on { color: var(--lp-accent); background: var(--lp-bg-active); }
 .mini-sep { width: 1px; height: 12px; background: var(--lp-border-l1); margin: 0 2px; }
-@media (hover: none) { .message-row .m-actions { display: flex; } }
 
 /* Agent 思考/产物卡片化 */
 .part-thinking, .part-artifact {

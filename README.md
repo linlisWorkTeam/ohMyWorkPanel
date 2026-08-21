@@ -2,7 +2,8 @@
 
 本地优先的多 Agent 协作面板：工作群绑定服务器工作区、`@` 触发本机 CLI Agent；也支持**聊天群** + 轻量 **chatbot**（默认响应者、原生窗口上下文与滚动摘要）。桌面（Tauri）与 Web 双模；本机灰度/生产以 Web + systemd 双槽位为主。
 
-当前 Git 标签：**[`v1.3.0`](https://github.com/linlisWorkTeam/workPanel/releases/tag/v1.3.0)**（工作流实现点）；前序 [`v1.2.0`](https://github.com/linlisWorkTeam/workPanel/releases/tag/v1.2.0)、[`v1.1.0`](https://github.com/linlisWorkTeam/workPanel/releases/tag/v1.1.0)。HEAD 上 drain / 群设置 / DSH P0 等为 **1.3.0+** 补丁，尚未另打小版本。`package.json` / Cargo 已对齐 `1.3.0`。  
+当前 Git 标签：**[`v2.0.0`](https://github.com/linlisWorkTeam/workPanel/releases/tag/v2.0.0)**（Cursor 环境包 + DSH 壳层）。前序 [`v1.3.0`](https://github.com/linlisWorkTeam/workPanel/releases/tag/v1.3.0)、[`v1.2.0`](https://github.com/linlisWorkTeam/workPanel/releases/tag/v1.2.0)、[`v1.1.0`](https://github.com/linlisWorkTeam/workPanel/releases/tag/v1.1.0)。`package.json` / Cargo 已对齐 `2.0.0`。  
+Cursor Agent 脱敏配置包：[`docs/releases/v2.0.0/`](docs/releases/v2.0.0/)。  
 发展方向 SSOT：[`docs/version-pipeline.md`](docs/version-pipeline.md)（勿把历史 epitaph「v1.3 双槽位」当成 tag `v1.3.0`）。  
 远端仓库：`https://github.com/linlisWorkTeam/workPanel`（`origin`）。
 
@@ -69,10 +70,11 @@ export CARGO_BUILD_JOBS=1 NODE_OPTIONS=--max-old-space-size=1024
 
 | 标签 | 含义 |
 |---|---|
+| **v2.0.0** | DSH 三栏壳 + Agent 配置开箱 + Cursor 脱敏环境包（不含 CLI 二进制/登录） |
 | **v1.3.0** | 版本页 + Ask / Wave 工作流（控制面；Wave 执行仍走管理员 kickoff） |
 | **v1.2.0** | 豆包语音 UX + Live 会话/聊天一致（生产基线 `0750306`） |
 | **v1.1.0** | 聊天默认响应者、成员排队可见、PanelLive 宿主、promote 审批 |
-| **1.3.0+**（未另打 tag） | 发版 drain、交接运行时注入（epitaph 摘要）、群设置入口、DSH headless P0、**Agent 配置一键导入（开箱即用）** |
+| **1.3.0+**（已收入 v2.0.0） | 发版 drain、交接注入、群设置、DSH P0、Agent 配置导入 |
 
 - 发版：灰度 `:8081` → docs → commit → **人批准** 才能 promote `:8080`；Agent 不得伪造令牌或绕过审批。
 - DSH：外挂运行时（锁版本、进程隔离），**不是**本仓编译期内核；群聊不是唯一事实源。
@@ -89,6 +91,7 @@ export CARGO_BUILD_JOBS=1 NODE_OPTIONS=--max-old-space-size=1024
 | `./scripts/canary-announce-a2a.sh` | 灰度改动点 A2A 公告 |
 | `./scripts/approve-prod-release.sh` | 生产操作一次性批准 |
 | `./scripts/promote-canary.sh` | 灰度 → 生产（bin+dist） |
+| `./scripts/pack-cursor-agent.sh` | 从本机生成 Cursor 脱敏配置包（stdout，不含登录） |
 | `powershell -File scripts/smoke-adapters.ps1` | 适配器 smoke（尽力，不进门禁） |
 
 ## Agent 适配器

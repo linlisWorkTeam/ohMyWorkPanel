@@ -23,7 +23,7 @@ use crate::scheduler::{self, SchedulerState};
     create_roadmap_item_db, create_task_run, delete_feature_db,
     delete_feature_task_db, delete_roadmap_item_db, get_features,
     get_feature_tasks, get_groups_for_user,
-    get_group as db_get_group,
+    get_group as db_get_group, get_members,
     get_preset_roles, get_roadmap_items, get_roadmap_state_db, get_runs,
     get_messages_before, get_settings_from, group_state, id, is_admin_user, mark_group_read,
     member_from_row, now, open_db, require_admin, require_group_access, resolve_target_agent_ids,
@@ -287,6 +287,18 @@ async fn mark_group_read_web(
     mark_group_read(&conn, &claims.sub, &group_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     Ok(Json(json!({ "ok": true, "groupId": group_id })))
+}
+
+async fn list_group_members_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(group_id): Path<String>,
+) -> Result<Json<Vec<Member>>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
+    get_members(&conn, &group_id)
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
 }
 
 async fn list_presence_web(
@@ -2636,7 +2648,10 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/api/ops/test-gate", post(ops_test_gate_web))
         .route("/api/ops/deploy-canary", post(ops_deploy_canary_web))
          // Members
-         .route("/api/groups/{group_id}/members", post(add_member_web))
+         .route(
+             "/api/groups/{group_id}/members",
+             get(list_group_members_web).post(add_member_web),
+         )
          .route("/api/groups/{group_id}/members/{member_id}", delete(remove_member_web))
          .route(
              "/api/groups/{group_id}/members/{member_id}/purge",
