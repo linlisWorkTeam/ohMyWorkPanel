@@ -470,3 +470,90 @@ pub struct RoadmapOrchestration {
      pub note: String,
      pub created_at: i64,
  }
+
+#[cfg(test)]
+mod contract_tests {
+    use super::*;
+
+    fn to_json<T: serde::Serialize>(value: &T) -> serde_json::Value {
+        serde_json::to_value(value).unwrap()
+    }
+
+    /// 契约锁（评审 #8 务实版）：前端 types.ts 期望 camelCase；
+    /// 本测试防止 Rust DTO 再出现 my_vote/created_at 类 snake 泄漏。
+    #[test]
+    fn feedback_and_phase_use_camel_case() {
+        let fb = MessageFeedback { up: 1, down: 2, my_vote: Some("up".into()) };
+        let v = to_json(&fb);
+        assert_eq!(v["up"], 1);
+        assert_eq!(v["down"], 2);
+        assert_eq!(v["myVote"], "up");
+        assert!(v.get("my_vote").is_none(), "snake_case 键不得泄漏");
+
+        let entry = RunPhaseEntry { phase: "streaming".into(), note: String::new(), created_at: 42 };
+        let w = to_json(&entry);
+        assert_eq!(w["phase"], "streaming");
+        assert_eq!(w["createdAt"], 42);
+        assert!(w.get("created_at").is_none());
+    }
+
+    #[test]
+    fn chat_event_keys_are_camel_case() {
+        let mut e = ChatEvent::bare("run_status", "g");
+        e.run_id = Some("r".into());
+        e.message_id = Some("m".into());
+        e.status = Some("running".into());
+        e.seq = Some(7);
+        let v = to_json(&e);
+        assert_eq!(v["groupId"], "g");
+        assert_eq!(v["runId"], "r");
+        assert_eq!(v["messageId"], "m");
+        assert_eq!(v["seq"], 7);
+        assert!(v.get("group_id").is_none());
+        assert!(v.get("elapsed_ms").is_none(), "None 字段应被 skip_serializing_if 省略");
+    }
+
+    #[test]
+    fn group_task_run_member_shape_matches_frontend() {
+        let group = Group {
+            id: "g".into(), name: "g".into(), workspace_path: "/w".into(),
+            owner_member_id: "o".into(), admin_member_id: None, created_at: 1,
+            announcement: String::new(), announcement_updated_at: None,
+            group_kind: "project".into(), archived: false, is_system: true, unread_count: 3,
+        };
+        let gv = to_json(&group);
+        for key in ["id", "name", "workspacePath", "ownerMemberId", "createdAt", "groupKind", "isSystem", "unreadCount"] {
+            assert!(gv.get(key).is_some(), "缺少 {}", key);
+        }
+        assert!(gv.get("workspace_path").is_none());
+        assert_eq!(gv["groupKind"], "project");
+
+        let run = TaskRun {
+            id: "r".into(), group_id: "g".into(), root_message_id: "m".into(),
+            agent_member_id: "a".into(), parent_run_id: None, depth: 0, status: "queued".into(),
+            output_message_id: None, error_message: None, review_status: None,
+            reviewer_member_id: None, created_at: 1, started_at: None, completed_at: None,
+            phase: Some("starting".into()), phase_updated_at: Some(9),
+        };
+        let rv = to_json(&run);
+        for key in ["rootMessageId", "agentMemberId", "outputMessageId", "reviewStatus", "reviewerMemberId", "phaseUpdatedAt"] {
+            assert!(rv.get(key).is_some(), "缺少 {}", key);
+        }
+        assert_eq!(rv["phase"], "starting");
+
+        let member = Member {
+            id: "a".into(), group_id: "g".into(), kind: "agent".into(), display_name: "A".into(),
+            avatar_color: "#000".into(), role_description: String::new(), is_active: true,
+            adapter: Some("mock".into()), executable_path: None, runtime_status: Some("ready".into()),
+            tags: String::new(), created_at: 1, workspace_path: None, api_key_set: true,
+            keep_alive: false, warm_status: None, model: None, auth_user_id: None,
+            invite_pending: false, system_locked: false,
+        };
+        let mv = to_json(&member);
+        for key in ["displayName", "avatarColor", "roleDescription", "isActive", "runtimeStatus", "apiKeySet", "keepAlive", "authUserId", "invitePending", "systemLocked"] {
+            assert!(mv.get(key).is_some(), "缺少 {}", key);
+        }
+        assert!(mv.get("api_key").is_none(), "原始 API key 永不外泄（只暴露 apiKeySet）");
+        assert!(mv.get("display_name").is_none());
+    }
+}
