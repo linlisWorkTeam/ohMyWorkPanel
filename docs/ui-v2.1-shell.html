@@ -1,0 +1,738 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="cyberpunk">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark light" />
+<title>WorkPanel v2.1 壳层示意图 — Base / Extend / 七主题</title>
+<style>
+:root {
+  --rail: 56px;
+  --left: 220px;
+  --right: 320px;
+  --dock: 260px;
+  --font: "IBM Plex Sans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", "Cascadia Code", Consolas, monospace;
+  --r: 10px;
+  --scan: 0;
+  --grain: 0;
+  --breath: 0;
+  --radius-mode: 10px;
+}
+[data-theme="cyberpunk"] {
+  --bg:#0a0014; --surf:#130a22; --elev:#1c1132; --ink:#f2ecff; --dim:#a791c8;
+  --acc:#00f0ff; --acc2:#ff2bd6; --line:rgba(0,240,255,.22); --user:rgba(0,240,255,.16);
+  color-scheme:dark; --scan:.07; --grain:0; --radius-mode:10px;
+}
+[data-theme="industrial"] {
+  --bg:#1a1c20; --surf:#22252b; --elev:#2a2e36; --ink:#eef3f7; --dim:#9fb2c1;
+  --acc:#f5a623; --acc2:#ff6a00; --line:rgba(245,166,35,.35); --user:rgba(255,106,0,.18);
+  color-scheme:dark; --scan:0; --grain:0; --radius-mode:4px;
+}
+[data-theme="atlas"] {
+  --bg:#e7eef5; --surf:#f2f7fb; --elev:#fff; --ink:#0b1f33; --dim:#5b7a94;
+  --acc:#1f9bb8; --acc2:#0b1f33; --line:rgba(11,31,51,.14); --user:rgba(31,155,184,.14);
+  color-scheme:light; --scan:0; --radius-mode:8px;
+}
+[data-theme="forge"] {
+  --bg:#141114; --surf:#1c1818; --elev:#282019; --ink:#f5ead9; --dim:#b49c82;
+  --acc:#e08a3c; --acc2:#7a3b12; --line:rgba(224,138,60,.35); --user:rgba(224,138,60,.18);
+  color-scheme:dark; --scan:0; --radius-mode:8px;
+}
+[data-theme="moss"] {
+  --bg:#e8efe6; --surf:#f2f7ef; --elev:#fff; --ink:#1f3a2e; --dim:#56705f;
+  --acc:#6a8f4e; --acc2:#1f3a2e; --line:rgba(31,58,46,.14); --user:rgba(106,143,78,.16);
+  color-scheme:light; --scan:0; --breath:.02; --radius-mode:14px;
+}
+[data-theme="noir"] {
+  --bg:#0c0d10; --surf:#131417; --elev:#1a1b1f; --ink:#f2ebe0; --dim:#9a9aa2;
+  --acc:#d94b3d; --acc2:#f2ebe0; --line:rgba(217,75,61,.4); --user:rgba(242,235,224,.1);
+  color-scheme:dark; --scan:0; --grain:.04; --radius-mode:2px;
+}
+[data-theme="minimal"] {
+  --bg:#f4f5f7; --surf:#fff; --elev:#fff; --ink:#17181a; --dim:#5c5f66;
+  --acc:#17181a; --acc2:#17181a; --line:rgba(23,24,26,.14); --user:rgba(23,24,26,.06);
+  color-scheme:light; --scan:0; --grain:0; --breath:0; --radius-mode:4px;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--ink);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100%;
+}
+body::before {
+  content: "";
+  pointer-events: none;
+  position: fixed; inset: 0;
+  z-index: 5;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0 3px,
+    rgba(0,0,0,.35) 3px 4px
+  );
+  opacity: var(--scan);
+  mix-blend-mode: overlay;
+}
+.note {
+  padding: 10px 18px;
+  background: var(--surf);
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--dim);
+  display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center;
+}
+.note b { color: var(--ink); font-weight: 600; }
+.themes { display: flex; flex-wrap: wrap; gap: 6px; }
+.themes button {
+  font: inherit; font-size: 12px;
+  border: 1px solid var(--line);
+  background: var(--elev);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.themes button.on { outline: 2px solid var(--acc); }
+.shell {
+  display: grid;
+  grid-template-columns: var(--rail) var(--left) minmax(0,1fr) var(--right);
+  min-height: 0;
+}
+.shell.docked { grid-template-columns: var(--rail) var(--left) minmax(0,1fr) minmax(200px,1fr) var(--dock); }
+.rail, .left, .mid, .right, .dock {
+  border-right: 1px solid var(--line);
+  background: var(--surf);
+  min-height: 0;
+}
+.rail { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 12px 0; font-size: 16px; }
+.rail span { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; border: 1px solid var(--line); }
+.left { padding: 14px; }
+.brand { font-size: 13px; letter-spacing: .04em; margin-bottom: 14px; }
+.brand em { color: var(--acc); font-style: normal; }
+.g { padding: 8px 10px; border-radius: var(--radius-mode); margin-bottom: 6px; font-size: 13px; }
+.g.on { background: color-mix(in srgb, var(--acc) 16%, transparent); outline: 1px solid var(--line); }
+.mid { display: flex; flex-direction: column; background: var(--bg); }
+.head { padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: baseline; }
+.head h1 { margin: 0; font-size: 16px; font-weight: 600; }
+.head small { color: var(--dim); }
+.wave { margin: 0 16px; margin-top: 10px; padding: 8px 12px; border: 1px dashed var(--line); border-radius: var(--radius-mode); font-size: 12px; color: var(--dim); }
+.chat {
+  flex: 1; padding: 12px 16px 8px; overflow: auto;
+  background:
+    radial-gradient(1200px 400px at 50% -10%, color-mix(in srgb, var(--acc) 8%, transparent), transparent 60%),
+    var(--bg);
+}
+.day {
+  display: flex; justify-content: center; margin: 6px 0 16px;
+}
+.day span {
+  font-size: 11px; color: var(--dim);
+  background: color-mix(in srgb, var(--elev) 80%, transparent);
+  border: 1px solid var(--line);
+  padding: 2px 10px; border-radius: 999px;
+}
+.row { display: flex; gap: 8px; margin-bottom: 16px; align-items: flex-end; }
+.row.me { flex-direction: row-reverse; }
+.av {
+  width: 36px; height: 36px; border-radius: 6px;
+  display: grid; place-items: center; font-size: 12px; font-weight: 700;
+  flex: none; color: #fff;
+}
+.av.c { background: linear-gradient(145deg, #5b8def, #3a5fd4); }
+.av.me { background: linear-gradient(145deg, #3ecf8e, #1faa6c); }
+.col { max-width: min(72%, 420px); }
+.who { font-size: 11px; color: var(--dim); margin: 0 6px 4px; line-height: 1; }
+.row.me .who { text-align: right; }
+.bub {
+  padding: 9px 12px;
+  border-radius: 4px 16px 16px 16px;
+  font-size: 14px; line-height: 1.55;
+  background: var(--elev);
+  border: 1px solid var(--line);
+  position: relative;
+  user-select: none;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--ink) 6%, transparent);
+}
+.row.me .bub {
+  border-radius: 16px 4px 16px 16px;
+  background: var(--user);
+  border-color: color-mix(in srgb, var(--acc) 25%, var(--line));
+}
+.bub.failed { border-color: color-mix(in srgb, #e85d5d 70%, var(--line)); }
+.time { font-size: 10px; color: var(--dim); margin: 4px 6px 0; }
+.row.me .time { text-align: right; }
+.q-in {
+  margin: 0 0 6px; padding: 6px 8px;
+  border-left: 3px solid color-mix(in srgb, var(--acc) 70%, var(--dim));
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  border-radius: 0 6px 6px 0;
+  font-size: 12px; color: var(--dim); line-height: 1.4;
+}
+.mention { color: var(--acc); font-weight: 600; }
+.voice {
+  display: flex; align-items: center; gap: 10px;
+  min-width: 148px; cursor: pointer; padding: 6px 4px !important;
+}
+.voice .tri {
+  width: 0; height: 0;
+  border-style: solid; border-width: 7px 0 7px 12px;
+  border-color: transparent transparent transparent var(--ink);
+}
+.row.me .voice .tri { border-width: 7px 12px 7px 0; border-color: transparent var(--ink) transparent transparent; }
+.voice .bars { display: flex; align-items: center; gap: 2px; height: 16px; flex: 1; }
+.voice .bars i {
+  width: 2px; background: var(--ink); opacity: .55; border-radius: 1px;
+  display: block; animation: vwave 1.1s ease-in-out infinite;
+}
+.voice .bars i:nth-child(1) { height: 6px; animation-delay: 0s; }
+.voice .bars i:nth-child(2) { height: 14px; animation-delay: .12s; }
+.voice .bars i:nth-child(3) { height: 9px; animation-delay: .24s; }
+.voice .bars i:nth-child(4) { height: 16px; animation-delay: .08s; }
+.voice .bars i:nth-child(5) { height: 7px; animation-delay: .2s; }
+.voice.playing .bars i { opacity: .9; }
+.voice .sec { font-size: 12px; color: var(--dim); min-width: 1.6em; }
+.row.me .voice { flex-direction: row-reverse; }
+@keyframes vwave { 50% { transform: scaleY(.45); } }
+.stream-body { color: var(--ink); }
+.caret { display: inline-block; width: 2px; height: 1em; background: var(--acc); margin-left: 2px; vertical-align: -2px; animation: blink 1s step-end infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.stop {
+  position: absolute; right: 8px; bottom: -11px;
+  font-size: 11px; border: 1px solid var(--line);
+  background: var(--elev); color: var(--ink);
+  border-radius: 999px; padding: 2px 10px; cursor: pointer;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--bg) 40%, transparent);
+}
+.row.me .stop { right: auto; left: 8px; }
+.think {
+  font-size: 12px; color: var(--dim);
+  border: 1px dashed var(--line); border-radius: 8px;
+  padding: 6px 8px; margin-bottom: 6px; cursor: pointer;
+}
+.quote-bar {
+  margin: 0 16px 0; padding: 8px 10px;
+  border-left: 3px solid var(--acc);
+  background: var(--elev);
+  border-radius: 0 8px 8px 0;
+  font-size: 12px; color: var(--dim);
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+}
+.quote-bar button {
+  font: inherit; border: 0; background: transparent; color: var(--dim); cursor: pointer; font-size: 16px; line-height: 1;
+}
+.jump {
+  position: sticky; bottom: 8px; margin: 0 auto 4px; width: max-content;
+  font-size: 12px; padding: 4px 12px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--elev); color: var(--acc); cursor: pointer;
+}
+#msgMenu {
+  position: fixed; z-index: 20;
+  background: color-mix(in srgb, #1a1a1a 88%, var(--elev));
+  color: #f5f5f5;
+  border-radius: 10px; padding: 6px 4px;
+  display: flex; gap: 0;
+  box-shadow: 0 8px 28px rgba(0,0,0,.35);
+  font-size: 13px;
+}
+#msgMenu button {
+  font: inherit; color: inherit; background: transparent; border: 0;
+  padding: 8px 14px; cursor: pointer; border-radius: 8px; white-space: nowrap;
+}
+#msgMenu button:hover { background: rgba(255,255,255,.1); }
+.hold-mask {
+  position: fixed; inset: 0; z-index: 15;
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+  display: grid; place-items: center;
+  color: var(--ink); font-size: 18px; letter-spacing: .08em;
+}
+.hold-mask b { display: block; font-size: 13px; color: var(--dim); font-weight: 400; margin-top: 8px; }
+.composer {
+  margin: 12px 16px 16px;
+  padding: 8px 10px 8px;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius-mode) + 4px);
+  background: var(--elev);
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--bg) 55%, transparent);
+}
+.composer:focus-within {
+  border-color: color-mix(in srgb, var(--acc) 65%, var(--line));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--acc) 35%, transparent);
+}
+.composer-wrap { padding-bottom: 4px; }
+.tools { display: flex; gap: 4px; margin-bottom: 2px; }
+.tools button {
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  min-width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+}
+.tools button:hover { background: color-mix(in srgb, var(--acc) 12%, transparent); color: var(--ink); }
+.composer textarea {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  margin: 0;
+  padding: 6px 4px 8px;
+  border: 0;
+  border-radius: 0;
+  resize: none;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+  caret-color: var(--acc);
+  background: var(--elev) !important;
+  background-color: var(--elev) !important;
+  color-scheme: inherit;
+  outline: none;
+  box-shadow: none;
+  appearance: none;
+  -webkit-appearance: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.composer textarea:focus,
+.composer textarea:focus-visible,
+.composer textarea:active {
+  outline: none;
+  box-shadow: none;
+  background: var(--elev) !important;
+  background-color: var(--elev) !important;
+}
+.composer textarea::placeholder { color: var(--dim); opacity: .85; }
+[data-theme="cyberpunk"] .composer textarea,
+[data-theme="industrial"] .composer textarea,
+[data-theme="forge"] .composer textarea,
+[data-theme="noir"] .composer textarea { color-scheme: dark; }
+[data-theme="atlas"] .composer textarea,
+[data-theme="moss"] .composer textarea,
+[data-theme="minimal"] .composer textarea { color-scheme: light; }
+.hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 4px;
+  font-size: 11px;
+  color: var(--dim);
+}
+.hint-left { display: flex; align-items: center; gap: 8px; }
+.mic {
+  font: inherit; font-size: 12px;
+  border: 1px solid var(--line);
+  background: transparent; color: var(--ink);
+  border-radius: 999px; padding: 5px 12px; cursor: pointer;
+}
+.send {
+  margin: 0;
+  background: var(--acc);
+  color: var(--bg);
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+[data-theme="minimal"] .send, [data-theme="atlas"] .send, [data-theme="moss"] .send { color: #fff; }
+[data-theme="minimal"] .send { background: var(--ink); color: #fff; }
+.right, .dock { display: flex; flex-direction: column; background: var(--surf); }
+.tabs { display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid var(--line); }
+.tabs button {
+  flex: 1; font: inherit; font-size: 12px; padding: 10px 6px;
+  border: 0; background: transparent; color: var(--dim); cursor: pointer;
+}
+.tabs button.on { color: var(--ink); box-shadow: inset 0 -2px 0 var(--acc); }
+.pane { padding: 12px; font-size: 13px; overflow: auto; flex: 1; }
+.member { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.roster { display: flex; flex-direction: column; gap: 4px; }
+.roster-hint { font-size: 11px; color: var(--dim); margin: 0 0 10px; }
+.m-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0,1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 8px;
+  border-radius: 12px;
+  cursor: context-menu;
+}
+.m-row:hover { background: color-mix(in srgb, var(--acc) 8%, transparent); }
+.m-row.on { background: color-mix(in srgb, var(--acc) 12%, transparent); }
+.m-av {
+  width: 40px; height: 40px; border-radius: 10px;
+  display: grid; place-items: center;
+  font-size: 15px; font-weight: 700; color: #fff;
+  position: relative;
+}
+.m-av .dot {
+  position: absolute; right: -1px; bottom: -1px;
+  width: 10px; height: 10px; border-radius: 50%;
+  border: 2px solid var(--surf); background: #3ecf8e;
+}
+.m-av .dot.off { background: #8a9099; }
+.m-av .dot.busy { background: var(--acc); }
+.m-meta { min-width: 0; }
+.m-name {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  font-size: 13px; font-weight: 650; line-height: 1.2;
+}
+.m-name em {
+  font-style: normal; font-size: 10px; font-weight: 600;
+  padding: 1px 6px; border-radius: 999px;
+  border: 1px solid var(--line); color: var(--dim);
+}
+.m-name em.lead { color: var(--acc); border-color: color-mix(in srgb, var(--acc) 40%, var(--line)); }
+.m-sub { font-size: 11px; color: var(--dim); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-state { font-size: 11px; color: var(--dim); }
+.m-state.ok { color: #3ecf8e; }
+.m-state.busy { color: var(--acc); }
+.m-state.bad { color: #e85d5d; }
+.m-add {
+  margin-top: 8px; width: 100%;
+  font: inherit; font-size: 13px;
+  padding: 10px; border-radius: 12px;
+  border: 1px dashed var(--line);
+  background: transparent; color: var(--dim); cursor: pointer;
+}
+.m-add:hover { color: var(--ink); border-color: var(--acc); }
+.stage {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+}
+.card {
+  border: 1px solid var(--line); border-radius: var(--radius-mode); padding: 10px; cursor: pointer;
+  background: var(--elev); font-size: 12px;
+}
+.card.on { outline: 2px solid var(--acc); }
+.card .sw { height: 28px; border-radius: 6px; margin-bottom: 6px; }
+.dock { border-right: 0; border-left: 1px dashed var(--line); }
+.dock h3 { margin: 0; padding: 12px; font-size: 12px; font-weight: 600; border-bottom: 1px solid var(--line); }
+.callout { font-size: 11px; color: var(--acc); letter-spacing: .04em; text-transform: uppercase; margin-bottom: 8px; }
+.foot { padding: 8px 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--dim); background: var(--surf); }
+.hidden { display: none !important; }
+@media (prefers-reduced-motion: reduce) { body::before { display: none; } }
+</style>
+</head>
+<body>
+<header class="note">
+  <span><b>v2.1 示意图</b>（不是运行时）· 切主题 · 右键或长按气泡出菜单 · 按住「说话」</span>
+  <div class="themes" id="themes"></div>
+  <label style="font-size:12px"><input type="checkbox" id="dock" /> 拆出 Live（right-dock）</label>
+</header>
+<div class="shell" id="shell">
+  <nav class="rail" aria-label="控制轨">
+    <span>L</span><span>◉</span><span>◎</span><span>◇</span>
+  </nav>
+  <aside class="left">
+    <div class="brand">LINLI'S <em>Workpanel</em></div>
+    <div class="callout">Base · 群导航</div>
+    <div class="g on">灰度测试</div>
+    <div class="g">FlowAnalysis</div>
+    <div class="g">AI 酒馆 · 聊</div>
+  </aside>
+  <main class="mid">
+    <div class="head">
+      <div>
+        <h1>灰度测试 <small>project</small></h1>
+        <small>状态簇已迁走 · 中栏只留群身份</small>
+      </div>
+    </div>
+    <div class="wave">WAVE · 尚未建立 Wave · 点此到版本页</div>
+    <div class="chat" id="chat">
+      <div class="day"><span>今天 00:48</span></div>
+
+      <div class="row">
+        <div class="av c">C</div>
+        <div class="col">
+          <div class="who">Cursor Agent</div>
+          <div class="bub" data-retry="0">右栏四页签，Extend 可拆第二列。气泡上不再常驻「复制 / 重试」——长按或右键出菜单。</div>
+          <div class="time">00:48</div>
+        </div>
+      </div>
+
+      <div class="row me">
+        <div class="av me">我</div>
+        <div class="col">
+          <div class="who">root</div>
+          <div class="bub" data-retry="0">把设置和主题都放进右栏，头上不要一排图标。</div>
+          <div class="time">00:49</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="av c">C</div>
+        <div class="col">
+          <div class="who">Cursor Agent</div>
+          <div class="bub" data-retry="0">
+            <div class="q-in">root：把设置和主题都放进右栏…</div>
+            收到。<span class="mention">@root</span> 设置进右栏第 4 页签。对话手感按微信：引用灰条、语音时长条、流式只露停止。
+          </div>
+          <div class="time">00:49</div>
+        </div>
+      </div>
+
+      <div class="row me">
+        <div class="av me">我</div>
+        <div class="col">
+          <div class="who">语音</div>
+          <div class="bub voice" data-retry="0" id="voiceBub" title="点击播放">
+            <span class="tri"></span>
+            <span class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+            <span class="sec">3″</span>
+          </div>
+          <div class="time">00:50</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="av c">C</div>
+        <div class="col">
+          <div class="who">Cursor Agent · 流式</div>
+          <div class="bub" data-retry="0" style="padding-bottom: 18px">
+            <div class="think">思考过程（已折叠）</div>
+            <span class="stream-body">正在把壳层和对话规则写进同一发…</span><span class="caret"></span>
+            <button class="stop" type="button" id="stopBtn">停止</button>
+          </div>
+          <div class="time">现在</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="av c">C</div>
+        <div class="col">
+          <div class="who">Cursor Agent · 失败</div>
+          <div class="bub failed" data-retry="1">CLI 超时。长按本条可「重试」——气泡上没有按钮，避免把列表撑抖。</div>
+          <div class="time">00:51</div>
+        </div>
+      </div>
+
+      <button type="button" class="jump" id="jump">↓ 有 1 条未读</button>
+    </div>
+    <div class="composer-wrap">
+    <div class="quote-bar" id="quoteBar"><span>引用 Cursor Agent：右栏四页签，Extend 可拆第二列…</span><button type="button" id="quoteClose" aria-label="取消引用">×</button></div>
+    <div class="composer">
+      <div class="tools">
+        <button type="button" title="提及">@</button>
+        <button type="button" title="斜杠命令">/</button>
+        <button type="button" title="OCR">🖼</button>
+      </div>
+      <textarea rows="2" placeholder="给群里的 Agent 派活…  @ 提及 · Enter 发送"></textarea>
+      <div class="hint">
+        <span class="hint-left">
+          <button class="mic" type="button" id="mic">按住 说话</button>
+          <span>Enter 发送 · 长按气泡出菜单</span>
+        </span>
+        <button class="send" type="button">发送</button>
+      </div>
+    </div>
+    </div>
+  </main>
+  <aside class="right">
+    <div class="tabs" id="tabs"></div>
+    <div class="pane" id="pane"></div>
+  </aside>
+  <aside class="dock hidden" id="dockPane">
+    <h3>Extend · Live（right-dock）</h3>
+    <div class="pane">
+      <div class="callout">并排第二列</div>
+      <p style="margin:0;color:var(--dim);font-size:13px;line-height:1.5">PanelLive / Cordis 组件挂这里。默认是页签；用户点「拆出」才出现本列。几何只存本机。</p>
+    </div>
+  </aside>
+</div>
+<footer class="foot">七主题平级 · 极简 = 无扫描无呼吸 · 打开本文件即可预览 · spec：docs/superpowers/specs/2026-08-22-workpanel-v2.1-chrome-extend-design.md</footer>
+<script>
+const THEMES = [
+  ["cyberpunk","Cyberpunk"],
+  ["industrial","Industrial"],
+  ["atlas","Atlas"],
+  ["forge","Forge"],
+  ["moss","Moss"],
+  ["noir","Noir"],
+  ["minimal","极简"],
+];
+const TABS = [
+  ["members","成员",""],
+  ["queue","队列","执行中 · 排队。Base 页签。"],
+  ["details","详情","版本 / 经验 / 日志。群设置已搬走。"],
+  ["settings","设置",""],
+  ["live","Live","Extend right-tab。可拆成 dock。"],
+];
+const root = document.documentElement;
+const themesEl = document.getElementById("themes");
+THEMES.forEach(([id, name]) => {
+  const b = document.createElement("button");
+  b.textContent = name;
+  b.onclick = () => {
+    root.setAttribute("data-theme", id);
+    [...themesEl.children].forEach((x) => x.classList.toggle("on", x === b));
+  };
+  if (id === "cyberpunk") b.classList.add("on");
+  themesEl.appendChild(b);
+});
+const swatches = {
+  cyberpunk: "linear-gradient(135deg,#0a0014,#ff2bd6 50%,#00f0ff)",
+  industrial: "linear-gradient(135deg,#1a1c20,#f5a623)",
+  atlas: "linear-gradient(135deg,#e7eef5,#1f9bb8)",
+  forge: "linear-gradient(135deg,#141114,#e08a3c)",
+  moss: "linear-gradient(135deg,#e8efe6,#6a8f4e)",
+  noir: "linear-gradient(135deg,#0c0d10,#d94b3d)",
+  minimal: "linear-gradient(135deg,#f4f5f7,#17181a)",
+};
+function membersHtml() {
+  const people = [
+    { id:"root", av:"我", bg:"linear-gradient(145deg,#3ecf8e,#1faa6c)", name:"root", tags:"<em class='lead'>群主</em>", sub:"本地成员", state:"在线", sk:"ok", dot:"" },
+    { id:"cur", av:"C", bg:"linear-gradient(145deg,#5b8def,#3a5fd4)", name:"Cursor Agent", tags:"<em class='lead'>管理员</em>", sub:"cursor · grok-4.6", state:"执行中", sk:"busy", dot:"busy", menu:"agent" },
+    { id:"cod", av:"X", bg:"linear-gradient(145deg,#7c5cbf,#4a3488)", name:"Codex", tags:"<em>系统</em>", sub:"codex · gpt-5.2", state:"已就绪", sk:"ok", dot:"", menu:"agent-lock" },
+    { id:"ds", av:"D", bg:"linear-gradient(145deg,#4aa3c8,#1f6f8a)", name:"DeepSeek", tags:"<em>机器人</em>", sub:"chatbot · 缺 Key", state:"不可用", sk:"bad", dot:"off", menu:"bot" },
+    { id:"inv", av:"?", bg:"#6b7280", name:"待加入", tags:"<em>链接中</em>", sub:"邀请未接受", state:"等待", sk:"", dot:"off", menu:"invite" },
+  ];
+  return `<p class="roster-hint">右键或长按成员：检测 / 设管理 / 移除（行上不摊按钮）</p>
+    <div class="roster">${people.map((p,i) => `
+      <div class="m-row ${i===1?"on":""}" data-menu="${p.menu||"human"}" data-name="${p.name}">
+        <div class="m-av" style="background:${p.bg}">${p.av}<i class="dot ${p.dot}"></i></div>
+        <div class="m-meta">
+          <div class="m-name">${p.name}${p.tags}</div>
+          <div class="m-sub">${p.sub}</div>
+        </div>
+        <div class="m-state ${p.sk}">${p.state}</div>
+      </div>`).join("")}</div>
+    <button type="button" class="m-add">＋ 邀请成员</button>`;
+}
+function settingsHtml() {
+  return `<div class="callout">core.settings</div>
+    <p style="margin:0 0 10px;color:var(--dim)">外观 · 运行 · 本群（原中栏头 🎨⚙ 与左栏底运行设置并入）</p>
+    <div class="stage">${THEMES.map(([id, name]) =>
+      `<div class="card ${root.getAttribute("data-theme")===id?"on":""}" data-id="${id}">
+        <div class="sw" style="background:${swatches[id]}"></div><b>${name}</b>
+      </div>`).join("")}</div>`;
+}
+const tabsEl = document.getElementById("tabs");
+const pane = document.getElementById("pane");
+let tab = "members";
+function bindRoster() {
+  pane.querySelectorAll(".m-row").forEach((el) => {
+    const kind = el.dataset.menu;
+    const items = {
+      human: ["复制名称"],
+      agent: ["检测", "撤销管理", "切换模型", "跳转 DSH Web", "移除"],
+      "agent-lock": ["检测", "设管理"],
+      bot: ["设管理", "移除"],
+      invite: ["复制邀请", "撤销邀请"],
+    }[kind] || ["复制名称"];
+    let hold;
+    const open = (e) => {
+      e.preventDefault();
+      closeMenu();
+      const m = document.createElement("div");
+      m.id = "msgMenu";
+      m.innerHTML = items.map((t) => `<button type="button"${t.includes("移除")||t.includes("撤销邀请")?" style='color:#ff8a8a'":""}>${t}</button>`).join("");
+      document.body.appendChild(m);
+      const r = m.getBoundingClientRect();
+      m.style.left = Math.min(e.clientX, innerWidth - r.width - 8) + "px";
+      m.style.top = Math.max(8, e.clientY - r.height - 8) + "px";
+      setTimeout(() => document.addEventListener("click", closeMenu, { once: true }), 0);
+    };
+    el.addEventListener("contextmenu", open);
+    el.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      hold = setTimeout(() => open(e), 420);
+    });
+    ["pointerup","pointerleave","pointercancel"].forEach((ev) => el.addEventListener(ev, () => clearTimeout(hold)));
+  });
+}
+function renderTabs() {
+  tabsEl.innerHTML = "";
+  TABS.forEach(([id, name, body]) => {
+    const b = document.createElement("button");
+    b.textContent = name;
+    b.className = id === tab ? "on" : "";
+    b.onclick = () => { tab = id; renderTabs(); };
+    tabsEl.appendChild(b);
+  });
+  const cur = TABS.find((t) => t[0] === tab);
+  pane.innerHTML = tab === "settings" ? settingsHtml()
+    : tab === "members" ? membersHtml()
+    : `<div class="callout">${tab}</div><p style="color:var(--dim);margin:0">${cur[2]}</p>`;
+  if (tab === "members") bindRoster();
+  pane.querySelectorAll(".card").forEach((c) => {
+    c.addEventListener("click", () => {
+      root.setAttribute("data-theme", c.dataset.id);
+      [...themesEl.children].forEach((x, i) => x.classList.toggle("on", THEMES[i][0] === c.dataset.id));
+      renderTabs();
+    });
+  });
+}
+renderTabs();
+function closeMenu() {
+  document.getElementById("msgMenu")?.remove();
+}
+function showMenu(x, y, retry) {
+  closeMenu();
+  const m = document.createElement("div");
+  m.id = "msgMenu";
+  m.innerHTML = "<button type='button'>复制</button><button type='button'>引用</button><button type='button'>朗读</button>"
+    + (retry ? "<button type='button'>重试</button>" : "");
+  document.body.appendChild(m);
+  const r = m.getBoundingClientRect();
+  m.style.left = Math.min(x, innerWidth - r.width - 8) + "px";
+  m.style.top = Math.max(8, y - r.height - 8) + "px";
+  setTimeout(() => document.addEventListener("click", closeMenu, { once: true }), 0);
+}
+document.querySelectorAll(".bub").forEach((el) => {
+  let hold;
+  el.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    showMenu(e.clientX, e.clientY, el.dataset.retry === "1");
+  });
+  el.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    hold = setTimeout(() => showMenu(e.clientX, e.clientY, el.dataset.retry === "1"), 420);
+  });
+  ["pointerup", "pointerleave", "pointercancel"].forEach((ev) => {
+    el.addEventListener(ev, () => clearTimeout(hold));
+  });
+});
+document.getElementById("quoteClose").onclick = () => {
+  document.getElementById("quoteBar").classList.add("hidden");
+};
+document.getElementById("voiceBub").onclick = () => {
+  document.getElementById("voiceBub").classList.toggle("playing");
+};
+document.getElementById("stopBtn").onclick = (e) => {
+  e.stopPropagation();
+  e.currentTarget.closest(".bub").querySelector(".stream-body").textContent = "已停止。";
+  e.currentTarget.closest(".bub").querySelector(".caret")?.remove();
+  e.currentTarget.remove();
+};
+document.getElementById("jump").onclick = () => {
+  document.getElementById("chat").scrollTop = 0;
+  document.getElementById("jump").classList.add("hidden");
+};
+const mic = document.getElementById("mic");
+let mask;
+mic.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  mask = document.createElement("div");
+  mask.className = "hold-mask";
+  mask.innerHTML = "松开 发送<b>上滑取消（示意图）</b>";
+  document.body.appendChild(mask);
+});
+["pointerup", "pointercancel", "pointerleave"].forEach((ev) => {
+  mic.addEventListener(ev, () => mask?.remove());
+});
+document.getElementById("dock").onchange = (e) => {
+  document.getElementById("shell").classList.toggle("docked", e.target.checked);
+  document.getElementById("dockPane").classList.toggle("hidden", !e.target.checked);
+};
+</script>
+</body>
+</html>

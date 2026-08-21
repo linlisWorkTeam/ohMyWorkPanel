@@ -3,9 +3,10 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { FormEvent, KeyboardEvent, memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 import { api, getAuthToken, onUnauthorized, requiresAuth, setAuthToken } from "./api";
 import {
-  agentReplyDefaultOpen,
   BOTTOM_THRESHOLD_PX,
   extractReplyPreview,
+  firstUnreadIndex,
+  formatQuotePrefix,
   isNearBottom,
 } from "./chatUi";
 import { currentMentionQuery, findMentionedMemberIds } from "./mentions";
@@ -16,6 +17,7 @@ import {
   parseMessageContent,
 } from "./messageContent";
 import { defaultModelForAdapter, modelsForAdapter, applyAgentModelsPayload } from "./agentModels";
+import { FALLBACK_CLI_ADAPTERS, mergeCliAdapters, type CliAdapterOption } from "./adaptersCatalog";
 import { canSubmitUserMember, chatbotSlotTaken, memberRosterAction, type UserAddMode } from "./memberForm";
 import { InviteLanding, parseInviteTokenFromPath } from "./InviteLanding";
 import { markdownToHtml } from "./markdownLite";
@@ -40,10 +42,11 @@ import {
   sliceVisibleMessages,
 } from "./messageHistory";
 import { loadAuthUser, resolveSenderMemberId, saveAuthUser, type AuthUser } from "./authSession";
-import { Divider, useAppFrame } from "./components/ui";
+import { Divider, useAppFrame, CONCEDE_RIGHT } from "./components/ui";
 import { loadSendKeyMode, saveSendKeyMode, sendKeyHint, shouldSendOnKey, type SendKeyMode } from "./sendKey";
 import type { ChatEvent, ExtensionStatus, Group, GroupState, Member, PresetRole, RuntimeSettings, TaskRun } from "./types";
 import { MessageBubble, MemberRow, Avatar, Status, ReviewBadge, TypingIndicator, RunQueuePane, EmptyHome } from "./components/furniture";
+import { RightDockHost } from "./components/RightDockHost";
 import { useGoalBar } from "./hooks/useGoalBar";
 import { useComposerDraft } from "./hooks/useComposerDraft";
 import { Brand, ThemeSwitcher, HeaderThemePop } from "./theme";
@@ -74,7 +77,10 @@ import {
   sttViaProxy,
   ttsPlaybackViaProxy,
 } from "./liveVoice";
-import { mergeCliAdapters, FALLBACK_CLI_ADAPTERS, type CliAdapterOption } from "./adaptersCatalog";
+import { listContributions } from "./contrib/registry";
+import { readDockGeom, writeDockGeom, type DockGeom } from "./contrib/dockGeom";
+import { SLASH_COMMANDS } from "./contrib/slash";
+import type { UiContribution } from "./contrib/types";
 
 type NewMember = {
   kind: "agent" | "user" | "chatbot";
@@ -131,9 +137,11 @@ export function App() {
   const [showMembers, setShowMembers] = useState(() =>
     typeof window === "undefined" || window.matchMedia("(min-width: 1081px)").matches,
   );
-  const [rightPanelTab, setRightPanelTab] = useState<"members" | "queue" | "details">("members");
+  const [rightPanelTab, setRightPanelTab] = useState("core.members");
   const [detailInner, setDetailInner] = useState<"home" | "experiences" | "logs">("home");
-  const [headerPop, setHeaderPop] = useState<null | "theme" | "help">(null);
+  const [quote, setQuote] = useState<{ author: string; excerpt: string } | null>(null);
+  const [dock, setDock] = useState<DockGeom>(() => readDockGeom());
+  const unreadJumpRef = useRef(0);
   const [mainView, setMainView] = useState<string>("chat");
   const [adminInAsk, setAdminInAsk] = useState(false);
   const [extensions, setExtensions] = useState<ExtensionStatus[]>([]);
@@ -152,7 +160,6 @@ export function App() {
   const [cliAdapters, setCliAdapters] = useState<CliAdapterOption[]>(FALLBACK_CLI_ADAPTERS);
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [settings, setSettings] = useState<RuntimeSettings | null>(null);
-  const [showSettings, setShowSettings] = useState(false);
   const [agentCfgImported, setAgentCfgImported] = useState(false);
   const [wsLink, setWsLink] = useState<{ state: WsLinkState; elapsedMs: number }>({
     state: "connected",
@@ -297,7 +304,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (!showSettings) {
+    if (!(showMembers && rightPanelTab === "core.settings")) {
       setMetrics(null);
       return;
     }
@@ -313,7 +320,7 @@ export function App() {
       cancelled = true;
       window.clearInterval(t);
     };
-  }, [showSettings]);
+  }, [showMembers, rightPanelTab]);
 
   // Boot: no token → login; has token → bootstrap; failure → login.
   useEffect(() => {
@@ -584,6 +591,19 @@ export function App() {
     const groupId = current?.group.id;
     if (!groupId) return;
     const entering = forceScrollGroupId.current === groupId;
+    const unread = unreadJumpRef.current;
+    if (unread > 0 && current?.messages.length) {
+      unreadJumpRef.current = 0;
+      forceScrollGroupId.current = null;
+      const idx = firstUnreadIndex(current.messages.length, unread);
+      const id = current.messages[idx]?.id;
+      const el = id ? messageListRef.current?.querySelector(`[data-msg-id="${CSS.escape(id)}"]`) : null;
+      if (el) {
+        el.scrollIntoView({ block: "center" });
+        stickToBottom.current = false;
+        return;
+      }
+    }
     if (entering) forceScrollGroupId.current = null;
     scrollMessagesToBottom(entering || stickToBottom.current);
   }, [lastKey, mainView, current?.group.id]);
@@ -650,27 +670,29 @@ export function App() {
           return next;
         });
       } else if (event.key === "Escape") {
-        if (showCreate || showSettings || showAddMember || headerPop) event.preventDefault();
+        if (showCreate || showAddMember) event.preventDefault();
         setShowCreate(false);
-        setShowSettings(false);
         setShowAddMember(false);
-        setHeaderPop(null);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frame.toggleLeft, showCreate, showSettings, showAddMember, headerPop]);
+  }, [frame.toggleLeft, showCreate, showAddMember]);
 
   useEffect(() => {
-    if (headerPop !== "theme") return;
-    const close = (event: globalThis.PointerEvent) => {
-      const el = event.target as Element | null;
-      if (!el?.closest(".header-right")) setHeaderPop(null);
+    const check = () => {
+      const w = frame.rootRef.current?.clientWidth ?? window.innerWidth;
+      if (w < CONCEDE_RIGHT && dock.dockedId) {
+        const next = { ...dock, dockedId: null };
+        setDock(next);
+        writeDockGeom(next);
+      }
     };
-    document.addEventListener("pointerdown", close);
-    return () => document.removeEventListener("pointerdown", close);
-  }, [headerPop]);
+    window.addEventListener("resize", check);
+    check();
+    return () => window.removeEventListener("resize", check);
+  }, [dock, frame.rootRef]);
 
   useEffect(() => {
     let cancelled = false;
@@ -696,7 +718,9 @@ export function App() {
   };
 
   const selectGroup = (group: Group) => {
-    forceScrollGroupId.current = group.id;
+    const unread = group.unreadCount ?? 0;
+    unreadJumpRef.current = unread;
+    forceScrollGroupId.current = unread > 0 ? null : group.id;
     stickToBottom.current = true;
     setShowJumpBottom(false);
     setVisibleCount(INITIAL_VISIBLE_MESSAGES);
@@ -855,13 +879,16 @@ export function App() {
       setError(isAdmin ? "当前群缺少群主成员，无法发送" : "未找到你在本群的成员身份，无法发言");
       return;
     }
-    const body = composer;
+    const body = quote
+      ? `${formatQuotePrefix(quote.author, quote.excerpt)}${composer}`
+      : composer;
     setComposer("");
+    setQuote(null);
     setSending(true);
     try {
       await api.sendMessage(current.group.id, senderMemberId, body, findMentionedMemberIds(body, activeMembers));
       await refresh(current.group.id);
-    } catch (reason) { setComposer(body); setError(readError(reason)); }
+    } catch (reason) { setComposer(composer); setError(readError(reason)); }
     finally { setSending(false); composerRef.current?.focus(); }
   };
 
@@ -992,12 +1019,6 @@ export function App() {
       if (ta) ta.setSelectionRange(ta.value.length, ta.value.length);
     });
   };
-  // 斜杠命令：仅列后端真实支持的（/board /approve /wave）；发送后在群内回显结果。
-  const SLASH_COMMANDS = [
-    { cmd: "/board", hint: "查看版本 / Wave 进度" },
-    { cmd: "/approve", hint: "批准当前 Ask 版本（生成默认 Wave）" },
-    { cmd: "/wave", hint: "重设当前版本 Wave：/wave <标题>" },
-  ];
   const selectSlash = (cmd: string) => {
     setComposer(cmd + (cmd === "/wave" ? " " : ""));
     setSlashOpen(false);
@@ -1026,11 +1047,33 @@ export function App() {
   const liveReady = Boolean(liveExt?.enabled && liveExt.healthy);
   const groupKind = current?.group.groupKind === "chat" ? "chat" : "project";
   const extTabViews = collectExtensionTabViews(extensions, groupKind);
-  const activeExtView = (() => {
-    const parsed = parseExtMainView(mainView);
-    if (!parsed) return null;
-    return extTabViews.find((v) => v.ext.id === parsed.extId && v.tab.id === parsed.tabId) ?? null;
-  })();
+  const extendTabs: UiContribution[] = extTabViews.map((view) => ({
+    id: view.viewKey,
+    title: view.tab.title,
+    slot: "right-tab",
+    origin: "extend",
+    dockable: true,
+    order: 80,
+  }));
+  const rightTabs = listContributions(extendTabs, "right-tab");
+  const dockedView = extTabViews.find((view) => view.viewKey === dock.dockedId) ?? null;
+  const extPaneView = extTabViews.find((view) => view.viewKey === rightPanelTab && view.viewKey !== dock.dockedId) ?? null;
+  const persistDock = (next: DockGeom) => {
+    setDock(next);
+    writeDockGeom(next);
+  };
+  const renderExtPane = (view: (typeof extTabViews)[number]) => (
+    <ExtensionPanel
+      extension={view.ext}
+      tab={view.tab}
+      group={current?.group ?? null}
+      members={members}
+      messages={current?.messages ?? []}
+      senderMemberId={senderMemberId}
+      onOpenSettings={() => setRightPanelTab("core.settings")}
+      onError={(msg) => setError(msg)}
+    />
+  );
 
   const addMember = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); if (!current) return;
@@ -1119,7 +1162,7 @@ export function App() {
   };
   const saveSettings = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); if (!settings) return;
-    try { setSettings(await api.updateSettings(settings)); setShowSettings(false); } catch (reason) { setError(readError(reason)); }
+    try { setSettings(await api.updateSettings(settings)); } catch (reason) { setError(readError(reason)); }
   };
 
   const toggleRole = (name: string) => setSelectedRoles((prev) => prev.includes(name) ? prev.filter((r) => r !== name) : [...prev, name]);
@@ -1140,11 +1183,10 @@ export function App() {
       <div className="dsh-rail" aria-label="控制轨">
         <span className="rail-logo">L</span>
         <button type="button" className={`rail-btn active${hasUnread ? " badge" : ""}`} title="展开群列表" onClick={() => frame.toggleLeft()}>◉</button>
-        <button type="button" className="rail-btn" title="公告 · 群设置" onClick={() => setMainView("settings")}>◎</button>
+        <button type="button" className="rail-btn" title="设置" onClick={() => { setShowMembers(true); setRightPanelTab("core.settings"); }}>◎</button>
         {isAdmin && (
-          <button type="button" className="rail-btn" title="Agent 配置" onClick={() => setMainView("agent-config")}>◇</button>
+          <button type="button" className="rail-btn" title={agentCfgImported ? "Agent 配置（已导入）" : "Agent 配置"} onClick={() => setMainView("agent-config")}>◇</button>
         )}
-        <button type="button" className="rail-btn rail-btm" title="运行设置" onClick={() => setShowSettings(true)}>⚙</button>
         <button type="button" className="rail-btn" title="展开左栏" onClick={() => frame.toggleLeft()}>▶</button>
       </div>
       <div className="left-expanded">
@@ -1190,7 +1232,6 @@ export function App() {
         >
           {frame.leftMode === "open" ? "◀◀" : "▶▶"}
         </button>
-        <button type="button" onClick={() => setShowSettings(true)}>运行设置</button>
         {requiresAuth && <button onClick={() => goLogin(null)}>退出登录{authUser ? `（${authUser.username}）` : ""}</button>}
       </div>
       </div>
@@ -1213,6 +1254,7 @@ export function App() {
             </p>
           </div>
           <div className="header-right">
+            {liveReady && <span className="status-chip">Live</span>}
             <button
               type="button"
               className={`icon-btn ${showMembers ? "on" : ""}`}
@@ -1223,58 +1265,7 @@ export function App() {
             >
               ☰
             </button>
-            <button
-              type="button"
-              className={`icon-btn ${headerPop === "theme" ? "on" : ""}`}
-              onClick={() => setHeaderPop((p) => (p === "theme" ? null : "theme"))}
-              title="外观主题"
-            >
-              🎨
-            </button>
-            {!isChatGroup && (
-              <button
-                type="button"
-                className={`icon-btn ${mainView === "versions" ? "on" : ""}`}
-                onClick={() => setMainView(mainView === "versions" ? "chat" : "versions")}
-                title="版本 · Wave"
-              >
-                ⛭
-              </button>
-            )}
-            {isAdmin && (
-              <button
-                type="button"
-                className={`icon-btn ${mainView === "agent-config" ? "on" : ""}`}
-                onClick={() => setMainView(mainView === "agent-config" ? "chat" : "agent-config")}
-                title={agentCfgImported ? "Agent 配置（已导入）" : "Agent 配置"}
-              >
-                ◇
-              </button>
-            )}
-            {extTabViews.map(({ ext, tab, viewKey }) => {
-              const ready = Boolean(ext.enabled && ext.healthy);
-              return (
-                <button
-                  key={viewKey}
-                  type="button"
-                  className={`icon-btn ${mainView === viewKey ? "on" : ""}`}
-                  disabled={!ext.enabled}
-                  title={!ext.enabled ? `请先在运行设置中开启 ${ext.name}` : ready ? tab.title : `${ext.name} 未就绪`}
-                  onClick={() => setMainView(viewKey)}
-                >
-                  {tab.title.slice(0, 1)}
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              className={`icon-btn ${headerPop === "help" ? "on" : ""}`}
-              onClick={() => setHeaderPop((p) => (p === "help" ? null : "help"))}
-              title="交互说明"
-            >
-              ?
-            </button>
-            <RuntimeHeaderThemePop open={headerPop === "theme"} onPick={() => setHeaderPop(null)} />
+            <RuntimeHeaderThemePop open={false} onPick={() => undefined} />
           </div>
         </header>
         {!isChatGroup && (
@@ -1293,18 +1284,7 @@ export function App() {
             <span className="g-act">{goalBar ? `${goalBar.done}/${goalBar.total} 完成` : "0/0"}</span>
           </div>
         )}
-        {activeExtView ? (
-          <ExtensionPanel
-            extension={activeExtView.ext}
-            tab={activeExtView.tab}
-            group={current?.group ?? null}
-            members={members}
-            messages={current?.messages ?? []}
-            senderMemberId={senderMemberId}
-            onOpenSettings={() => setShowSettings(true)}
-            onError={(msg) => setError(msg)}
-          />
-        ) : !isChatGroup && mainView === "versions" ? (
+        {!isChatGroup && mainView === "versions" ? (
           <VersionView
             group={current.group}
             members={members}
@@ -1315,26 +1295,6 @@ export function App() {
           />
         ) : mainView === "dsh" ? (
             <DSHView onClose={() => setMainView("chat")} />
-          ) : mainView === "settings" ? (
-          <GroupSettingsView
-            group={current.group}
-            members={members}
-            canManage={isAdmin || Boolean(senderMemberId && current.group.ownerMemberId === senderMemberId)}
-            onGroupPatch={(g) => {
-              setCurrent((prev) => (prev ? { ...prev, group: { ...prev.group, ...g } } : prev));
-              setGroups((prev) => prev.map((x) => (x.id === g.id ? { ...x, ...g } : x)));
-            }}
-            onMemberPatch={(m) => {
-              setCurrent((prev) => {
-                if (!prev) return prev;
-                return {
-                  ...prev,
-                  members: prev.members.map((x) => (x.id === m.id ? { ...x, ...m } : x)),
-                };
-              });
-            }}
-            onError={(msg) => setError(msg)}
-          />
         ) : mainView === "agent-config" ? (
           <AgentConfigView
             onError={(msg) => setError(msg)}
@@ -1357,7 +1317,7 @@ export function App() {
             const prev = index > 0 ? visibleMessages[index - 1] : null;
             const showDay = !prev || dayLabel(prev.createdAt) !== dayLabel(message.createdAt);
             return (
-              <div key={message.id} className="day-block">
+              <div key={message.id} className="day-block" data-msg-id={message.id}>
                 {showDay && <div className="day-divider"><span>{dayLabel(message.createdAt)}</span></div>}
                 <MessageBubble
                   message={message}
@@ -1368,6 +1328,7 @@ export function App() {
                   voiceUxEnabled={liveReady}
                   playingMessageId={playingMessageId}
                   onPlayVoice={playMessageVoice}
+                  onQuote={(msg, senderName) => setQuote({ author: senderName, excerpt: extractReplyPreview(msg.content, 80) })}
                 />
               </div>
             );
@@ -1417,6 +1378,12 @@ export function App() {
                   <span>{member.displayName}<small>{member.kind === "agent" ? member.roleDescription || member.adapter : member.kind === "chatbot" ? "聊天机器人" : "用户"}</small></span>
                 </button>
               ))}
+            </div>
+          )}
+          {quote && (
+            <div className="quote-bar">
+              <span>引用 {quote.author}：{quote.excerpt}</span>
+              <button type="button" aria-label="取消引用" onClick={() => setQuote(null)}>×</button>
             </div>
           )}
           <div className="composer">
@@ -1478,16 +1445,25 @@ export function App() {
 
     <Divider {...frame.rightDivider} />
 
-    {current && showMembers && <aside className="member-panel">
-      <header>
-        <div className="tabs" role="tablist" aria-label="右栏">
-          <button type="button" className={`tab ${rightPanelTab === "members" ? "active" : ""}`} onClick={() => setRightPanelTab("members")}>成员</button>
-          <button type="button" className={`tab ${rightPanelTab === "queue" ? "active" : ""}`} onClick={() => setRightPanelTab("queue")}>队列</button>
-          <button type="button" className={`tab ${rightPanelTab === "details" ? "active" : ""}`} onClick={() => { setRightPanelTab("details"); setDetailInner("home"); }}>详情</button>
-        </div>
-        <button className="icon-btn" onClick={() => setShowMembers(false)} aria-label="关闭右栏">×</button>
-      </header>
-      {rightPanelTab === "members" ? <>
+    {current && showMembers && <RightDockHost
+      tabs={rightTabs}
+      activeId={rightPanelTab}
+      onSelect={(id) => {
+        setRightPanelTab(id);
+        if (id === "core.details") setDetailInner("home");
+      }}
+      dockedId={dock.dockedId}
+      onDock={(id) => {
+        persistDock({ ...dock, dockedId: id });
+        setRightPanelTab("core.members");
+      }}
+      onUndock={() => persistDock({ ...dock, dockedId: null })}
+      dockWidth={dock.width}
+      onDockWidth={(width) => persistDock({ ...dock, width })}
+      dockPane={dockedView ? renderExtPane(dockedView) : null}
+      onClose={() => setShowMembers(false)}
+      pane={<>
+      {rightPanelTab === "core.members" ? <>
         {(current.group.announcement ?? "").trim() && (
           <div className="announce-banner" title={current.group.announcement}>
             公告：{(current.group.announcement ?? "").slice(0, 120)}{(current.group.announcement ?? "").length > 120 ? "…" : ""}
@@ -1616,9 +1592,9 @@ export function App() {
             <p className="form-hint">{isChatGroup ? "聊天群可添加多个机器人。" : "项目群仅可添加一个聊天机器人。"}</p>
           </>}
           <div><button type="button" className="quiet-button" onClick={() => setShowAddMember(false)}>取消</button><button type="submit">添加</button></div>
-        </form> : isAdmin ? <button className="add-member-button" onClick={() => { setNewMember(emptyMember); setShowAddMember(true); }}>＋ 添加成员</button> : null}
-      </> : rightPanelTab === "queue" ? <RunQueuePane runs={current.runs} members={members} onCancel={(run) => void changeRun(run, "cancel")} onReview={(run, decision) => void changeRunReview(run, decision)} />
-      : <div className="details-pane">
+        </form> : isAdmin ? <button className="add-member-button" onClick={() => { setNewMember(emptyMember); setShowAddMember(true); }}>＋ 邀请成员</button> : null}
+      </> : rightPanelTab === "core.queue" ? <RunQueuePane runs={current.runs} members={members} onCancel={(run) => void changeRun(run, "cancel")} onReview={(run, decision) => void changeRunReview(run, decision)} />
+      : rightPanelTab === "core.details" ? <div className="details-pane">
         {detailInner !== "home" && (
           <div className="details-links" style={{ paddingBottom: 0 }}>
             <button type="button" onClick={() => setDetailInner("home")}>← 返回详情</button>
@@ -1626,64 +1602,20 @@ export function App() {
         )}
         {detailInner === "home" ? (
           <div className="details-links">
-            <button type="button" onClick={() => setMainView("settings")}>群设置<small>公告 / 工作目录</small></button>
             {!isChatGroup && <button type="button" onClick={() => setMainView("versions")}>版本管理<small>Wave / 路线图</small></button>}
             {isAdmin && <button type="button" onClick={() => setDetailInner("experiences")}>经验<small>可复用的群内笔记</small></button>}
             {isAdmin && <button type="button" onClick={() => setDetailInner("logs")}>日志<small>运行与排障</small></button>}
           </div>
         ) : detailInner === "experiences" ? <ExperiencePanel groupId={current.group.id} members={members} ownerId={current.group.ownerMemberId} onError={(msg) => setError(msg)} />
         : <LogsPanel onError={(msg) => setError(msg)} />}
-      </div>}
-    </aside>}
-
-    {showCreate && (
-      <Modal title="新建群组" onClose={() => groups.length > 0 && setShowCreate(false)}>
-        <form className="modal-form" onSubmit={createGroup}>
-          <label>群类型
-            <select value={createGroupKind} onChange={(e) => setCreateGroupKind(e.target.value as "project" | "chat")}>
-              <option value="chat">聊天群（多机器人，无项目功能）</option>
-              <option value="project">项目群（工作区 + 路线图/编排）</option>
-            </select>
-          </label>
-          <label>群名称<input name="name" required placeholder={createGroupKind === "chat" ? "例如：日常闲聊" : "例如：官网改版"} /></label>
-          <label>群主名称<input name="ownerName" required defaultValue="我" /></label>
-          {createGroupKind === "project" && (
-            <label>服务器工作目录
-              <ServerPathPicker value={workspacePath} onChange={setWorkspacePath} onError={setError} />
-            </label>
-          )}
-          {createGroupKind === "project" && presetRoles.length > 0 && (
-            <div className="preset-roles">
-              <span className="preset-roles-label">预置 Agent 角色</span>
-              <div className="preset-roles-grid">
-                {presetRoles.map((role) => {
-                  const selected = selectedRoles.includes(role.name);
-                  return (
-                    <button key={role.name} type="button" className={`preset-role ${selected ? "selected" : ""}`} onClick={() => toggleRole(role.name)}>
-                      <span className="preset-role-dot" style={{ background: role.avatarColor }} />
-                      <span className="preset-role-body">
-                        <strong>{role.name}</strong>
-                        <small>{role.adapter}{role.roleDescription ? ` · ${role.roleDescription}` : ""}</small>
-                      </span>
-                      <span className="preset-role-check">{selected ? "✓" : "+"}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-          <p className="form-hint">{createGroupKind === "chat" ? "聊天群无需工作区，创建后可添加多个聊天机器人。" : "必须选择服务器上已存在的绝对路径；所有 Agent 任务均在该目录执行。"}</p>
-          <button className="primary-wide" type="submit">创建{createGroupKind === "chat" ? "聊天群" : "项目群"}</button>
-        </form>
-      </Modal>
-    )}
-    {showSettings && (
-      <Modal title="运行设置" onClose={() => setShowSettings(false)}>
-        <div className="modal-form settings-modal">
+      </div>
+      : rightPanelTab === "core.settings" ? (
+        <div className="settings-pane modal-form settings-modal">
+          <h3 className="settings-section-title">外观</h3>
           <RuntimeThemeSwitcher />
           {isAdmin && current && (
             <div className="extension-settings">
-              <h3 className="settings-section-title">Extend</h3>
+              <h3 className="settings-section-title">运行 · Extend</h3>
               {extensions.length === 0 ? (
                 <p className="form-hint">未发现扩展（检查 LINLIS_EXTENSION_ROOTS / 清单文件）。</p>
               ) : (
@@ -1705,7 +1637,6 @@ export function App() {
                   </div>
                 ))
               )}
-              <p className="form-hint">启用后顶栏出现 manifest 页签；媒体面由扩展自理，A2A 仅文本 skills（禁 PCM）。</p>
             </div>
           )}
           <div className="extension-settings">
@@ -1713,7 +1644,7 @@ export function App() {
             <p className="form-hint">
               {metrics
                 ? `CPU ${metrics.cpuPct.toFixed(1)}% · RSS ${metrics.rssMib.toFixed(1)} MiB · 采样 ${new Date(metrics.ts).toLocaleTimeString()}`
-                : "打开设置后每 5s 拉取 /api/metrics/latest（后台仍 20s 落库）"}
+                : "打开设置后每 5s 拉取 /api/metrics/latest"}
             </p>
           </div>
           {isAdmin && settings ? (
@@ -1722,7 +1653,6 @@ export function App() {
               <NumberSetting label="任务超时（秒）" value={settings.runTimeoutSeconds} onChange={(value) => setSettings({ ...settings, runTimeoutSeconds: value })} min={30} max={7200} />
               <NumberSetting label="工作群上下文消息数" value={settings.contextMessageLimit} onChange={(value) => setSettings({ ...settings, contextMessageLimit: value })} min={5} max={200} />
               <NumberSetting label="聊天群/机器人上下文" value={settings.chatContextMessageLimit ?? 12} onChange={(value) => setSettings({ ...settings, chatContextMessageLimit: value })} min={5} max={40} />
-              <p className="form-hint">聊天群/chatbot 默认保留最近 12 条原文；超出时折叠进历史摘要后再累加。无向量长期记忆。</p>
               <NumberSetting label="管理员最大派生层级" value={settings.maxDelegationDepth} onChange={(value) => setSettings({ ...settings, maxDelegationDepth: value })} min={0} max={4} />
               <h3 className="settings-section-title">心跳</h3>
               <label className="settings-check">
@@ -1767,28 +1697,83 @@ export function App() {
           ) : (
             <p className="form-hint">主题已即时生效。运行参数仅管理员可改。</p>
           )}
+          <h3 className="settings-section-title">本群</h3>
+          <GroupSettingsView
+            group={current.group}
+            members={members}
+            canManage={isAdmin || Boolean(senderMemberId && current.group.ownerMemberId === senderMemberId)}
+            onGroupPatch={(g) => {
+              setCurrent((prev) => (prev ? { ...prev, group: { ...prev.group, ...g } } : prev));
+              setGroups((prev) => prev.map((x) => (x.id === g.id ? { ...x, ...g } : x)));
+            }}
+            onMemberPatch={(m) => {
+              setCurrent((prev) => {
+                if (!prev) return prev;
+                return {
+                  ...prev,
+                  members: prev.members.map((x) => (x.id === m.id ? { ...x, ...m } : x)),
+                };
+              });
+            }}
+            onError={(msg) => setError(msg)}
+          />
+          <details className="help-fold">
+            <summary>键盘与斜杠</summary>
+            <table>
+              <tbody>
+                <tr><td><code>Ctrl/⌘ + 1</code></td><td>左栏展开 / 折叠为控制轨</td></tr>
+                <tr><td><code>Ctrl/⌘ + 2</code></td><td>打开或关闭右栏</td></tr>
+                <tr><td><code>@</code></td><td>提及成员</td></tr>
+                <tr><td><code>/</code></td><td>/board /approve /wave</td></tr>
+              </tbody>
+            </table>
+          </details>
         </div>
+      ) : extPaneView ? renderExtPane(extPaneView)
+      : <p className="form-hint">选择一个页签。</p>}
+      </>}
+    />}
+
+    {showCreate && (
+      <Modal title="新建群组" onClose={() => groups.length > 0 && setShowCreate(false)}>
+        <form className="modal-form" onSubmit={createGroup}>
+          <label>群类型
+            <select value={createGroupKind} onChange={(e) => setCreateGroupKind(e.target.value as "project" | "chat")}>
+              <option value="chat">聊天群（多机器人，无项目功能）</option>
+              <option value="project">项目群（工作区 + 路线图/编排）</option>
+            </select>
+          </label>
+          <label>群名称<input name="name" required placeholder={createGroupKind === "chat" ? "例如：日常闲聊" : "例如：官网改版"} /></label>
+          <label>群主名称<input name="ownerName" required defaultValue="我" /></label>
+          {createGroupKind === "project" && (
+            <label>服务器工作目录
+              <ServerPathPicker value={workspacePath} onChange={setWorkspacePath} onError={setError} />
+            </label>
+          )}
+          {createGroupKind === "project" && presetRoles.length > 0 && (
+            <div className="preset-roles">
+              <span className="preset-roles-label">预置 Agent 角色</span>
+              <div className="preset-roles-grid">
+                {presetRoles.map((role) => {
+                  const selected = selectedRoles.includes(role.name);
+                  return (
+                    <button key={role.name} type="button" className={`preset-role ${selected ? "selected" : ""}`} onClick={() => toggleRole(role.name)}>
+                      <span className="preset-role-dot" style={{ background: role.avatarColor }} />
+                      <span className="preset-role-body">
+                        <strong>{role.name}</strong>
+                        <small>{role.adapter}{role.roleDescription ? ` · ${role.roleDescription}` : ""}</small>
+                      </span>
+                      <span className="preset-role-check">{selected ? "✓" : "+"}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          <p className="form-hint">{createGroupKind === "chat" ? "聊天群无需工作区，创建后可添加多个聊天机器人。" : "必须选择服务器上已存在的绝对路径；所有 Agent 任务均在该目录执行。"}</p>
+          <button className="primary-wide" type="submit">创建{createGroupKind === "chat" ? "聊天群" : "项目群"}</button>
+        </form>
       </Modal>
-    )}
-    {headerPop === "help" && (
-      <div className="help-overlay" onClick={(e) => { if (e.target === e.currentTarget) setHeaderPop(null); }}>
-        <div className="help-box" role="dialog" aria-labelledby="help-title">
-          <button type="button" className="icon-btn close" onClick={() => setHeaderPop(null)} aria-label="关闭">×</button>
-          <h2 id="help-title">交互说明</h2>
-          <p className="sub">与 docs/ui-demo.html 同一套壳层：三栏、控制轨、斜杠命令。</p>
-          <table>
-            <thead><tr><th>操作</th><th>作用</th></tr></thead>
-            <tbody>
-              <tr><td><code>Ctrl/⌘ + 1</code></td><td>左栏展开 / 折叠为 56px 控制轨</td></tr>
-              <tr><td><code>Ctrl/⌘ + 2</code></td><td>打开或关闭右栏（成员 / 队列 / 详情）</td></tr>
-              <tr><td><code>Esc</code></td><td>关闭浮层、设置、主题面板</td></tr>
-              <tr><td><code>@</code></td><td>提及成员</td></tr>
-              <tr><td><code>/</code></td><td>斜杠命令：/board /approve /wave</td></tr>
-              <tr><td>Enter / Ctrl+Enter</td><td>发送（可在输入框下切换）</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
     )}
     {releasingBannerText(wsLink.state, wsLink.elapsedMs) && (
       <div className="error-toast" style={{ bottom: error ? 64 : 16 }}>

@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from "react";
 
-export type ThemeId = "atlas" | "cyberpunk" | "industrial" | "forge" | "moss" | "noir";
+export type ThemeId = "atlas" | "cyberpunk" | "industrial" | "forge" | "moss" | "noir" | "minimal";
 
 export type ThemeMeta = {
   id: ThemeId;
@@ -61,6 +61,13 @@ export const THEMES: ThemeMeta[] = [
     blurb: "墨稿夜台",
     vibe: "高对比暗色",
     swatch: ["#0c0d10", "#f2ebe0", "#d94b3d"],
+  },
+  {
+    id: "minimal",
+    name: "极简",
+    blurb: "冷灰纸面",
+    vibe: "纸面墨色 · 无装饰 · 无口音",
+    swatch: ["#f4f5f7", "#17181a", "#5c5f66"],
   },
 ];
 
@@ -132,18 +139,16 @@ export function Brand({ compact = false }: { compact?: boolean }) {
   );
 }
 
-/** Fashion theme picker for 运行设置 — not the sidebar footer. */
+/** Seven equal stage cards for 设置 · 外观. */
 export function ThemeSwitcher() {
   const { theme, setTheme } = useTheme();
-  const featured = THEMES.filter((t) => t.featured);
-  const classic = THEMES.filter((t) => !t.featured);
 
   return (
     <div className="theme-switcher theme-switcher-settings" role="group" aria-label="切换界面主题">
       <div className="theme-switcher-label">外观主题</div>
-      <p className="theme-switcher-hint">即时生效，保存在本机。主推赛博 / 机械工业，带背景图与动效。</p>
-      <div className="theme-featured-grid">
-        {featured.map((item) => {
+      <p className="theme-switcher-hint">七套平级。即时生效，仅保存在本机。</p>
+      <div className="theme-stage-grid">
+        {THEMES.map((item) => {
           const active = item.id === theme;
           return (
             <button
@@ -156,9 +161,7 @@ export function ThemeSwitcher() {
               <span
                 className="theme-card-preview"
                 style={{
-                  backgroundImage: `linear-gradient(135deg, ${item.swatch[0]} 0%, ${item.swatch[2]} 45%, ${item.swatch[1]} 100%), url(/themes/${item.id === "cyberpunk" ? "cyberpunk" : "industrial"}.svg)`,
-                  backgroundSize: "cover, cover",
-                  backgroundBlendMode: "soft-light, normal",
+                  background: `linear-gradient(135deg, ${item.swatch[0]} 0%, ${item.swatch[2]} 48%, ${item.swatch[1]} 100%)`,
                 }}
               >
                 <span className="theme-card-shine" aria-hidden />
@@ -168,30 +171,6 @@ export function ThemeSwitcher() {
                 <strong>{item.name}</strong>
                 <small>{item.vibe}</small>
               </span>
-            </button>
-          );
-        })}
-      </div>
-      <div className="theme-switcher-label theme-classic-label">经典</div>
-      <div className="theme-swatches theme-swatches-classic">
-        {classic.map((item) => {
-          const active = item.id === theme;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              className={`theme-swatch ${active ? "active" : ""}`}
-              aria-pressed={active}
-              title={`${item.name} · ${item.blurb}`}
-              onClick={() => setTheme(item.id)}
-            >
-              <span
-                className="theme-swatch-face"
-                style={{
-                  background: `linear-gradient(135deg, ${item.swatch[0]} 0%, ${item.swatch[2]} 48%, ${item.swatch[1]} 100%)`,
-                }}
-              />
-              <span className="theme-swatch-name">{item.name}</span>
             </button>
           );
         })}
