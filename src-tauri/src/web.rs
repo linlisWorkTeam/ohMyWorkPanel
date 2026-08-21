@@ -2751,3 +2751,160 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .merge(protected)
         .with_state(state)
 }
+
+#[cfg(test)]
+mod acl_tests {
+    use super::*;
+    use crate::auth::Claims;
+    use tempfile::NamedTempFile;
+
+    fn claims(sub: &str, username: &str) -> ClaimsExtractor {
+        ClaimsExtractor(Claims {
+            sub: sub.to_string(),
+            username: username.to_string(),
+            exp: usize::MAX,
+        })
+    }
+
+    /// 构建带真实 schema 的测试床：
+    /// - 用户 u-admin（is_admin=1）↔ 成员 am（群主/管理员）
+    /// - 用户 u-scoped（is_admin=0）↔ 成员 sm（普通成员）
+    /// - 用户 u-alone：无任何群成员身份
+    async fn test_state() -> (NamedTempFile, Arc<AppState>) {
+        let file = NamedTempFile::new().unwrap();
+        crate::db::init_db(file.path()).unwrap();
+        let conn = crate::db::open_db(file.path()).unwrap();
+        conn.execute(
+            "INSERT INTO users(id,username,password_hash,created_at,is_admin) VALUES('u-admin','admin_u','x',1,1)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO users(id,username,password_hash,created_at,is_admin) VALUES('u-scoped','scoped_u','x',1,0)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO users(id,username,password_hash,created_at,is_admin) VALUES('u-alone','alone_u','x',1,0)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at,group_kind) VALUES('g','g','.','am','am',1,'project')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,tags,auth_user_id) VALUES('am','g','user','Admin','#000','',1,1,'','u-admin')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,tags,auth_user_id) VALUES('sm','g','user','Scoped','#000','',1,1,'','u-scoped')",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+
+        let (tx, _rx) = broadcast::channel::<String>(32);
+        let sched = SchedulerState {
+            db_path: file.path().to_path_buf(),
+            event_sender: crate::event_sender::EventSender::Web(tx.clone()),
+            cancellations: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+            scheduling_groups: Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
+            live_sessions: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+        };
+        let state = Arc::new(AppState {
+            db_path: file.path().to_path_buf(),
+            tx: tx.clone(),
+            sched,
+            presence: Arc::new(PresenceRegistry::default()),
+        });
+        (file, state)
+    }
+
+    fn msg(group_id: &str, sender_member_id: &str, content: &str) -> Json<SendMessageInput> {
+        Json(SendMessageInput {
+            group_id: group_id.to_string(),
+            sender_member_id: sender_member_id.to_string(),
+            content: content.to_string(),
+            mention_member_ids: Vec::new(),
+        })
+    }
+
+    #[tokio::test]
+    async fn scoped_user_cannot_impersonate_other_members_message() {
+        let (_file, state) = test_state().await;
+        let res = send_message_web(
+            State(state),
+            claims("u-scoped", "bob"),
+            msg("g", "am", "假装管理员发言"),
+        )
+        .await;
+        // 非管理员只能以本人成员身份发言 → FORBIDDEN
+        assert!(matches!(res, Err((StatusCode::FORBIDDEN, _))));
+    }
+
+    #[tokio::test]
+    async fn scoped_user_can_send_as_own_member() {
+        let (_file, state) = test_state().await;
+        let res = send_message_web(
+            State(state.clone()),
+            claims("u-scoped", "bob"),
+            msg("g", "sm", "hello from scoped"),
+        )
+        .await;
+        assert!(res.is_ok(), "expected ok, got {:?}", res.map(|v| v.0));
+        // 消息落库
+        let conn = crate::db::open_db(&state.db_path).unwrap();
+        let n: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM messages WHERE group_id='g' AND content='hello from scoped'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 1);
+    }
+
+    #[tokio::test]
+    async fn user_without_membership_is_denied_group_access() {
+        let (_file, state) = test_state().await;
+        let res = send_message_web(
+            State(state),
+            claims("u-alone", "eve"),
+            msg("g", "am", "hi"),
+        )
+        .await;
+        assert!(res.is_err(), "无群成员身份的用户不应能发送");
+    }
+
+    #[tokio::test]
+    async fn admin_can_send_as_any_group_member() {
+        let (_file, state) = test_state().await;
+        let res = send_message_web(
+            State(state),
+            claims("u-admin", "root"),
+            msg("g", "sm", "root speaks as scoped member"),
+        )
+        .await;
+        assert!(res.is_ok(), "管理员可以代普通成员发言，got {:?}", res.map(|v| v.0));
+    }
+
+    #[tokio::test]
+    async fn slash_board_returns_system_reply_for_project_user() {
+        let (_file, state) = test_state().await;
+        let res = send_message_web(State(state.clone()), claims("u-scoped", "bob"), msg("g", "sm", "/board")).await;
+        assert!(res.is_ok());
+        let conn = crate::db::open_db(&state.db_path).unwrap();
+        // 应有两条消息：用户的 /board + 管理员回显
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM messages WHERE group_id='g' AND content LIKE '/board%'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1, "用户原始消息存在");
+        let caps: i64 = conn
+            .query_row("SELECT COUNT(*) FROM messages WHERE group_id='g' AND content LIKE '%版本%'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(caps, 1, "版本摘要/引导回显存在");
+    }
+}
