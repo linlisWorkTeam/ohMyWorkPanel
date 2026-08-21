@@ -1282,6 +1282,24 @@ mod tests {
     }
 
     #[test]
+    fn v2_cursor_release_bundle_deserializes_without_secrets() {
+        let raw = include_str!("../../docs/releases/v2.0.0/cursor-agent.bundle.json");
+        assert!(
+            !raw.to_ascii_lowercase().contains("authid"),
+            "release bundle must not ship Cursor auth"
+        );
+        let b: AgentConfigBundle = serde_json::from_str(raw).expect("v2.0.0 cursor bundle");
+        assert!(b.cursor.enabled);
+        assert_eq!(b.cursor.executable.as_deref(), Some("agent"));
+        assert_eq!(b.cursor.model.as_deref(), Some("grok-4.6"));
+        assert!(b.codex.api_key.is_none());
+        assert!(b.claude.auth_token.is_none());
+        assert!(b.agents.iter().all(|a| a.api_key.is_none()));
+        assert!(b.agents.iter().any(|a| a.adapter == "cursor"));
+        assert!(b.auto_install.iter().any(|c| c == "cursor"));
+    }
+
+    #[test]
     fn provision_updates_seed_codex_member() {
         let dir = TempDir::new().unwrap();
         let dbp = dir.path().join("test.sqlite3");
