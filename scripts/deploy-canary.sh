@@ -35,6 +35,17 @@ if [[ ! -x "${WORKSPACE_BIN}" || ! -f "${WORKSPACE_DIST}/index.html" ]]; then
   exit 1
 fi
 
+# Fail-closed: JSX-only theme chrome imports stripped → Brand is not defined → empty #root
+js="$(ls "${WORKSPACE_DIST}"/assets/index-*.js 2>/dev/null | head -1 || true)"
+if [[ -z "${js}" ]]; then
+  echo "ERROR: no web index-*.js in ${WORKSPACE_DIST}/assets" >&2
+  exit 1
+fi
+if grep -E -q 'jsx\(Brand|jsx\(ThemeSwitcher|jsx\(HeaderThemePop' "${js}"; then
+  echo "ERROR: ${js} left theme chrome as free JSX identifiers (empty #root / React crash)" >&2
+  exit 1
+fi
+
 /bin/cp -f "${WORKSPACE_BIN}" "${CANARY_SLOT}/bin/linlis-work-panel-server"
 chmod +x "${CANARY_SLOT}/bin/linlis-work-panel-server"
 rm -rf "${CANARY_SLOT}/dist"

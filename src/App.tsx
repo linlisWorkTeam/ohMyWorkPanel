@@ -100,6 +100,21 @@ const emptyMember: NewMember = {
 /** DeepSeek Harness Web UI 默认地址（`dsh web`，默认 :3080）。可手动改成实际端口。 */
 const DSH_WEB_URL = "http://127.0.0.1:3080";
 
+// Value-bind wrappers: some production minifiers drop JSX-only named imports
+// from this large module (`jsx(Brand)` stays a global → empty #root on :8081).
+function BrandMark() {
+  const Cmp = Brand;
+  return <Cmp />;
+}
+function RuntimeThemeSwitcher() {
+  const Cmp = ThemeSwitcher;
+  return <Cmp />;
+}
+function RuntimeHeaderThemePop(props: { open: boolean; onPick: () => void }) {
+  const Cmp = HeaderThemePop;
+  return <Cmp {...props} />;
+}
+
 export function App() {
   const inviteToken =
     typeof window !== "undefined" ? parseInviteTokenFromPath(window.location.pathname) : null;
@@ -715,7 +730,7 @@ export function App() {
   }
 
   if (requiresAuth && session === "checking") {
-    return <main className="auth-screen"><div className="auth-card"><Brand /><p className="auth-hint">正在检查登录状态…</p></div></main>;
+    return <main className="auth-screen"><div className="auth-card"><BrandMark /><p className="auth-hint">正在检查登录状态…</p></div></main>;
   }
 
   if (requiresAuth && session === "login") {
@@ -1133,7 +1148,7 @@ export function App() {
         <button type="button" className="rail-btn" title="展开左栏" onClick={() => frame.toggleLeft()}>▶</button>
       </div>
       <div className="left-expanded">
-      <Brand />
+      <BrandMark />
       <div className="sidebar-heading"><span>工作区 · 群</span>{isAdmin && <button className="icon-button" onClick={() => setShowCreate(true)} aria-label="新建群聊">＋</button>}</div>
       <nav className="group-list">
         {activeGroups.map((group) => (
@@ -1259,7 +1274,7 @@ export function App() {
             >
               ?
             </button>
-            <HeaderThemePop open={headerPop === "theme"} onPick={() => setHeaderPop(null)} />
+            <RuntimeHeaderThemePop open={headerPop === "theme"} onPick={() => setHeaderPop(null)} />
           </div>
         </header>
         {!isChatGroup && (
@@ -1665,7 +1680,7 @@ export function App() {
     {showSettings && (
       <Modal title="运行设置" onClose={() => setShowSettings(false)}>
         <div className="modal-form settings-modal">
-          <ThemeSwitcher />
+          <RuntimeThemeSwitcher />
           {isAdmin && current && (
             <div className="extension-settings">
               <h3 className="settings-section-title">Extend</h3>
@@ -1841,7 +1856,7 @@ function AuthScreen({ error, onError, onAuthed }: { error: string | null; onErro
   return (
     <main className="auth-screen">
       <section className="auth-card">
-        <Brand />
+        <BrandMark />
         <h1>{mode === "login" ? "登录" : "注册"}</h1>
         <p className="auth-hint">多 Agent 协作工作台。使用管理员分配的账号登录后进入所属群聊。</p>
         <form className="modal-form" onSubmit={(e) => void submit(e)}>
