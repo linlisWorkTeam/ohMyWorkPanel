@@ -30,6 +30,7 @@ pub mod scheduler;
 pub mod git_inspect;
 pub mod workflow;
 pub mod web;
+pub mod db_migrations;
 
 use db::init_db;
 use std::{

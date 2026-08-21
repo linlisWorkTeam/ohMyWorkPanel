@@ -128,53 +128,8 @@ pub fn init_db(path: &Path) -> AppResult<()> {
         ",
         )
         .map_err(|e| e.to_string())?;
-    // Migration: add review columns to task_runs for existing databases
-    for col in &["review_status", "reviewer_member_id"] {
-        let _ = connection.execute(
-            &format!("ALTER TABLE task_runs ADD COLUMN {} TEXT", col),
-            [],
-        );
-    }
-    // Phase 2: agent_tags column for smart routing
-    for col in &["tags"] {
-        let _ = connection.execute(
-            &format!("ALTER TABLE members ADD COLUMN {} TEXT NOT NULL DEFAULT ''", col),
-            [],
-        );
-    }
-    // Cursor (and future) CLI session reuse per agent member
-    let _ = connection.execute(
-        "ALTER TABLE agent_profiles ADD COLUMN cli_session_id TEXT",
-        [],
-    );
-    // Group announcement (= project-level rule for all agents)
-    let _ = connection.execute(
-        "ALTER TABLE groups ADD COLUMN announcement TEXT NOT NULL DEFAULT ''",
-        [],
-    );
-    let _ = connection.execute(
-        "ALTER TABLE groups ADD COLUMN announcement_updated_at INTEGER",
-        [],
-    );
-    for col_sql in [
-        "ALTER TABLE agent_profiles ADD COLUMN workspace_path TEXT",
-        "ALTER TABLE agent_profiles ADD COLUMN api_key TEXT",
-        "ALTER TABLE agent_profiles ADD COLUMN keep_alive INTEGER NOT NULL DEFAULT 0",
-        "ALTER TABLE agent_profiles ADD COLUMN last_heartbeat_at INTEGER",
-        "ALTER TABLE agent_profiles ADD COLUMN warm_status TEXT NOT NULL DEFAULT 'cold'",
-        "ALTER TABLE agent_profiles ADD COLUMN model TEXT",
-        "ALTER TABLE agent_profiles ADD COLUMN system_locked INTEGER NOT NULL DEFAULT 0",
-        "ALTER TABLE task_runs ADD COLUMN phase TEXT",
-        "ALTER TABLE task_runs ADD COLUMN phase_updated_at INTEGER",
-        "ALTER TABLE groups ADD COLUMN group_kind TEXT NOT NULL DEFAULT 'project'",
-        "ALTER TABLE groups ADD COLUMN archived INTEGER NOT NULL DEFAULT 0",
-        "ALTER TABLE groups ADD COLUMN is_system INTEGER NOT NULL DEFAULT 0",
-        "ALTER TABLE members ADD COLUMN auth_user_id TEXT",
-        "ALTER TABLE members ADD COLUMN roster_hidden INTEGER NOT NULL DEFAULT 0",
-        "ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0",
-    ] {
-        let _ = connection.execute(col_sql, []);
-    }
+    // 版本化 schema 迁移（PRAGMA user_version）：吸收历史遗留的逐列 ALTER 补丁。
+    crate::db_migrations::migrate(&connection)?;
     let _ = connection.execute_batch(
         r#"
         CREATE TABLE IF NOT EXISTS group_invites (
@@ -193,7 +148,6 @@ pub fn init_db(path: &Path) -> AppResult<()> {
         "UPDATE users SET is_admin=1 WHERE username='root' OR id='seed-user-root'",
         [],
     );
-    migrate_members_allow_chatbot(&connection)?;
     let _ = crate::extensions::ensure_extensions_table(&connection);
     let _ = crate::workflow::ensure_workflow_tables(&connection);
     let _ = connection.execute_batch(
@@ -448,48 +402,6 @@ pub fn assert_member_mutable(connection: &Connection, member_id: &str) -> AppRes
 }
 
 
-
-fn migrate_members_allow_chatbot(connection: &Connection) -> AppResult<()> {
-    let ddl: String = connection
-        .query_row(
-            "SELECT sql FROM sqlite_master WHERE type='table' AND name='members'",
-            [],
-            |r| r.get(0),
-        )
-        .unwrap_or_default();
-    if ddl.contains("chatbot") {
-        return Ok(());
-    }
-    connection
-        .execute_batch("PRAGMA foreign_keys=OFF;")
-        .map_err(|e| e.to_string())?;
-    let result = (|| -> AppResult<()> {
-        connection
-            .execute_batch(
-                r#"
-CREATE TABLE IF NOT EXISTS members_new (
-  id TEXT PRIMARY KEY,
-  group_id TEXT NOT NULL,
-  kind TEXT NOT NULL CHECK(kind IN ('user','agent','chatbot')),
-  display_name TEXT NOT NULL,
-  avatar_color TEXT NOT NULL,
-  role_description TEXT NOT NULL,
-  is_active INTEGER NOT NULL DEFAULT 1,
-  created_at INTEGER NOT NULL,
-  tags TEXT NOT NULL DEFAULT ''
-);
-INSERT INTO members_new(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,tags)
-SELECT id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,COALESCE(tags,'') FROM members;
-DROP TABLE members;
-ALTER TABLE members_new RENAME TO members;
-"#,
-            )
-            .map_err(|e| e.to_string())?;
-        Ok(())
-    })();
-    let _ = connection.execute_batch("PRAGMA foreign_keys=ON;");
-    result
-}
 
 pub const GROUP_SELECT: &str = "SELECT id,name,workspace_path,owner_member_id,admin_member_id,created_at,COALESCE(announcement,''),announcement_updated_at,COALESCE(group_kind,'project'),COALESCE(archived,0),COALESCE(is_system,0) FROM groups";
 
