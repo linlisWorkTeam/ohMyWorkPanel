@@ -8,7 +8,7 @@ function detailsStub(open: boolean) {
       return sel === "details" ? node : null;
     },
   };
-  return node;
+  return node as unknown as EventTarget & { open: boolean };
 }
 
 describe("applySelfDetailsToggle", () => {
@@ -36,7 +36,7 @@ describe("applySelfDetailsToggle", () => {
   it("treats a click whose target is the inner summary as self toggle", () => {
     const setOpen = vi.fn();
     const self = detailsStub(true);
-    const summary = { closest: (sel: string) => (sel === "details" ? self : null) };
+    const summary = { closest: (sel: string) => (sel === "details" ? self : null) } as unknown as EventTarget;
     applySelfDetailsToggle(
       { target: summary, currentTarget: self, stopPropagation() { /* no-op */ } },
       setOpen,
