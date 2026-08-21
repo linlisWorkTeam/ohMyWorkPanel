@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { DOCK_MIN_WIDTH } from "../contrib/dockGeom";
 import type { UiContribution } from "../contrib/types";
 
 export function RightDockHost({
@@ -58,7 +59,7 @@ export function RightDockHost({
         )}
         <button className="icon-btn" onClick={onClose} aria-label="关闭右栏">×</button>
       </header>
-      <div className="right-dock-body" style={docked ? { gridTemplateColumns: `minmax(220px, 1fr) 4px ${dockWidth}px` } : undefined}>
+      <div className="right-dock-body" style={docked ? { gridTemplateColumns: `minmax(${DOCK_MIN_WIDTH}px, 1fr) 4px ${dockWidth}px` } : undefined}>
         <div className="right-dock-pane">{pane}</div>
         {docked && (
           <>
@@ -67,7 +68,7 @@ export function RightDockHost({
               onPointerDown={(event) => {
                 const startX = event.clientX;
                 const startW = dockWidth;
-                const move = (ev: PointerEvent) => onDockWidth(Math.max(220, startW - (ev.clientX - startX)));
+                const move = (ev: PointerEvent) => onDockWidth(Math.max(DOCK_MIN_WIDTH, startW - (ev.clientX - startX)));
                 const up = () => {
                   window.removeEventListener("pointermove", move);
                   window.removeEventListener("pointerup", up);

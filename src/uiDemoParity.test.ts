@@ -26,7 +26,7 @@ describe("ui-demo.html chrome parity", () => {
     expect(app).toContain("className=\"composer\"");
     expect(app).toContain("className=\"composer-hint\"");
     expect(app).toContain("className=\"send-btn\"");
-    expect(app).toContain("rightTabs.map");
+    expect(app).toContain("RightDockHost");
     expect(registry).toContain('title: "成员"');
     expect(registry).toContain('title: "队列"');
     expect(registry).toContain('title: "详情"');

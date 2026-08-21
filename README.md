@@ -2,7 +2,7 @@
 
 本地优先的多 Agent 协作面板：工作群绑定服务器工作区、`@` 触发本机 CLI Agent；也支持**聊天群** + 轻量 **chatbot**（默认响应者、原生窗口上下文与滚动摘要）。桌面（Tauri）与 Web 双模；本机灰度/生产以 Web + systemd 双槽位为主。
 
-当前 Git 标签：**[`v2.0.0`](https://github.com/linlisWorkTeam/workPanel/releases/tag/v2.0.0)**（Cursor 环境包 + DSH 壳层）。前序 [`v1.3.0`](https://github.com/linlisWorkTeam/workPanel/releases/tag/v1.3.0)、[`v1.2.0`](https://github.com/linlisWorkTeam/workPanel/releases/tag/v1.2.0)、[`v1.1.0`](https://github.com/linlisWorkTeam/workPanel/releases/tag/v1.1.0)。`package.json` / Cargo 已对齐 `2.0.0`。  
+当前 Git 标签：**[`v2.0.0`](https://github.com/linlisWorkTeam/workPanel/releases/tag/v2.0.0)**（Cursor 环境包 + DSH 壳层）。前序 [`v1.3.0`](https://github.com/linlisWorkTeam/workPanel/releases/tag/v1.3.0)、[`v1.2.0`](https://github.com/linlisWorkTeam/workPanel/releases/tag/v1.2.0)、[`v1.1.0`](https://github.com/linlisWorkTeam/workPanel/releases/tag/v1.1.0)。`package.json` / Cargo 已对齐 `2.1.0`（tag `v2.1.0` 待灰度后打）。  
 Cursor Agent 脱敏配置包：[`docs/releases/v2.0.0/`](docs/releases/v2.0.0/)。  
 发展方向 SSOT：[`docs/version-pipeline.md`](docs/version-pipeline.md)（勿把历史 epitaph「v1.3 双槽位」当成 tag `v1.3.0`）。  
 远端仓库：`https://github.com/linlisWorkTeam/workPanel`（`origin`）。

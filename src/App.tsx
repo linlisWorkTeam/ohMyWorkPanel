@@ -17,6 +17,7 @@ import {
   parseMessageContent,
 } from "./messageContent";
 import { defaultModelForAdapter, modelsForAdapter, applyAgentModelsPayload } from "./agentModels";
+import { FALLBACK_CLI_ADAPTERS, mergeCliAdapters, type CliAdapterOption } from "./adaptersCatalog";
 import { canSubmitUserMember, chatbotSlotTaken, memberRosterAction, type UserAddMode } from "./memberForm";
 import { InviteLanding, parseInviteTokenFromPath } from "./InviteLanding";
 import { markdownToHtml } from "./markdownLite";
@@ -45,6 +46,7 @@ import { Divider, useAppFrame, CONCEDE_RIGHT } from "./components/ui";
 import { loadSendKeyMode, saveSendKeyMode, sendKeyHint, shouldSendOnKey, type SendKeyMode } from "./sendKey";
 import type { ChatEvent, ExtensionStatus, Group, GroupState, Member, PresetRole, RuntimeSettings, TaskRun } from "./types";
 import { MessageBubble, MemberRow, Avatar, Status, ReviewBadge, TypingIndicator, RunQueuePane, EmptyHome } from "./components/furniture";
+import { RightDockHost } from "./components/RightDockHost";
 import { useGoalBar } from "./hooks/useGoalBar";
 import { useComposerDraft } from "./hooks/useComposerDraft";
 import { Brand, ThemeSwitcher, HeaderThemePop } from "./theme";
@@ -1443,36 +1445,24 @@ export function App() {
 
     <Divider {...frame.rightDivider} />
 
-    {current && showMembers && <aside className={`member-panel${dock.dockedId ? " is-docked" : ""}`}>
-      <header>
-        <div className="tabs" role="tablist" aria-label="右栏">
-          {rightTabs.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              className={`tab ${rightPanelTab === tab.id || dock.dockedId === tab.id ? "active" : ""}`}
-              onClick={() => {
-                setRightPanelTab(tab.id);
-                if (tab.id === "core.details") setDetailInner("home");
-              }}
-            >
-              {tab.title}
-            </button>
-          ))}
-        </div>
-        {rightTabs.some((tab) => tab.dockable && tab.id === rightPanelTab) && !dock.dockedId && (
-          <button type="button" className="icon-btn dock-btn" title="拆出第二列" onClick={() => {
-            persistDock({ ...dock, dockedId: rightPanelTab });
-            setRightPanelTab("core.members");
-          }}>拆出</button>
-        )}
-        {dock.dockedId && (
-          <button type="button" className="icon-btn dock-btn" title="收回页签" onClick={() => persistDock({ ...dock, dockedId: null })}>收回</button>
-        )}
-        <button className="icon-btn" onClick={() => setShowMembers(false)} aria-label="关闭右栏">×</button>
-      </header>
-      <div className="right-dock-body" style={dock.dockedId ? { gridTemplateColumns: `minmax(200px, 1fr) 4px ${dock.width}px` } : undefined}>
-      <div className="right-dock-pane">
+    {current && showMembers && <RightDockHost
+      tabs={rightTabs}
+      activeId={rightPanelTab}
+      onSelect={(id) => {
+        setRightPanelTab(id);
+        if (id === "core.details") setDetailInner("home");
+      }}
+      dockedId={dock.dockedId}
+      onDock={(id) => {
+        persistDock({ ...dock, dockedId: id });
+        setRightPanelTab("core.members");
+      }}
+      onUndock={() => persistDock({ ...dock, dockedId: null })}
+      dockWidth={dock.width}
+      onDockWidth={(width) => persistDock({ ...dock, width })}
+      dockPane={dockedView ? renderExtPane(dockedView) : null}
+      onClose={() => setShowMembers(false)}
+      pane={<>
       {rightPanelTab === "core.members" ? <>
         {(current.group.announcement ?? "").trim() && (
           <div className="announce-banner" title={current.group.announcement}>
@@ -1741,28 +1731,8 @@ export function App() {
         </div>
       ) : extPaneView ? renderExtPane(extPaneView)
       : <p className="form-hint">选择一个页签。</p>}
-      </div>
-      {dockedView && (
-        <>
-          <div
-            className="right-dock-split"
-            onPointerDown={(event) => {
-              const startX = event.clientX;
-              const startW = dock.width;
-              const move = (ev: PointerEvent) => persistDock({ ...dock, width: Math.max(220, startW - (ev.clientX - startX)) });
-              const up = () => {
-                window.removeEventListener("pointermove", move);
-                window.removeEventListener("pointerup", up);
-              };
-              window.addEventListener("pointermove", move);
-              window.addEventListener("pointerup", up);
-            }}
-          />
-          <div className="right-dock-extra">{renderExtPane(dockedView)}</div>
-        </>
-      )}
-      </div>
-    </aside>}
+      </>}
+    />}
 
     {showCreate && (
       <Modal title="新建群组" onClose={() => groups.length > 0 && setShowCreate(false)}>
