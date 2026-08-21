@@ -62,6 +62,7 @@ async fn main() {
     if let Err(e) = linlis_work_panel_lib::agent_config::auto_apply_on_startup(&db_path) {
         eprintln!("Agent config auto-apply: {e}");
     }
+    linlis_work_panel_lib::reload_cli_adapter_manifests();
 
     let (tx, _) = broadcast::channel::<String>(256);
 

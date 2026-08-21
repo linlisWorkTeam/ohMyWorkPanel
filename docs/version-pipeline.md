@@ -136,7 +136,7 @@ status: active
 
 | 轨道 | 定位 | 做 | 不做（本阶段） |
 |---|---|---|---|
-| **A 工作群** | 绑定 workspace 的 Agent 协作（主产品） | @ 调度、串行、A2A、公告、**版本/Wave 工作流**、经验/记忆、**交接运行时注入** | 把工作群做成纯社交 IM |
+| **A 工作群** | 绑定 workspace 的 Agent 协作（主产品） | @ 调度、串行、A2A、公告、**版本/Wave 工作流**、经验/记忆、**交接运行时注入**、**CLI 适配器 Manifest（内部多 CLI）** | 把工作群做成纯社交 IM；把 CLI 插件塞进 IM connector / Extend 页签 |
 | **B 发布与稳态** | 双槽位自迭代不断供 | 门禁、灰度公告、探活/心跳/指标、promote 审批 | Agent 擅自 promote；打断 stop→start |
 | **C 扩展宿主** | manifest 动态 Extend（含 PanelLive / AIHotel） | `LINLIS_EXTENSION_ROOTS`、通用反代/页签/A2A | 平台写扩展业务；为每扩展抄 proxy_* |
 | **D 聊天群** | `groupKind=chat`，无业务 workspace；轻对话 | Phase 1：体验地基（见下） | 未拍板前不做多平台中枢大工程 |
@@ -167,6 +167,7 @@ status: active
 6. **稳态债（B）**：每次增量仍灰度 → 批准 promote；勿中断 stop→start。
 7. **轨道 G 自举运行时（新占位）**：设计 Spec `2026-08-16-dsh-self-bootstrap-runtime.md` + 群聊治理层 `2026-08-16-group-chat-governance-plane.md`；P0（dsh headless 适配器 + DSH Web 嵌入）✅；P1 ACP 会话回放待立项（先立群聊治理层）。**小组件定位**：见 `specs/2026-08-16-widget-capability-placement.md`（widget=页签/能力，不单独建群；仅治理型项目群例外）。
 8. **Agent 配置一键导入（I1，轨道 A / 发布打包）**：代码已落地（阶段 5.1）；下一步 ECS canary `:8081` 部署 + 群公告 →（批）promote 生产；顺带验证「服务器导出 → 新机一键导入」端到端与前端壳冒烟（`release-checklist.md §F`）。
+9. **CLI 适配器 Manifest（轨道 A）**：SSOT accepted — `specs/2026-08-21-cli-adapter-manifest.md`。**P0 已灰度 `:8081`**（查表 + `GET /api/adapters`）；P0.1+ 未开工。
 
 ---
 
@@ -192,5 +193,6 @@ status: active
 | [`docs/roadmap.md`](roadmap.md) | 历史勾选 + 指向本文 |
 | [`docs/superpowers/specs/2026-08-06-workpanel-v1.3.0-workflow-era-design.md`](superpowers/specs/2026-08-06-workpanel-v1.3.0-workflow-era-design.md) | V1.3.0 工作流全量设计 |
 | [`docs/superpowers/specs/2026-08-16-dsh-self-bootstrap-runtime.md`](superpowers/specs/2026-08-16-dsh-self-bootstrap-runtime.md) | 轨道 G：DSH 自举接入总设计（会两级不可改自举 Agent） |
+| [`docs/superpowers/specs/2026-08-21-cli-adapter-manifest.md`](superpowers/specs/2026-08-21-cli-adapter-manifest.md) | 轨道 A：CLI 适配器 Manifest（**accepted** SSOT） |
 | [`docs/superpowers/specs/2026-08-16-dsh-ui-language-workpanel.md`](superpowers/specs/2026-08-16-dsh-ui-language-workpanel.md) | 借鉴 DSH UI 设计语言（三栏：工作区=群聊，右栏=Agent） |
 | [`docs/superpowers/specs/2026-08-16-widget-capability-placement.md`](superpowers/specs/2026-08-16-widget-capability-placement.md) | 小组件形态判定与收敛路线（widget=页签/能力，不单独建群） |

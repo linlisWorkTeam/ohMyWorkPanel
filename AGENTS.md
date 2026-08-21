@@ -43,7 +43,7 @@ scripts/
 ## 编码约定
 
 - **IPC 兼容**：不改动 `tauri::command` 签名、前端 API 调用、SQLite schema。破坏性 API 变更需明确讨论。
-- **新增适配器**：实现 `adapters::mod.rs` 的 `AdapterKind`，提供 `build_args`；cli 候选排在 `candidate_executables` 里。
+- **新增 CLI 适配器**：见 [`docs/superpowers/specs/2026-08-21-cli-adapter-manifest.md`](docs/superpowers/specs/2026-08-21-cli-adapter-manifest.md)（终态 `*.adapter.json`）。**P0 未落地前**仍可改 `AdapterKind` + `build_args` + `candidate_executables`；落地后内部新 CLI 只加 json，禁止 `sh -c`。chatbot / mock 不是 CLI 插件。
 - **Rust 风格**：`AppResult<T> = Result<T, String>`；行内链式 `map_err(|e| e.to_string())?` 与现有风格一致。
 - **前端适配器标签**：在 `App.tsx:155` 的 `<select>` 里更新文案；`types.ts:21` 的 adapter union 保持同步。
 - **Commit 风格**：中文或英文均可，建议类型前缀（`chore:`/`refactor:`/`feat:`/`test:`/`fix:`）。

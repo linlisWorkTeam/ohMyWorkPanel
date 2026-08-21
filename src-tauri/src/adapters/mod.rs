@@ -8,8 +8,10 @@ pub mod models;
 mod openclaw;
 mod opencode;
 pub mod parse;
+pub mod manifest;
 
 use crate::db::AppResult;
+use manifest::SpawnSpec;
 use parse::{
     parse_agent_event, parse_agent_line, parse_openclaw_mixed_output, DeltaMode, ParsedEvent,
 };
@@ -185,7 +187,7 @@ fn candidate_exists(path: &Path) -> bool {
     path.is_file()
 }
 
-fn find_executable_path(name: &str) -> Option<String> {
+pub(crate) fn find_executable_path(name: &str) -> Option<String> {
     std::env::var("PATH").ok().and_then(|paths| {
         for dir in std::env::split_paths(&paths) {
             #[cfg(windows)]
@@ -228,7 +230,7 @@ pub fn find_executable_on_path(name: &str) -> Option<String> {
 }
 
 #[cfg(windows)]
-fn find_in_npm(name: &str) -> Option<String> {
+pub(crate) fn find_in_npm(name: &str) -> Option<String> {
     let appdata = std::env::var("APPDATA").ok()?;
     let npm_dir = std::path::Path::new(&appdata).join("npm");
     for ext in ["cmd", "exe", "bat", "ps1"] {
@@ -281,7 +283,7 @@ where
 /// Run adapter process. `on_delta(channel, text, replace)`. Returns captured CLI session id if any.
 /// `api_key`: when set for Codex, exported as `OPENAI_API_KEY` (DeepSeek OpenAI-compatible auth).
 pub async fn run_streaming<F, Fut>(
-    kind: AdapterKind,
+    spec: SpawnSpec,
     executable: &str,
     workspace: &Path,
     prompt: &str,
@@ -296,7 +298,8 @@ where
     F: FnMut(String, String, bool) -> Fut,
     Fut: std::future::Future<Output = AppResult<()>>,
 {
-    let adapter = kind.as_str();
+    let adapter = spec.id().to_string();
+    let kind = spec.builtin_kind();
     if workspace == Path::new("/") || !workspace.exists() {
         return Err(format!(
             "工作目录无效：{}。请把群工作目录设为具体项目路径（不能是 /）。",
@@ -306,11 +309,11 @@ where
     let mut command = prepare_command(executable);
     command
         .current_dir(workspace)
-        .args(kind.build_args(prompt, session_id, model))
+        .args(spec.build_args(prompt, session_id, model))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    if kind == AdapterKind::Codex {
+    if kind == Some(AdapterKind::Codex) {
         // systemd units usually omit shell OPENAI_API_KEY; fall back to ~/.codex/auth.json
         // (same key OpenCode Zen Go / local Codex CLI already use).
         match codex::resolve_api_key(api_key) {
@@ -354,7 +357,7 @@ where
         tokio::select! {
             result = lines.next_line() => match result {
                 Ok(Some(line)) => {
-                    if kind == AdapterKind::OpenClaw {
+                    if kind == Some(AdapterKind::OpenClaw) {
                         if !openclaw_buf.is_empty() {
                             openclaw_buf.push('\n');
                         }
@@ -366,7 +369,7 @@ where
                         if serde_json::from_str::<serde_json::Value>(trimmed).is_err() {
                             continue;
                         }
-                        let event = kind.parse_event(trimmed);
+                        let event = spec.parse_event(trimmed);
                         openclaw_buf.clear();
                         if let Some(id) = event.session_id {
                             captured_session = Some(id);
@@ -379,12 +382,12 @@ where
                             on_delta(event.channel, event.text, replace).await?;
                         }
                     } else {
-                        if kind == AdapterKind::Codex {
+                        if kind == Some(AdapterKind::Codex) {
                             if let Some(hint) = codex_failure_hint(&line) {
                                 last_failure_hint = Some(hint);
                             }
                         }
-                        let event = kind.parse_event(&line);
+                        let event = spec.parse_event(&line);
                         if let Some(id) = event.session_id {
                             captured_session = Some(id);
                         }
@@ -395,10 +398,10 @@ where
                     }
                 }
                 Ok(None) => {
-                    if kind == AdapterKind::OpenClaw {
+                    if kind == Some(AdapterKind::OpenClaw) {
                         let trimmed = openclaw_buf.trim();
                         if !trimmed.is_empty() {
-                            let event = kind.parse_event(trimmed);
+                            let event = spec.parse_event(trimmed);
                             if let Some(id) = event.session_id {
                                 captured_session = Some(id);
                             }
@@ -434,7 +437,7 @@ where
     let stderr = stderr_task.await.unwrap_or_default();
     // OpenClaw 2026.3 often prints the JSON envelope on stderr (stdout empty),
     // especially after gateway→embedded fallback. Recover payloads[].text.
-    if kind == AdapterKind::OpenClaw && !openclaw_got_final {
+    if kind == Some(AdapterKind::OpenClaw) && !openclaw_got_final {
         if let Some(event) = parse_openclaw_mixed_output(&stderr) {
             if let Some(id) = event.session_id.clone() {
                 captured_session = Some(id);
@@ -448,12 +451,12 @@ where
     }
     if !status.success() {
         // Prefer a clean payload over dumping gateway noise + raw JSON.
-        if kind == AdapterKind::OpenClaw && openclaw_got_final {
+        if kind == Some(AdapterKind::OpenClaw) && openclaw_got_final {
             return Ok(captured_session);
         }
-        return Err(format_cli_failure(adapter, &status.to_string(), &stderr, last_failure_hint.as_deref()));
+        return Err(format_cli_failure(&adapter, &status.to_string(), &stderr, last_failure_hint.as_deref()));
     }
-    if kind == AdapterKind::OpenClaw && !openclaw_got_final {
+    if kind == Some(AdapterKind::OpenClaw) && !openclaw_got_final {
         return Err(format!(
             "{adapter} 未解析到回复（stdout 空且 stderr 无 payloads）。stderr 摘要：{}",
             stderr.chars().take(280).collect::<String>()

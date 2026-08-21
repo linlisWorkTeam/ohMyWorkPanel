@@ -598,7 +598,7 @@ async fn run_agent(
         return Ok(());
     }
 
-    let kind = AdapterKind::parse(adapter_name)?;
+    let spec = adapters::manifest::resolve_adapter(adapter_name)?;
     let delta_count = Arc::new(AtomicU64::new(0));
     let hb_stop = Arc::new(AtomicBool::new(false));
     {
@@ -648,7 +648,7 @@ async fn run_agent(
         }
     };
 
-    if kind == AdapterKind::Mock {
+    if spec.builtin_kind() == Some(AdapterKind::Mock) {
         emit_phase(state, &context.group.id, &context.run.id, "streaming");
         let result = adapters::run_mock_stream(token, make_on_delta()).await;
         hb_stop.store(true, Ordering::Relaxed);
@@ -657,15 +657,15 @@ async fn run_agent(
     }
 
     emit_phase(state, &context.group.id, &context.run.id, "cli_spawn");
-    let executable = kind.resolve_executable(context.agent.executable_path.as_deref())?;
-    let mut session_id = if kind == AdapterKind::Cursor {
+    let executable = spec.resolve_executable(context.agent.executable_path.as_deref())?;
+    let mut session_id = if spec.persists_session() {
         let conn = open_db(&state.db_path)?;
         get_cli_session_id(&conn, &context.agent.id)?
     } else {
         None
     };
 
-    let prompt = if kind == AdapterKind::Cursor && session_id.is_some() {
+    let prompt = if spec.builtin_kind() == Some(AdapterKind::Cursor) && session_id.is_some() {
         short_resume_prompt(context)
     } else {
         context.prompt.clone()
@@ -682,21 +682,22 @@ async fn run_agent(
     let model = context.agent.model.as_deref();
     // Member profile key is optional; adapters::codex::resolve_api_key also reads
     // process env / ~/.codex/auth.json so Codex works under systemd.
-    let codex_key = if kind == AdapterKind::Codex {
+    let codex_key = if spec.builtin_kind() == Some(AdapterKind::Codex) {
         let conn = open_db(&state.db_path)?;
         get_agent_api_key(&conn, &context.agent.id)?.filter(|k| !k.trim().is_empty())
     } else {
         None
     };
+    let timeout = spec.timeout_secs(context.settings.run_timeout_seconds as u64);
     emit_phase(state, &context.group.id, &context.run.id, "awaiting_first_token");
     let result = adapters::run_streaming(
-        kind,
+        spec.clone(),
         &executable,
         &cwd,
         &prompt,
         session_id.as_deref(),
         model,
-        context.settings.run_timeout_seconds as u64,
+        timeout,
         token,
         codex_key.as_deref(),
         make_on_delta(),
@@ -706,7 +707,7 @@ async fn run_agent(
     let captured = match result {
         Ok(captured) => captured,
         Err(error)
-            if kind == AdapterKind::Cursor
+            if spec.builtin_kind() == Some(AdapterKind::Cursor)
                 && session_id.is_some()
                 && is_resume_failure(&error) =>
         {
@@ -715,13 +716,13 @@ async fn run_agent(
             set_cli_session_id(&conn, &context.agent.id, None)?;
             session_id = None;
             adapters::run_streaming(
-                kind,
+                spec.clone(),
                 &executable,
                 &cwd,
                 &context.prompt,
                 None,
                 model,
-                context.settings.run_timeout_seconds as u64,
+                timeout,
                 token,
                 None,
                 make_on_delta(),
@@ -735,7 +736,7 @@ async fn run_agent(
     };
     hb_stop.store(true, Ordering::Relaxed);
 
-    if kind == AdapterKind::Cursor {
+    if spec.persists_session() {
         if let Some(id) = captured.or(session_id) {
             let conn = open_db(&state.db_path)?;
             set_cli_session_id(&conn, &context.agent.id, Some(&id))?;

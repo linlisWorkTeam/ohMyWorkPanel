@@ -34,6 +34,7 @@ pub mod db_migrations;
 
 #[cfg(feature = "gui")]
 use db::init_db;
+pub use adapters::manifest::reload_manifests as reload_cli_adapter_manifests;
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
