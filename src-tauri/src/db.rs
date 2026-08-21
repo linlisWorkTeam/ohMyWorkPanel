@@ -38,7 +38,7 @@ fn machine_key() -> [u8; 32] {
         let path = KEY_FILE
             .get()
             .cloned()
-            .unwrap_or_else(|| std::path::PathBuf::from("linlis.key"));
+            .unwrap_or_else(|| std::env::temp_dir().join("linlis-work-panel.key"));
         if let Ok(data) = std::fs::read(&path) {
             if data.len() == 32 {
                 let mut key = [0u8; 32];
