@@ -1208,15 +1208,13 @@ async fn get_message_channel_part_web(
      Path(run_id): Path<String>,
  ) -> Result<Json<()>, (StatusCode, String)> {
      let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     let changed = conn
-         .execute("UPDATE task_runs SET status='cancelled',completed_at=?1 WHERE id=?2 AND status IN ('queued','running')", params![now(), run_id])
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-     if changed > 0 {
-         conn.execute("UPDATE messages SET status='cancelled' WHERE id=(SELECT output_message_id FROM task_runs WHERE id=?1) AND status='streaming'", params![run_id])
-             .ok();
-         logger::warn(&conn, "run", &format!("run {} cancelled", run_id), None);
-         web_emit(&state.tx, "", "run_status", None, Some(&run_id), Some("cancelled"), None);
-     }
+     let Some(info) = crate::db::cancel_run(&conn, &run_id)
+         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
+     else {
+         return Ok(Json(()));
+     };
+     logger::warn(&conn, "run", &format!("run {} cancelled", run_id), None);
+     web_emit(&state.tx, &info.group_id, "run_status", None, Some(&run_id), Some("cancelled"), None);
      Ok(Json(()))
  }
 
@@ -1225,11 +1223,11 @@ async fn get_message_channel_part_web(
      Path(run_id): Path<String>,
  ) -> Result<Json<String>, (StatusCode, String)> {
      let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     let old: TaskRun = conn
-         .query_row("SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at,phase,phase_updated_at FROM task_runs WHERE id=?1", params![run_id], crate::db::run_from_row)
-         .map_err(|e| (StatusCode::NOT_FOUND, format!("run not found: {e}")))?;
-     let new_id = create_task_run(&conn, &old.group_id, &old.root_message_id, &old.agent_member_id, old.parent_run_id.as_deref(), old.depth)
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     let Some((new_id, _group_id)) = crate::db::retry_run(&conn, &run_id)
+         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
+     else {
+         return Err((StatusCode::NOT_FOUND, "run not found".into()));
+     };
      logger::info(&conn, "run", &format!("run {} retried as {}", run_id, new_id), None);
      Ok(Json(new_id))
  }

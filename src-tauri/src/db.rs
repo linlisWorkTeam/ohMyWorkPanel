@@ -1588,6 +1588,63 @@ pub fn create_task_run(
     Ok(run_id)
 }
 
+/// 运输层（Tauri command / Web handler）需要的取消上下文。
+pub struct CancelRunInfo {
+    pub group_id: String,
+    pub output_message_id: Option<String>,
+}
+
+/// 取消任务（仅 queued/running 生效）：标 cancelled + 流式输出消息标 cancelled。
+/// 返回 None 表示任务不存在或不在可取消状态；Some 供 transport 发事件。
+pub fn cancel_run(conn: &Connection, run_id: &str) -> AppResult<Option<CancelRunInfo>> {
+    let run: Option<TaskRun> = conn
+        .query_row(&format!("{} WHERE id=?1", RUN_SELECT), params![run_id], run_from_row)
+        .optional()
+        .map_err(|e| e.to_string())?;
+    let Some(run) = run else {
+        return Ok(None);
+    };
+    if !matches!(run.status.as_str(), "queued" | "running") {
+        return Ok(None);
+    }
+    conn.execute(
+        "UPDATE task_runs SET status='cancelled',completed_at=?1 WHERE id=?2",
+        params![now(), run_id],
+    )
+    .map_err(|e| e.to_string())?;
+    if let Some(message_id) = &run.output_message_id {
+        conn.execute(
+            "UPDATE messages SET status='cancelled' WHERE id=?1 AND status='streaming'",
+            params![message_id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(Some(CancelRunInfo {
+        group_id: run.group_id,
+        output_message_id: run.output_message_id,
+    }))
+}
+
+/// 重试任务：以原 root/agent 建新 run。返回 (new_id, group_id)；None 表示原任务不存在。
+pub fn retry_run(conn: &Connection, run_id: &str) -> AppResult<Option<(String, String)>> {
+    let run: Option<TaskRun> = conn
+        .query_row(&format!("{} WHERE id=?1", RUN_SELECT), params![run_id], run_from_row)
+        .optional()
+        .map_err(|e| e.to_string())?;
+    let Some(run) = run else {
+        return Ok(None);
+    };
+    let new_id = create_task_run(
+        conn,
+        &run.group_id,
+        &run.root_message_id,
+        &run.agent_member_id,
+        run.parent_run_id.as_deref(),
+        run.depth,
+    )?;
+    Ok(Some((new_id, run.group_id)))
+}
+
 pub fn active_agent_ids(
     conn: &Connection,
     group_id: &str,
@@ -2045,6 +2102,35 @@ mod tests {
         let (up4, down4, mine4) = vote_message(&conn, "m", "u", None).unwrap();
         assert_eq!((up4, down4), (0, 0));
         assert_eq!(mine4, None);
+    }
+
+    #[test]
+    fn cancel_and_retry_service_functions() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        init_db(file.path()).unwrap();
+        let conn = open_db(file.path()).unwrap();
+        conn.execute("INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at) VALUES('g','g','.','u',NULL,1)", []).unwrap();
+        conn.execute("INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,tags) VALUES('u','g','user','u','#000','',1,1,'')", []).unwrap();
+        conn.execute("INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,tags) VALUES('a','g','agent','a','#000','',1,1,'')", []).unwrap();
+        conn.execute("INSERT INTO messages VALUES('m','g','u',NULL,'x','completed',1)", []).unwrap();
+        conn.execute("INSERT INTO task_runs(id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,created_at) VALUES('r','g','m','a',NULL,0,'running',1)", []).unwrap();
+
+        // cancel：running → cancelled，返回 group/输出
+        let info = cancel_run(&conn, "r").unwrap().unwrap();
+        assert_eq!(info.group_id, "g");
+        let status: String = conn.query_row("SELECT status FROM task_runs WHERE id='r'", [], |r| r.get(0)).unwrap();
+        assert_eq!(status, "cancelled");
+        // 已取消 → None（幂等）
+        assert!(cancel_run(&conn, "r").unwrap().is_none());
+
+        // retry：重开新 run
+        let (new_id, group_id) = retry_run(&conn, "r").unwrap().unwrap();
+        assert_eq!(group_id, "g");
+        assert_ne!(new_id, "r");
+        let new_status: String = conn.query_row("SELECT status FROM task_runs WHERE id=?1", params![new_id], |r| r.get(0)).unwrap();
+        assert_eq!(new_status, "queued");
+        // 不存在 → None
+        assert!(retry_run(&conn, "no-such").unwrap().is_none());
     }
 
     #[test]

@@ -604,18 +604,9 @@ pub async fn cancel_run(
 ) -> AppResult<()> {
     let state = state.inner().clone();
     let conn = open_db(&state.db_path)?;
-    let run: TaskRun = conn
-        .query_row(
-            "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at,phase,phase_updated_at FROM task_runs WHERE id=?1",
-            params![run_id],
-            run_from_row,
-        )
-        .optional()
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "找不到任务。".to_string())?;
-    if !matches!(run.status.as_str(), "queued" | "running") {
+    let Some(info) = crate::db::cancel_run(&conn, &run_id)? else {
         return Ok(());
-    }
+    };
     if let Some(token) = state
         .cancellations
         .lock()
@@ -624,24 +615,12 @@ pub async fn cancel_run(
     {
         token.store(true, Ordering::SeqCst);
     }
-    conn.execute(
-        "UPDATE task_runs SET status='cancelled',completed_at=?1 WHERE id=?2",
-        params![now(), run_id],
-    )
-    .map_err(|e| e.to_string())?;
-    if let Some(message_id) = &run.output_message_id {
-        conn.execute(
-            "UPDATE messages SET status='cancelled' WHERE id=?1",
-            params![message_id],
-        )
-        .map_err(|e| e.to_string())?;
-    }
     insert_run_event(&conn, &run_id, "cancelled", "{}")?;
     let _ = app.emit("chat-event", ChatEvent {
             kind: "run_status".into(),
-            group_id: run.group_id,
+            group_id: info.group_id,
             run_id: Some(run_id),
-            message_id: run.output_message_id,
+            message_id: info.output_message_id,
             delta: None,
             status: Some("cancelled".into()),
             error: None,
@@ -666,25 +645,11 @@ pub async fn retry_run(
 ) -> AppResult<String> {
     let state = state.inner().clone();
     let conn = open_db(&state.db_path)?;
-    let old: TaskRun = conn
-        .query_row(
-            "SELECT id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,output_message_id,error_message,review_status,reviewer_member_id,created_at,started_at,completed_at,phase,phase_updated_at FROM task_runs WHERE id=?1",
-            params![run_id],
-            run_from_row,
-        )
-        .optional()
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "找不到任务。".to_string())?;
-    let new_id = create_task_run(
-        &conn,
-        &old.group_id,
-        &old.root_message_id,
-        &old.agent_member_id,
-        old.parent_run_id.as_deref(),
-        old.depth,
-    )?;
+    let Some((new_id, group_id)) = crate::db::retry_run(&conn, &run_id)? else {
+        return Err("找不到任务。".to_string());
+    };
     drop(conn);
-    schedule_group(to_scheduler(&state, &app), old.group_id);
+    schedule_group(to_scheduler(&state, &app), group_id);
     Ok(new_id)
 }
 
