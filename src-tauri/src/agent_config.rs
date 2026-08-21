@@ -914,7 +914,7 @@ fn apply_patch(
 
 // ===================== auto install =====================
 
-struct InstallSpec {
+pub(crate) struct InstallSpec {
     name: &'static str,
     desc: String,
     command: Vec<String>,

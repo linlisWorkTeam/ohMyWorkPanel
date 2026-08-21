@@ -5,7 +5,7 @@ use serde::Deserialize;
 use std::process::{Command, Stdio};
 
 #[derive(Debug, Deserialize)]
-struct WikiRetrieveResult {
+pub struct WikiRetrieveResult {
     #[serde(default)]
     ok: bool,
     #[serde(default)]

@@ -32,6 +32,7 @@ pub mod workflow;
 pub mod web;
 pub mod db_migrations;
 
+#[cfg(feature = "gui")]
 use db::init_db;
 use std::{
     collections::{HashMap, HashSet},

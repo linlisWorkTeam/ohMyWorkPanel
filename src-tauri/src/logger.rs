@@ -1,4 +1,4 @@
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use chrono::Utc;
 use uuid::Uuid;
