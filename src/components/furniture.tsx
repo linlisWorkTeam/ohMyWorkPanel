@@ -9,6 +9,7 @@ import { memberRosterAction } from "../memberForm";
 import { PHASE_LABEL, time, dayLabel, readError } from "./uiShared";
 import { applySelfDetailsToggle } from "../detailsToggle";
 import type { Group, GroupState, Member, RunPhaseEntry, TaskRun } from "../types";
+import { ContextActionMenu, useLongPress, type ActionItem } from "./ContextActionMenu";
 
 /* ============================================================
    WorkPanel UI furniture: 从 App.tsx 抽取的消息/成员/状态组件（P1 组件化）
@@ -24,6 +25,7 @@ export const MessageBubble = memo(function MessageBubble({
   voiceUxEnabled,
   playingMessageId,
   onPlayVoice,
+  onQuote,
 }: {
   message: GroupState["messages"][number];
   members: Member[];
@@ -33,11 +35,14 @@ export const MessageBubble = memo(function MessageBubble({
   voiceUxEnabled?: boolean;
   playingMessageId?: string | null;
   onPlayVoice?: (messageId: string, content: string) => void;
+  onQuote?: (message: GroupState["messages"][number], senderName: string) => void;
 }) {
   const sender = members.find((member) => member.id === message.senderMemberId);
   const run = runs.find((candidate) => candidate.outputMessageId === message.id);
   const own = Boolean(viewerMemberId) && message.senderMemberId === viewerMemberId;
   const responding = message.status === "streaming" || run?.status === "queued" || run?.status === "running";
+  const canStop = run?.status === "running" || run?.status === "queued";
+  const canRetry = Boolean(run && ["failed", "cancelled", "interrupted", "changes_requested"].includes(run.status));
   const hasContent = hasRenderableContent(message.content);
   const foldAgent = !own && hasContent;
   const [expanded, setExpanded] = useState(() => agentReplyDefaultOpen(responding));
@@ -63,9 +68,9 @@ export const MessageBubble = memo(function MessageBubble({
         : run?.status === "queued" ? "排队中" : "…"
     } />
   );
-  const showPlay = Boolean(voiceUxEnabled && hasContent && !responding && onPlayVoice);
+  const showSpeak = Boolean(voiceUxEnabled && hasContent && !responding && onPlayVoice);
   const playing = playingMessageId === message.id;
-  const [copied, setCopied] = useState(false);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const copyMessage = async () => {
     const text = message.content || "";
     try {
@@ -82,15 +87,31 @@ export const MessageBubble = memo(function MessageBubble({
       }
       document.body.removeChild(ta);
     }
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1400);
   };
+  const senderName = sender?.displayName ?? "已移除成员";
+  const items: ActionItem[] = [
+    { id: "copy", label: "复制", onSelect: () => void copyMessage() },
+    { id: "quote", label: "引用", onSelect: () => onQuote?.(message, senderName) },
+  ];
+  if (showSpeak) {
+    items.push({
+      id: "speak",
+      label: playing ? "播放中…" : "朗读",
+      disabled: playing,
+      onSelect: () => onPlayVoice?.(message.id, message.content),
+    });
+  }
+  if (canRetry && run) {
+    items.push({ id: "retry", label: "重试", onSelect: () => onRun(run, "retry") });
+  }
+  const openMenu = (x: number, y: number) => setMenu({ x, y });
+  const hold = useLongPress(openMenu);
   return (
     <article className={`message-row ${own ? "own" : ""} ${responding ? "is-responding" : ""}`}>
       <Avatar member={sender} responding={responding && !own} />
       <div className="message-content">
         <div className="message-meta">
-          <strong>{sender?.displayName ?? "已移除成员"}</strong>
+          <strong>{senderName}</strong>
           <span>{time(message.createdAt)}</span>
           {run && <Status status={run.status} />}
           {run?.phase && (run.status === "queued" || run.status === "running") && (
@@ -98,7 +119,14 @@ export const MessageBubble = memo(function MessageBubble({
           )}
           {run?.reviewStatus && <ReviewBadge reviewStatus={run.reviewStatus} />}
         </div>
-        <div className={`bubble ${message.status}${responding ? " streaming" : ""}${showPlay ? " has-play" : ""}`}>
+        <div
+          className={`bubble ${message.status}${responding ? " streaming" : ""}`}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            openMenu(event.clientX, event.clientY);
+          }}
+          {...hold}
+        >
           {foldAgent ? (
             <details
               className="agent-reply-fold"
@@ -111,32 +139,23 @@ export const MessageBubble = memo(function MessageBubble({
           ) : (
             body
           )}
-          {showPlay && (
+          {canStop && run && (
             <button
               type="button"
-              className={`bubble-play-btn${playing ? " playing" : ""}`}
-              title={playing ? "播放中…" : "朗读消息"}
-              disabled={playing}
-              onClick={() => onPlayVoice?.(message.id, message.content)}
+              className="bubble-stop"
+              onClick={(event) => {
+                event.stopPropagation();
+                onRun(run, "cancel");
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
             >
-              {playing ? "…" : "▶"}
+              停止
             </button>
-          )}
-        </div>
-        <div className="m-actions">
-          <button type="button" className="mini-btn" onClick={() => void copyMessage()}>{copied ? "已复制 ✓" : "复制"}</button>
-          {run && (
-            <span className="mini-sep" />
-          )}
-          {(run?.status === "running" || run?.status === "queued") && (
-            <button type="button" className="mini-btn" onClick={() => onRun(run, "cancel")}>停止</button>
-          )}
-          {run && ["failed", "cancelled", "interrupted", "changes_requested"].includes(run.status) && (
-            <button type="button" className="mini-btn" onClick={() => onRun(run, "retry")}>重试</button>
           )}
         </div>
         {run?.errorMessage && <p className="run-error">{run.errorMessage}</p>}
       </div>
+      {menu && <ContextActionMenu items={items} x={menu.x} y={menu.y} onClose={() => setMenu(null)} />}
     </article>
   );
 });
@@ -403,6 +422,7 @@ export function MemberRow({ member, group, runs, detecting, online, askMode, onA
   const busy = agentBusyLabel(counts);
   const responding = busy != null;
   const [queueOpen, setQueueOpen] = useState(false);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   useEffect(() => {
     if (!responding) setQueueOpen(false);
   }, [responding]);
@@ -411,15 +431,80 @@ export function MemberRow({ member, group, runs, detecting, online, askMode, onA
     member.runtimeStatus === "ready" ? "已就绪" : member.runtimeStatus === "unavailable" ? "不可用" : "待检测";
   const busyOrIdle = detecting ? "检测中…" : busy ?? idleRuntime;
   const statusText = member.kind === "agent"
-    ? `${member.adapter} · ${busyOrIdle}${member.keepAlive ? ` · 保活${member.warmStatus ? `(${member.warmStatus})` : ""}` : ""}`
+    ? `${member.adapter}${member.model ? ` · ${member.model}` : ""}`
     : member.kind === "chatbot"
-      ? `${member.adapter ?? "chatbot"} · ${member.model || "deepseek-v4-flash"} · ${member.apiKeySet ? "已配置 Key" : "缺 Key"}`
+      ? `${member.adapter ?? "chatbot"} · ${member.model || "deepseek-v4-flash"}`
       : member.invitePending
-        ? "链接中 · 等待接受邀请"
+        ? "邀请未接受"
         : member.roleDescription || "本地成员";
+  const stateLabel = member.kind === "user"
+    ? (online ? "在线" : member.invitePending ? "等待" : "离线")
+    : detecting ? "检测中" : busy ? "执行中" : idleRuntime;
+  const stateKind = detecting ? "" : busy ? "busy" : member.runtimeStatus === "unavailable" ? "bad" : online || member.runtimeStatus === "ready" ? "ok" : "";
   const rosterAction = memberRosterAction(member);
+  const items: ActionItem[] = [];
+  if (member.kind === "agent") {
+    items.push({
+      id: "detect",
+      label: detecting ? "检测中" : "检测",
+      disabled: Boolean(detecting),
+      onSelect: () => onDetect(member),
+    });
+  }
+  if ((member.kind === "agent" || member.kind === "chatbot") && !member.systemLocked) {
+    items.push({
+      id: "admin",
+      label: isAdmin
+        ? (group.groupKind === "chat" ? "撤销默认响应" : "撤销管理")
+        : (group.groupKind === "chat" ? "设为默认响应" : "设管理"),
+      onSelect: () => onAdmin(isAdmin ? null : member.id),
+    });
+  }
+  if (modelOptions.length > 0 && (member.kind === "agent" || member.kind === "chatbot") && !member.systemLocked) {
+    for (const model of modelOptions) {
+      items.push({
+        id: `model:${model}`,
+        label: member.model === model ? `模型 · ${model} ✓` : `切换为 ${model}`,
+        onSelect: () => onModel(member, model),
+      });
+    }
+  }
+  if (member.kind === "agent" && member.adapter === "dsh") {
+    items.push({ id: "dsh", label: "跳转 DSH Web", onSelect: () => onOpenDsh?.(member) });
+  }
+  if (member.invitePending) {
+    items.push({
+      id: "revoke-invite",
+      label: "撤销邀请",
+      danger: true,
+      onSelect: () => onRemove(member),
+    });
+  } else if (!member.systemLocked && member.id !== group.ownerMemberId) {
+    items.push({
+      id: "remove",
+      label: rosterAction === "delete" ? "删除" : "移除",
+      danger: true,
+      onSelect: () => onRemove(member),
+    });
+  }
+  if (items.length === 0) {
+    items.push({
+      id: "copy-name",
+      label: "复制名称",
+      onSelect: () => void navigator.clipboard.writeText(member.displayName),
+    });
+  }
+  const openMenu = (x: number, y: number) => setMenu({ x, y });
+  const hold = useLongPress(openMenu);
   return (
-    <div className={`member-row ${member.isActive ? "" : "inactive"} ${member.invitePending ? "invite-pending" : ""} ${responding ? "is-responding" : ""}`}>
+    <div
+      className={`member-row roster-row ${member.isActive ? "" : "inactive"} ${member.invitePending ? "invite-pending" : ""} ${responding ? "is-responding" : ""}`}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        openMenu(event.clientX, event.clientY);
+      }}
+      {...hold}
+    >
       <Avatar member={member} responding={responding} online={online} />
       <div className="member-details">
         <strong>
@@ -432,8 +517,6 @@ export function MemberRow({ member, group, runs, detecting, online, askMode, onA
           {member.kind === "chatbot" && <em className="admin-badge">机器人</em>}
             {member.systemLocked && <em className="admin-badge" title="平台锁定的自举 Agent，不可修改/移除">系统</em>}
           {member.invitePending && <em className="invite-badge">链接中</em>}
-          {online && <em className="online-badge">在线</em>}
-          {busy && <em className="responding-badge">{busy}</em>}
         </strong>
         <span>
           {member.kind === "agent" && busy ? (
@@ -461,46 +544,22 @@ export function MemberRow({ member, group, runs, detecting, online, askMode, onA
             ))}
           </ul>
         )}
-        {modelOptions.length > 0 && (member.kind === "agent" || member.kind === "chatbot") && (
-          <select
-            className="member-model-select"
-            value={member.model || modelOptions[0]}
-            onChange={(e) => onModel(member, e.target.value)}
-            title="切换模型"
-          >
-            {modelOptions.map((m) => <option key={m} value={m}>{m}</option>)}
-          </select>
-        )}
       </div>
-      <div className="member-actions">
-          {!member.systemLocked && (<>
-        {member.kind === "agent" && (
-          <button disabled={!!detecting} onClick={() => onDetect(member)}>{detecting ? "检测中" : "检测"}</button>
-        )}
-          {member.kind === "agent" && member.adapter === "dsh" && (
-            <button
-              onClick={() => onOpenDsh?.(member)}
-              title="在群聊内打开 DeepSeek Harness Web 界面（需在服务器启动 dsh web，默认 :3080）"
-            >
-              跳转 DSH Web
-            </button>
-          )}
-        {(member.kind === "agent" || member.kind === "chatbot") && (
-          <button onClick={() => onAdmin(isAdmin ? null : member.id)} title={group.groupKind === "chat" ? "未设置时无人默认回复；设置后无 @ 时由该成员兜底" : "群管理员（Agent 可保活）"}>
-            {isAdmin
-              ? (group.groupKind === "chat" ? "撤销默认响应" : "撤销")
-              : (group.groupKind === "chat" ? "设为默认响应" : "设管理")}
-          </button>
-        )}
-        {member.id !== group.ownerMemberId && (
-          <button className="danger" onClick={() => onRemove(member)}>
-            {rosterAction === "delete"
-              ? (member.invitePending ? "撤销邀请" : "删除")
-              : "移除"}
-          </button>
-        )}
-          </>)}
-      </div>
+      <div className={`m-state ${stateKind}`}>{stateLabel}</div>
+      <button
+        type="button"
+        className="member-more"
+        aria-label="成员操作"
+        onClick={(event) => {
+          event.stopPropagation();
+          const rect = event.currentTarget.getBoundingClientRect();
+          openMenu(rect.right, rect.bottom);
+        }}
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        ⋯
+      </button>
+      {menu && <ContextActionMenu items={items} x={menu.x} y={menu.y} onClose={() => setMenu(null)} />}
     </div>
   );
 }

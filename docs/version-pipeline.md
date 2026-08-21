@@ -136,9 +136,10 @@ status: active
 
 | 切片 | 内容 | 状态 |
 |---|---|---|
-| 贡献协议 | Base/Extend：`right-tab` / `right-dock` / `composer-tool` / `status` | 立项 |
-| 设置迁右栏 | 基线四页签 + 中栏头图标簇取消 | 立项 |
-| 七主题 | 六套成戏 + `minimal` 极简 | 立项 |
+| 贡献协议 | Base/Extend：`right-tab` / `right-dock` / `composer-tool` / `status` / `message-action` | ✅ 代码 |
+| 设置迁右栏 | 基线四页签 + 中栏头图标簇取消 | ✅ 代码 |
+| 对话/成员 | 微信手感：长按菜单、引用前缀、通讯录成员行 | ✅ 代码 |
+| 七主题 | 六套成戏 + `minimal` 极简 | ✅ 代码 |
 | 发版 | 灰度 §F → tag `v2.1.0` →（批）promote | 未开始 |
 
 ---

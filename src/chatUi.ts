@@ -23,6 +23,19 @@ export function previewAgentReply(text: string, maxLen = 48): string {
 }
 
 /** Prefer final channel text; fall back to plain content. */
+/** Quote is a composer prefix this release (no schema / quoteMessageId). */
+export function formatQuotePrefix(author: string, excerpt: string, maxLen = 80): string {
+  const one = excerpt.replace(/\s+/g, " ").trim().slice(0, maxLen);
+  const clipped = excerpt.replace(/\s+/g, " ").trim().length > maxLen ? `${one}…` : one;
+  return `「引用 ${author}：${clipped}」\n`;
+}
+
+/** Approximate first unread row when only unreadCount is known. */
+export function firstUnreadIndex(messageCount: number, unreadCount: number): number {
+  if (unreadCount <= 0 || messageCount <= 0) return -1;
+  return Math.max(0, messageCount - unreadCount);
+}
+
 export function extractReplyPreview(content: string, maxLen = 48): string {
   try {
     const parsed = JSON.parse(content) as { parts?: Array<{ channel?: string; text?: string }> };

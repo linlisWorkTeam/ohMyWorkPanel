@@ -1,8 +1,8 @@
 ---
 date: 2026-08-22
 topic: workpanel-v2.1-chrome-extend
-status: draft-for-review
-decider: pending user review
+status: implemented
+decider: user (2026-08-22 plan)
 ---
 
 # 设计：WorkPanel v2.1.0 前台壳层扩展 + 七主题成戏
