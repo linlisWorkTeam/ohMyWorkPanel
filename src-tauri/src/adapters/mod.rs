@@ -41,6 +41,15 @@ pub enum AdapterKind {
     Dsh,
 }
 
+/// 适配器能力描述（轻量注册表条目）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AdapterDescriptor {
+    pub key: &'static str,
+    pub label: &'static str,
+    pub needs_member_api_key: bool,
+    pub spawnable: bool,
+}
+
 impl AdapterKind {
     pub fn parse(s: &str) -> Result<Self, String> {
         match s {
@@ -64,6 +73,36 @@ impl AdapterKind {
             Self::OpenClaw => "openclaw",
             Self::Cursor => "cursor",
             Self::Dsh => "dsh",
+        }
+    }
+
+    /// 全部适配器（轻量注册表：新增适配器只需在此登记并在 `descriptor`/`parse` 补一行）。
+    pub const ALL: [AdapterKind; 7] = [
+        Self::Mock,
+        Self::Codex,
+        Self::ClaudeCode,
+        Self::OpenCode,
+        Self::OpenClaw,
+        Self::Cursor,
+        Self::Dsh,
+    ];
+
+    /// 能力描述（key / 展示名 / 是否需要成员级 API key / 是否可 spawn）。
+    pub fn descriptor(self) -> AdapterDescriptor {
+        let label = match self {
+            Self::Mock => "模拟 Agent",
+            Self::Codex => "Codex CLI",
+            Self::ClaudeCode => "Claude Code",
+            Self::OpenCode => "OpenCode",
+            Self::OpenClaw => "OpenClaw",
+            Self::Cursor => "Cursor CLI",
+            Self::Dsh => "DeepSeek Harness",
+        };
+        AdapterDescriptor {
+            key: self.as_str(),
+            label,
+            needs_member_api_key: false, // 当前 7 个 CLI 适配器均由自身 env/auth 文件取密钥
+            spawnable: !self.candidate_executables().is_empty(),
         }
     }
 
@@ -742,5 +781,21 @@ mod tests {
         );
         assert!(msg.contains("401"));
         assert!(!msg.contains("Reading additional input"));
+    }
+
+    #[test]
+    fn adapter_registry_all_parse_back_and_describe() {
+        // 轻量注册表：ALL 全量、parse/as_str 双射、descriptor 非空。
+        assert_eq!(AdapterKind::ALL.len(), 7, "新增适配器需同步 ALL/parse/descriptor");
+        let mut seen = std::collections::HashSet::new();
+        for kind in AdapterKind::ALL {
+            let d = kind.descriptor();
+            assert_eq!(d.key, kind.as_str());
+            assert!(!d.label.is_empty());
+            assert!(seen.insert(d.key), "注册表 key 重复: {}", d.key);
+            assert_eq!(AdapterKind::parse(d.key).unwrap(), kind);
+            assert_eq!(d.spawnable, !kind.candidate_executables().is_empty());
+            assert!(!d.needs_member_api_key, "{} 不应需要成员级 key（当前 CLI 适配器均自取密钥）", d.key);
+        }
     }
 }
