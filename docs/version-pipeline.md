@@ -130,6 +130,17 @@ status: active
 | Cursor 包 | [`docs/releases/v2.0.0/`](releases/v2.0.0/) 脱敏 bundle + `scripts/pack-cursor-agent.sh` | ✅ 本阶段 |
 | 发布 | git tag `v2.0.0`；灰度后需人批准才能 promote | 本阶段 |
 
+### 阶段 7 — **v2.1.0（下一站，已立项）** 前台壳层扩展 + 七主题
+
+> 未打 tag。与 HEAD 白屏修复（`032d4f9`）合并发一个 release。Spec：[`specs/2026-08-22-workpanel-v2.1-chrome-extend-design.md`](superpowers/specs/2026-08-22-workpanel-v2.1-chrome-extend-design.md)；示意图 [`ui-v2.1-shell.html`](ui-v2.1-shell.html)。
+
+| 切片 | 内容 | 状态 |
+|---|---|---|
+| 贡献协议 | Base/Extend：`right-tab` / `right-dock` / `composer-tool` / `status` | 立项 |
+| 设置迁右栏 | 基线四页签 + 中栏头图标簇取消 | 立项 |
+| 七主题 | 六套成戏 + `minimal` 极简 | 立项 |
+| 发版 | 灰度 §F → tag `v2.1.0` →（批）promote | 未开始 |
+
 ---
 
 ## 锁定的产品方向（勿漂移）
@@ -162,7 +173,7 @@ status: active
 1. **交接运行时桥（TOP1 / 轨道 A）**：Context Seams — epitaph 摘要注入 + Logs 记账（本切片）；全文 epitaph / 新事件表 / Wave 闭环不做。
 2. **V1.3.0 扩展宿主 EH**：S0–S5 代码已齐；剩余灰度回归，不与本切片抢并发。
 3. **V1.3.0 工作流已在生产**；后续增量仍灰度 →（批）promote。Wave 闭环为 TOP2，本切片之后再立项。
-4. **Git tag**：`v2.0.0` 已打（2026-08-21）；下一小版本待立项后再打。
+4. **Git tag**：`v2.0.0` 已打（2026-08-21）；**下一 tag 立项为 `v2.1.0`**（壳层扩展 + 七主题，见阶段 7）。
 5. **聊天群 D1（若拍板）** / 质量 E Phase 2 / D3：不与宿主收尾抢并发。
 6. **稳态债（B）**：每次增量仍灰度 → 批准 promote；勿中断 stop→start。
 7. **轨道 G 自举运行时（新占位）**：设计 Spec `2026-08-16-dsh-self-bootstrap-runtime.md` + 群聊治理层 `2026-08-16-group-chat-governance-plane.md`；P0（dsh headless 适配器 + DSH Web 嵌入）✅；P1 ACP 会话回放待立项（先立群聊治理层）。**小组件定位**：见 `specs/2026-08-16-widget-capability-placement.md`（widget=页签/能力，不单独建群；仅治理型项目群例外）。

@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="cyberpunk">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark light" />
+<title>WorkPanel v2.1 壳层示意图 — Base / Extend / 七主题</title>
+<style>
+:root {
+  --rail: 56px;
+  --left: 220px;
+  --right: 320px;
+  --dock: 260px;
+  --font: "IBM Plex Sans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", "Cascadia Code", Consolas, monospace;
+  --r: 10px;
+  --scan: 0;
+  --grain: 0;
+  --breath: 0;
+  --radius-mode: 10px;
+}
+[data-theme="cyberpunk"] {
+  --bg:#0a0014; --surf:#130a22; --elev:#1c1132; --ink:#f2ecff; --dim:#a791c8;
+  --acc:#00f0ff; --acc2:#ff2bd6; --line:rgba(0,240,255,.22); --user:rgba(0,240,255,.16);
+  color-scheme:dark; --scan:.07; --grain:0; --radius-mode:10px;
+}
+[data-theme="industrial"] {
+  --bg:#1a1c20; --surf:#22252b; --elev:#2a2e36; --ink:#eef3f7; --dim:#9fb2c1;
+  --acc:#f5a623; --acc2:#ff6a00; --line:rgba(245,166,35,.35); --user:rgba(255,106,0,.18);
+  color-scheme:dark; --scan:0; --grain:0; --radius-mode:4px;
+}
+[data-theme="atlas"] {
+  --bg:#e7eef5; --surf:#f2f7fb; --elev:#fff; --ink:#0b1f33; --dim:#5b7a94;
+  --acc:#1f9bb8; --acc2:#0b1f33; --line:rgba(11,31,51,.14); --user:rgba(31,155,184,.14);
+  color-scheme:light; --scan:0; --radius-mode:8px;
+}
+[data-theme="forge"] {
+  --bg:#141114; --surf:#1c1818; --elev:#282019; --ink:#f5ead9; --dim:#b49c82;
+  --acc:#e08a3c; --acc2:#7a3b12; --line:rgba(224,138,60,.35); --user:rgba(224,138,60,.18);
+  color-scheme:dark; --scan:0; --radius-mode:8px;
+}
+[data-theme="moss"] {
+  --bg:#e8efe6; --surf:#f2f7ef; --elev:#fff; --ink:#1f3a2e; --dim:#56705f;
+  --acc:#6a8f4e; --acc2:#1f3a2e; --line:rgba(31,58,46,.14); --user:rgba(106,143,78,.16);
+  color-scheme:light; --scan:0; --breath:.02; --radius-mode:14px;
+}
+[data-theme="noir"] {
+  --bg:#0c0d10; --surf:#131417; --elev:#1a1b1f; --ink:#f2ebe0; --dim:#9a9aa2;
+  --acc:#d94b3d; --acc2:#f2ebe0; --line:rgba(217,75,61,.4); --user:rgba(242,235,224,.1);
+  color-scheme:dark; --scan:0; --grain:.04; --radius-mode:2px;
+}
+[data-theme="minimal"] {
+  --bg:#f4f5f7; --surf:#fff; --elev:#fff; --ink:#17181a; --dim:#5c5f66;
+  --acc:#17181a; --acc2:#17181a; --line:rgba(23,24,26,.14); --user:rgba(23,24,26,.06);
+  color-scheme:light; --scan:0; --grain:0; --breath:0; --radius-mode:4px;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--ink);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100%;
+}
+body::before {
+  content: "";
+  pointer-events: none;
+  position: fixed; inset: 0;
+  z-index: 5;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0 3px,
+    rgba(0,0,0,.35) 3px 4px
+  );
+  opacity: var(--scan);
+  mix-blend-mode: overlay;
+}
+.note {
+  padding: 10px 18px;
+  background: var(--surf);
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--dim);
+  display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center;
+}
+.note b { color: var(--ink); font-weight: 600; }
+.themes { display: flex; flex-wrap: wrap; gap: 6px; }
+.themes button {
+  font: inherit; font-size: 12px;
+  border: 1px solid var(--line);
+  background: var(--elev);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.themes button.on { outline: 2px solid var(--acc); }
+.shell {
+  display: grid;
+  grid-template-columns: var(--rail) var(--left) minmax(0,1fr) var(--right);
+  min-height: 0;
+}
+.shell.docked { grid-template-columns: var(--rail) var(--left) minmax(0,1fr) minmax(200px,1fr) var(--dock); }
+.rail, .left, .mid, .right, .dock {
+  border-right: 1px solid var(--line);
+  background: var(--surf);
+  min-height: 0;
+}
+.rail { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 12px 0; font-size: 16px; }
+.rail span { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; border: 1px solid var(--line); }
+.left { padding: 14px; }
+.brand { font-size: 13px; letter-spacing: .04em; margin-bottom: 14px; }
+.brand em { color: var(--acc); font-style: normal; }
+.g { padding: 8px 10px; border-radius: var(--radius-mode); margin-bottom: 6px; font-size: 13px; }
+.g.on { background: color-mix(in srgb, var(--acc) 16%, transparent); outline: 1px solid var(--line); }
+.mid { display: flex; flex-direction: column; background: var(--bg); }
+.head { padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: baseline; }
+.head h1 { margin: 0; font-size: 16px; font-weight: 600; }
+.head small { color: var(--dim); }
+.wave { margin: 0 16px; margin-top: 10px; padding: 8px 12px; border: 1px dashed var(--line); border-radius: var(--radius-mode); font-size: 12px; color: var(--dim); }
+.chat { flex: 1; padding: 16px; overflow: auto; }
+.bub { max-width: 72%; padding: 10px 12px; border-radius: var(--radius-mode); margin-bottom: 10px; font-size: 13px; line-height: 1.45; background: var(--elev); border: 1px solid var(--line); }
+.bub.me { margin-left: auto; background: var(--user); }
+.composer { margin: 12px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius-mode); background: var(--elev); }
+.tools { display: flex; gap: 8px; font-size: 12px; color: var(--dim); margin-bottom: 8px; }
+.tools i { font-style: normal; border: 1px solid var(--line); padding: 2px 8px; border-radius: 999px; }
+.composer textarea { width: 100%; min-height: 52px; border: 0; background: transparent; color: var(--ink); font: inherit; resize: none; }
+.send { margin-top: 8px; float: right; background: var(--acc); color: var(--bg); border: 0; border-radius: 8px; padding: 6px 14px; font: inherit; font-weight: 600; }
+[data-theme="minimal"] .send, [data-theme="atlas"] .send, [data-theme="moss"] .send { color: #fff; }
+[data-theme="minimal"] .send { background: var(--ink); color: #fff; }
+.right, .dock { display: flex; flex-direction: column; background: var(--surf); }
+.tabs { display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid var(--line); }
+.tabs button {
+  flex: 1; font: inherit; font-size: 12px; padding: 10px 6px;
+  border: 0; background: transparent; color: var(--dim); cursor: pointer;
+}
+.tabs button.on { color: var(--ink); box-shadow: inset 0 -2px 0 var(--acc); }
+.pane { padding: 12px; font-size: 13px; overflow: auto; flex: 1; }
+.member { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.stage {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+}
+.card {
+  border: 1px solid var(--line); border-radius: var(--radius-mode); padding: 10px; cursor: pointer;
+  background: var(--elev); font-size: 12px;
+}
+.card.on { outline: 2px solid var(--acc); }
+.card .sw { height: 28px; border-radius: 6px; margin-bottom: 6px; }
+.dock { border-right: 0; border-left: 1px dashed var(--line); }
+.dock h3 { margin: 0; padding: 12px; font-size: 12px; font-weight: 600; border-bottom: 1px solid var(--line); }
+.callout { font-size: 11px; color: var(--acc); letter-spacing: .04em; text-transform: uppercase; margin-bottom: 8px; }
+.foot { padding: 8px 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--dim); background: var(--surf); }
+.hidden { display: none !important; }
+@media (prefers-reduced-motion: reduce) { body::before { display: none; } }
+</style>
+</head>
+<body>
+<header class="note">
+  <span><b>v2.1 示意图</b>（不是运行时）· 切主题看材质差 · 点「设置」· 勾选拆出 Live 看 right-dock</span>
+  <div class="themes" id="themes"></div>
+  <label style="font-size:12px"><input type="checkbox" id="dock" /> 拆出 Live（right-dock）</label>
+</header>
+<div class="shell" id="shell">
+  <nav class="rail" aria-label="控制轨">
+    <span>L</span><span>◉</span><span>◎</span><span>◇</span>
+  </nav>
+  <aside class="left">
+    <div class="brand">LINLI'S <em>Workpanel</em></div>
+    <div class="callout">Base · 群导航</div>
+    <div class="g on">灰度测试</div>
+    <div class="g">FlowAnalysis</div>
+    <div class="g">AI 酒馆 · 聊</div>
+  </aside>
+  <main class="mid">
+    <div class="head">
+      <div>
+        <h1>灰度测试 <small>project</small></h1>
+        <small>状态簇已迁走 · 中栏只留群身份</small>
+      </div>
+    </div>
+    <div class="wave">WAVE · 尚未建立 Wave · 点此到版本页</div>
+    <div class="chat">
+      <div class="bub me">把设置和主题都放进右栏，头上不要一排图标。</div>
+      <div class="bub">收到。右栏基线四页签：成员 / 队列 / 详情 / 设置。Extend 可 dock 第二列。</div>
+    </div>
+    <div class="composer">
+      <div class="tools">
+        <i>@ 提及 · composer-tool</i>
+        <i>/ 命令 · 仅 board/approve/wave</i>
+        <i>🖼 OCR</i>
+      </div>
+      <textarea placeholder="输入消息…"></textarea>
+      <button class="send" type="button">发送</button>
+      <div style="clear:both"></div>
+    </div>
+  </main>
+  <aside class="right">
+    <div class="tabs" id="tabs"></div>
+    <div class="pane" id="pane"></div>
+  </aside>
+  <aside class="dock hidden" id="dockPane">
+    <h3>Extend · Live（right-dock）</h3>
+    <div class="pane">
+      <div class="callout">并排第二列</div>
+      <p style="margin:0;color:var(--dim);font-size:13px;line-height:1.5">PanelLive / Cordis 组件挂这里。默认是页签；用户点「拆出」才出现本列。几何只存本机。</p>
+    </div>
+  </aside>
+</div>
+<footer class="foot">七主题平级 · 极简 = 无扫描无呼吸 · 打开本文件即可预览 · spec：docs/superpowers/specs/2026-08-22-workpanel-v2.1-chrome-extend-design.md</footer>
+<script>
+const THEMES = [
+  ["cyberpunk","Cyberpunk"],
+  ["industrial","Industrial"],
+  ["atlas","Atlas"],
+  ["forge","Forge"],
+  ["moss","Moss"],
+  ["noir","Noir"],
+  ["minimal","极简"],
+];
+const TABS = [
+  ["members","成员","成员列表仍在。检测 / 设管理 / 移除。"],
+  ["queue","队列","执行中 · 排队。Base 页签。"],
+  ["details","详情","版本 / 经验 / 日志。群设置已搬走。"],
+  ["settings","设置",""],
+  ["live","Live","Extend right-tab。可拆成 dock。"],
+];
+const root = document.documentElement;
+const themesEl = document.getElementById("themes");
+THEMES.forEach(([id, name]) => {
+  const b = document.createElement("button");
+  b.textContent = name;
+  b.onclick = () => {
+    root.setAttribute("data-theme", id);
+    [...themesEl.children].forEach((x) => x.classList.toggle("on", x === b));
+  };
+  if (id === "cyberpunk") b.classList.add("on");
+  themesEl.appendChild(b);
+});
+const swatches = {
+  cyberpunk: "linear-gradient(135deg,#0a0014,#ff2bd6 50%,#00f0ff)",
+  industrial: "linear-gradient(135deg,#1a1c20,#f5a623)",
+  atlas: "linear-gradient(135deg,#e7eef5,#1f9bb8)",
+  forge: "linear-gradient(135deg,#141114,#e08a3c)",
+  moss: "linear-gradient(135deg,#e8efe6,#6a8f4e)",
+  noir: "linear-gradient(135deg,#0c0d10,#d94b3d)",
+  minimal: "linear-gradient(135deg,#f4f5f7,#17181a)",
+};
+function settingsHtml() {
+  return `<div class="callout">core.settings</div>
+    <p style="margin:0 0 10px;color:var(--dim)">外观 · 运行 · 本群（原中栏头 🎨⚙ 与左栏底运行设置并入）</p>
+    <div class="stage">${THEMES.map(([id, name]) =>
+      `<div class="card ${root.getAttribute("data-theme")===id?"on":""}" data-id="${id}">
+        <div class="sw" style="background:${swatches[id]}"></div><b>${name}</b>
+      </div>`).join("")}</div>`;
+}
+const tabsEl = document.getElementById("tabs");
+const pane = document.getElementById("pane");
+let tab = "settings";
+function renderTabs() {
+  tabsEl.innerHTML = "";
+  TABS.forEach(([id, name, body]) => {
+    const b = document.createElement("button");
+    b.textContent = name;
+    b.className = id === tab ? "on" : "";
+    b.onclick = () => { tab = id; renderTabs(); };
+    tabsEl.appendChild(b);
+  });
+  const cur = TABS.find((t) => t[0] === tab);
+  pane.innerHTML = tab === "settings" ? settingsHtml() : `<div class="callout">${tab}</div><p style="color:var(--dim);margin:0">${cur[2]}</p>
+    ${tab==="members"?'<div class="member"><span>root · 群主</span><span>在线</span></div><div class="member"><span>Cursor Agent</span><span>空闲</span></div>':""}`;
+  pane.querySelectorAll(".card").forEach((c) => {
+    c.addEventListener("click", () => {
+      root.setAttribute("data-theme", c.dataset.id);
+      [...themesEl.children].forEach((x, i) => x.classList.toggle("on", THEMES[i][0] === c.dataset.id));
+      renderTabs();
+    });
+  });
+}
+renderTabs();
+document.getElementById("dock").onchange = (e) => {
+  document.getElementById("shell").classList.toggle("docked", e.target.checked);
+  document.getElementById("dockPane").classList.toggle("hidden", !e.target.checked);
+};
+</script>
+</body>
+</html>
