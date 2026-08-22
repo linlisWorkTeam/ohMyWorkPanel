@@ -1,5 +1,7 @@
 # How-to：本地运行项目
 
+[简体中文](run-locally.md) | [English](run-locally.en.md)
+
 ## 浏览器开发模式
 
 在仓库根目录执行：

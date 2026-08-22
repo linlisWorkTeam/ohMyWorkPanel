@@ -1,5 +1,7 @@
 # How-to：运行测试
 
+[简体中文](run-tests.md) | [English](run-tests.en.md)
+
 ## 前端测试
 
 ```bash
