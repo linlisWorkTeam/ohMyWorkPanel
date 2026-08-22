@@ -28,6 +28,12 @@
 
 ## 2. 启动 ohMyWorkPanel
 
+### 方式 0：Windows 安装包（推荐）
+
+普通 Windows 用户无需安装 Node.js、Rust 或 pnpm。打开 [v2.1.1 Release](https://github.com/linlisWorkTeam/ohMyWorkPanel/releases/tag/v2.1.1)，下载并运行 `ohMyWorkPanel_2.1.1_x64-setup.exe`。
+
+该安装包包含桌面应用、前端资源、Rust 运行依赖和 WebView2 离线安装器。外部 Agent CLI 不会被打包，使用 Codex、Claude Code、OpenCode、OpenClaw 或 Cursor 前，请在执行任务的机器上单独安装并登录对应 CLI。
+
 ### 方式 A：完整 Web 服务（推荐）
 
 此方式包含 Rust 后端、SQLite、登录、群组和 WebSocket，是本教程后续截图对应的运行方式。

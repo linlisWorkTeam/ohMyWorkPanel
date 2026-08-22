@@ -28,6 +28,12 @@ Real Agents are optional. Without an external CLI, use the Mock adapter to verif
 
 ## 2. Start ohMyWorkPanel
 
+### Option 0: Windows installer (recommended)
+
+Windows users do not need to install Node.js, Rust, or pnpm. Open the [v2.1.1 Release](https://github.com/linlisWorkTeam/ohMyWorkPanel/releases/tag/v2.1.1), download `ohMyWorkPanel_2.1.1_x64-setup.exe`, and run it.
+
+The installer includes the desktop app, frontend assets, Rust runtime dependencies, and the WebView2 offline installer. External Agent CLIs are not bundled. Install and authenticate Codex, Claude Code, OpenCode, OpenClaw, or Cursor separately on the machine that executes tasks.
+
 ### Option A: Complete Web service (recommended)
 
 This option includes the Rust backend, SQLite, authentication, groups, and WebSocket. It is the mode used for the screenshots in the rest of this tutorial.

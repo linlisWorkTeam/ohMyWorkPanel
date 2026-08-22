@@ -40,6 +40,12 @@ For complete commands, configuration, and Web API details, see the [`docs/`](doc
 
 ## Quick Start
 
+### Windows installer (recommended for end users)
+
+If you do not want to install Node.js, Rust, or pnpm, download `ohMyWorkPanel_2.1.1_x64-setup.exe` from the [v2.1.1 Release](https://github.com/linlisWorkTeam/ohMyWorkPanel/releases/tag/v2.1.1) and run it.
+
+The installer includes the desktop app, frontend assets, Rust runtime dependencies, and the WebView2 offline installer. External Agent CLIs such as Codex, Claude Code, OpenCode, OpenClaw, and Cursor, along with their login credentials, are not bundled; install and authenticate them separately on the machine that executes tasks.
+
 ### Prerequisites
 
 Browser development and the Web service build require:
