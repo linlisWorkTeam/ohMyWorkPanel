@@ -171,6 +171,12 @@ body::before {
     --left: 0;
     --right: 0;
   }
+  /* The side panels become fixed drawers below 1080px. Keep the main column
+     in the third grid track instead of auto-placing it into the collapsed
+     left track. */
+  .wp-mid {
+    grid-column: 3;
+  }
   .wp-rail {
     z-index: 31;
   }

@@ -27,6 +27,7 @@ describe("Shell chrome", () => {
     const chunk = css.slice(idx, idx + 1600);
     expect(chunk).toMatch(/\.wp-shell\s*\{[^}]*--left:\s*0/);
     expect(chunk).toMatch(/\.wp-shell\s*\{[^}]*--right:\s*0/);
+    expect(chunk).toMatch(/\.wp-mid\s*\{[^}]*grid-column:\s*3/);
     expect(chunk).toMatch(/\.wp-left\s*\{[^}]*position:\s*fixed/);
     expect(chunk).toMatch(/\.wp-right\s*\{[^}]*position:\s*fixed/);
   });
