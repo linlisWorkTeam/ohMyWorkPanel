@@ -40,6 +40,12 @@ ohMyWorkPanel 提供 Web 和 Tauri 桌面两种使用方式，用群组管理成
 
 ## 快速上手
 
+### Windows 安装包（推荐普通用户）
+
+不想安装 Node.js、Rust 或 pnpm 时，直接从 [v2.1.1 Release](https://github.com/linlisWorkTeam/ohMyWorkPanel/releases/tag/v2.1.1) 下载 `ohMyWorkPanel_2.1.1_x64-setup.exe` 并运行即可。
+
+安装包包含桌面应用、前端资源、Rust 运行依赖和 WebView2 离线安装器。Codex、Claude Code、OpenCode、OpenClaw、Cursor 等外部 Agent CLI 以及登录凭据不会随包提供，需要在执行任务的机器上单独安装和登录。
+
 ### 环境依赖
 
 浏览器开发模式和 Web 服务构建需要：
