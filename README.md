@@ -2,6 +2,8 @@
 
 本地优先的多 Agent 协作面板：把群聊、工作区和 Agent 任务放在同一个界面中。
 
+[简体中文](README.md) | [English](README.en.md)
+
 [![Build](https://img.shields.io/badge/build-not_configured-lightgrey)](#开发者指南)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 

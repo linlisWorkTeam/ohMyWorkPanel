@@ -1,9 +1,11 @@
 # ohMyWorkPanel 文档
 
+[简体中文](index.md) | [English](index.en.md)
+
 本目录面向项目使用者和贡献者，按 Diátaxis 的四类文档组织：
 
-- [Tutorials 教程](tutorials/quickstart.md)：从零完成一次可运行的入门流程。
-- [How-to 操作指南](how-to/README.md)：按任务解决常见问题。
+- [Tutorials 教程](tutorials/quickstart.md) / [English](tutorials/quickstart.en.md)：从零完成一次可运行的入门流程。
+- [How-to 操作指南](how-to/README.md) / [English](how-to/README.en.md)：按任务解决常见问题。
 - [Explanation 概念解释](explanation/roadmap.md)：解释方向、范围和决策背景。
 - [Reference 参考手册](reference/README.md)：查阅命令、配置和 API 入口。
 
@@ -24,5 +26,6 @@
 - [版本流水线](version-pipeline.md)
 - [Epitaph 交接索引](epitaph/README.md)
 - [设计与实施记录](superpowers/)
+- [文档多语言维护规范](i18n.md)
 
 <!-- TODO: 随用户文档完善，把仍有使用价值的专项文档补充到对应分类。 -->

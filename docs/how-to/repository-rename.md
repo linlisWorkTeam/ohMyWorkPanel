@@ -1,5 +1,7 @@
 # How-to：仓库改名后更新 ECS
 
+[简体中文](repository-rename.md) | [English](repository-rename.en.md)
+
 项目已从 `workPanel` 改名为 `ohMyWorkPanel`，新的仓库地址是：
 
 ```text
@@ -12,7 +14,7 @@ https://github.com/linlisWorkTeam/ohMyWorkPanel.git
 cd /AI/ohMyWorkPanel
 git remote set-url origin https://github.com/linlisWorkTeam/ohMyWorkPanel.git
 git fetch origin --prune
-git pull --ff-only origin master
+git pull --ff-only origin main
 ```
 
 如果 ECS 仍使用旧目录 `/AI/LinlisWorkPanel`，请先由运维确认备份、服务停机窗口和数据迁移方案，再迁移到 `/AI/ohMyWorkPanel`。不要直接删除旧目录或 SQLite 数据。
