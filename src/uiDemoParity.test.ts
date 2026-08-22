@@ -20,21 +20,21 @@ describe("ui-v2.1-shell.html chrome parity", () => {
   it("Shell has rail left mid and App mounts it", () => {
     expect(shell).toContain("wp-rail");
     expect(app).toContain("<Shell");
-    expect(registry).toContain('title: "??"');
+    expect(registry).toContain('title: "设置"');
   });
 
   it("bubbles are WeChat corners without fold or ellipsis", () => {
     expect(chat).not.toContain("agent-reply-fold");
     expect(furniture).not.toContain("agent-reply-fold");
-    expect(roster).not.toContain("?");
+    expect(roster).not.toContain("⋯");
     expect(tokens).toMatch(/\.wp-row\.me\s+\.wp-bub/);
   });
 
   it("registry exposes four right-tab titles", () => {
-    expect(registry).toContain('title: "??"');
-    expect(registry).toContain('title: "??"');
-    expect(registry).toContain('title: "??"');
-    expect(registry).toContain('title: "??"');
+    expect(registry).toContain('title: "成员"');
+    expect(registry).toContain('title: "队列"');
+    expect(registry).toContain('title: "详情"');
+    expect(registry).toContain('title: "设置"');
   });
 
   it("App mounts RightDockHost in the Shell right slot", () => {
@@ -46,9 +46,9 @@ describe("ui-v2.1-shell.html chrome parity", () => {
     expect(app).toMatch(/import\s*\{\s*Shell\s*\}\s*from\s*["']\.\/shell\/Shell["']/);
     expect(app).toContain("<Shell");
     expect(app).not.toContain('className="dsh-rail"');
-    expect(app).toContain("???? Wave");
-    expect(app).not.toContain('title="????"');
-    expect(app).not.toContain(">??<");
+    expect(app).toContain("尚未建立 Wave");
+    expect(app).not.toContain('title="外观主题"');
+    expect(app).not.toContain(">🎨<");
   });
 
   it("aliases --lp-bg-app to mock --bg", () => {
@@ -89,14 +89,14 @@ describe("ui-v2.1-shell.html chrome parity", () => {
   });
 
   it("does not put unused thumbs on the bubble action row", () => {
-    expect(furniture).not.toContain("??");
-    expect(furniture).not.toContain("??");
+    expect(furniture).not.toContain("👍");
+    expect(furniture).not.toContain("👎");
     expect(furniture).not.toContain("voteMessage");
   });
 
   it("moves member detect/admin/remove into the context menu", () => {
-    expect(furniture).toContain('label: detecting ? "???" : "??"');
-    expect(furniture).toContain("???");
+    expect(furniture).toContain('label: detecting ? "检测中" : "检测"');
+    expect(furniture).toContain("设管理");
     expect(furniture).not.toMatch(/<div className="member-actions">/);
   });
 
@@ -105,7 +105,7 @@ describe("ui-v2.1-shell.html chrome parity", () => {
     expect(chat).not.toContain("agent-reply-fold");
     expect(furniture).not.toContain("member-more");
     expect(roster).not.toContain("member-more");
-    expect(roster).not.toContain("?");
+    expect(roster).not.toContain("⋯");
   });
 
   it("settings theme cards are mock stage swatches", () => {

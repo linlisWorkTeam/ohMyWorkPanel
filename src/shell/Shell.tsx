@@ -31,12 +31,12 @@ export function Shell({
 }) {
   return (
     <div className={`wp-shell${leftOpen ? " is-left-open" : ""}`}>
-      <nav className="wp-rail" aria-label="???">
+      <nav className="wp-rail" aria-label="控制轨">
         <span className="wp-rail-logo">L</span>
-        <button type="button" className="wp-rail-btn" title="?????" onClick={onToggleLeft}>?</button>
-        <button type="button" className="wp-rail-btn" title="??" onClick={onOpenSettings}>?</button>
+        <button type="button" className="wp-rail-btn" title="展开群列表" onClick={onToggleLeft}>◉</button>
+        <button type="button" className="wp-rail-btn" title="设置" onClick={onOpenSettings}>◎</button>
         {showAgentConfig && (
-          <button type="button" className="wp-rail-btn" title="Agent ??" onClick={onOpenAgentConfig}>?</button>
+          <button type="button" className="wp-rail-btn" title="Agent 配置" onClick={onOpenAgentConfig}>◇</button>
         )}
       </nav>
       <aside className="wp-left">

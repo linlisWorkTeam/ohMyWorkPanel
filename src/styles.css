@@ -59,13 +59,13 @@
 .ocr-button:disabled { opacity:.4;cursor:not-allowed; }
 .ocr-button:hover:not(:disabled) { background:#edf2f8; }
 
-/* ?? Right Panel Tab Bar ?? */
+/* ── Right Panel Tab Bar ── */
 .pm-tab-bar { display:flex; gap:0; }
 .pm-tab-btn { border:0; background:transparent; color:#7a8798; font-size:12px; font-weight:600; padding:6px 10px 10px; border-bottom:2px solid transparent; cursor:pointer; transition:color .15s,border-color .15s; }
 .pm-tab-btn.active { color:#3b7fc4; border-bottom-color:#3b7fc4; }
 .pm-tab-btn:hover:not(.active) { color:#4f6074; }
 
-/* ?? PM Panel ?? */
+/* ── PM Panel ── */
 .pm-panel { display:flex; flex-direction:column; flex:1; min-height:0; }
 .pm-loading { display:grid;place-items:center;height:100%;color:#8490a1;font-size:12px;padding:30px; }
 .pm-empty { display:grid;place-items:center;gap:10px;padding:40px 18px;text-align:center;color:#768498;font-size:12px; }
@@ -109,7 +109,7 @@
 .feature-card.needs-bind { border-color:#ead9c4; }
 .pm-tasks-count { font-size:9px;color:#7f8d9e;background:#eef2f6;border-radius:7px;padding:1px 5px; }
 
-/* ?? Roadmap View ?? */
+/* ── Roadmap View ── */
 .roadmap-group { margin-bottom:12px; }
 .roadmap-group-title { font-size:11px;color:#5a6d82;margin:8px 0 6px;font-weight:700; letter-spacing:.02em; text-transform:uppercase; }
 .roadmap-card { background:linear-gradient(180deg,#fff,#f8fafc);border:1px solid #e4ebf2;border-radius:10px;padding:10px 11px;margin-bottom:7px; box-shadow:0 1px 0 #fff inset; transition:border-color .15s ease, box-shadow .15s ease; }
@@ -120,7 +120,7 @@
 .roadmap-card-meta { display:flex;align-items:center;gap:8px;font-size:10px;color:#76869a;margin:4px 0; flex-wrap:wrap; }
 .roadmap-card-actions { display:flex;gap:8px;justify-content:flex-end;align-items:center;margin-top:6px;padding-top:6px;border-top:1px solid #eef2f6; }
 
-/* ?? Kanban Board ?? */
+/* ── Kanban Board ── */
 .kanban-view { display:flex;flex-direction:column;height:100%; }
 .kanban-board { display:flex;gap:10px;overflow-x:auto;flex:1;padding:2px 2px 8px;min-height:0; }
 .kanban-col { min-width:220px;max-width:260px;flex:1;background:linear-gradient(180deg,#f5f8fb,#eef2f7);border:1px solid #e3e9f0;border-radius:12px;padding:10px;display:flex;flex-direction:column; }
@@ -145,7 +145,7 @@
 .feature-task-add { display:flex;gap:4px;margin-top:4px; }
 .feature-card-actions { display:flex;gap:6px;justify-content:flex-end;margin-top:5px;padding-top:4px;border-top:1px solid #f0f3f7; }
 
-/* ?? Experience Panel ?? */
+/* ── Experience Panel ── */
 .exp-toolbar { display:flex; gap:5px; align-items:center; margin-bottom:8px; }
 .exp-search { flex:1; min-width:0; }
 .exp-card { background:#fff;border:1px solid #e9eef4;border-radius:7px;padding:8px 9px;margin-bottom:5px; }
@@ -155,7 +155,7 @@
 .exp-card-meta { display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:4px; }
 .exp-card-actions { margin-left:auto; }
 
-/* ?? Logs Panel ?? */
+/* ── Logs Panel ── */
 .log-row { padding:5px 4px;border-bottom:1px solid #f0f3f7; }
 .log-row-head { display:flex;align-items:center;gap:6px;margin-bottom:2px; }
 .log-badge { border-radius:4px;padding:0 5px;font-size:9px;font-weight:700;line-height:15px; }
@@ -170,7 +170,7 @@
 .log-clear { color:#ba615b; }
 .log-more { width:100%;margin-top:8px; }
 
-/* ?? Review Status ?? */
+/* ── Review Status ── */
 .status.awaiting_review { background:#fdf3e3;color:#cf8a2c; }
 .status.changes_requested { background:#f3e8ff;color:#7e57c2; }
 .review-badge { border-radius:9px;padding:1px 6px;font-size:10px;font-weight:600; }
@@ -178,7 +178,7 @@
 .review-badge.approved { background:#e7f5ec;color:#278253; }
 .review-badge.rejected { background:#fff0ef;color:#c4544c; }
 
-/* ?? Agent responding animation ?? */
+/* ── Agent responding animation ── */
 @keyframes typing-bounce {
   0%, 80%, 100% { transform: translateY(0); opacity: .35; }
   40% { transform: translateY(-3px); opacity: 1; }
@@ -220,8 +220,8 @@
   list-style:none; margin-bottom:6px;
 }
 .agent-reply-fold > summary::-webkit-details-marker { display:none; }
-.agent-reply-fold > summary::before { content:"? "; color:#8a9bb0; }
-.agent-reply-fold[open] > summary::before { content:"? "; }
+.agent-reply-fold > summary::before { content:"▸ "; color:#8a9bb0; }
+.agent-reply-fold[open] > summary::before { content:"▾ "; }
 .part-thinking {
   border:1px solid #e2e8f0; border-radius:8px; padding:6px 8px; background:#f8fafc; color:#64748b; font-size:12px;
 }
@@ -318,7 +318,7 @@
 .path-confirm code { font-size:12px; color:#4a5a6e; word-break:break-all; }
 .path-loading { font-size:12px; color:#8a96a8; }
 
-/* Project workflow ? atlas control surface */
+/* Project workflow — atlas control surface */
 .project-workflow {
   --wf-ink: #1c2838;
   --wf-muted: #6b7a8d;
@@ -522,7 +522,7 @@
 .send-key-toggle { font-size:11px; padding:4px 8px; }
 .member-model-select { margin-top:4px; max-width:100%; font-size:11px; }
 
-/* === Agent ???????/??/???=== */
+/* === Agent 配置（一键导入/导出/自检）=== */
 .agent-config-view .wf-section { background:var(--wf-panel); }
 .room-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px; }
 .room-card {

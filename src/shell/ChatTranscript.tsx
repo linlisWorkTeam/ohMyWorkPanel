@@ -17,15 +17,15 @@ export type ChatTranscriptProps = {
   onQuote?: (message: GroupState["messages"][number], senderName: string) => void;
 };
 
-/** `[??]`, `[?? 3?]`, `3?`, `?? 3`. */
+/** `[语音]`, `[语音 3″]`, `3″`, `🎤 3`. */
 function looksLikeVoicePlaceholder(content: string): boolean {
   const t = content.trim();
   if (!t) return false;
-  return /^\[??[^\]]*\]$/.test(t) || /^\d+\s*[?"]$/.test(t) || /^??\s*\d/.test(t);
+  return /^\[语音[^\]]*\]$/.test(t) || /^\d+\s*[″"]$/.test(t) || /^🎤\s*\d/.test(t);
 }
 
 function voiceSeconds(content: string): number {
-  const match = content.match(/(\d+)\s*[?"'s?]?/);
+  const match = content.match(/(\d+)\s*[″"'s秒]?/);
   const n = match ? Number(match[1]) : 1;
   return Number.isFinite(n) && n > 0 ? n : 1;
 }
@@ -91,29 +91,29 @@ const TranscriptRow = memo(function TranscriptRow({
   const isVoice = Boolean(onPlayVoice) && looksLikeVoicePlaceholder(message.content);
   const playing = playingMessageId === message.id;
   const failed = run?.status === "failed";
-  const senderName = sender?.displayName ?? "?????";
+  const senderName = sender?.displayName ?? "已移除成员";
   const showSpeak = Boolean(voiceUxEnabled && hasContent && !responding && onPlayVoice);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const openMenu = (x: number, y: number) => setMenu({ x, y });
   const hold = useLongPress(openMenu);
 
   const items: ActionItem[] = [
-    { id: "copy", label: "??", onSelect: () => void copyText(message.content || "") },
-    { id: "quote", label: "??", onSelect: () => onQuote?.(message, senderName) },
+    { id: "copy", label: "复制", onSelect: () => void copyText(message.content || "") },
+    { id: "quote", label: "引用", onSelect: () => onQuote?.(message, senderName) },
   ];
   if (showSpeak) {
     items.push({
       id: "speak",
-      label: playing ? "????" : "??",
+      label: playing ? "播放中…" : "朗读",
       disabled: playing,
       onSelect: () => onPlayVoice?.(message.id, message.content),
     });
   }
   if (canRetry && run) {
-    items.push({ id: "retry", label: "??", onSelect: () => onRun(run, "retry") });
+    items.push({ id: "retry", label: "重试", onSelect: () => onRun(run, "retry") });
   }
 
-  const whoExtra = responding ? " ? ??" : failed ? " ? ??" : "";
+  const whoExtra = responding ? " · 流式" : failed ? " · 失败" : "";
   const bubClass = [
     "wp-bub",
     isVoice ? "voice" : "",
@@ -125,9 +125,9 @@ const TranscriptRow = memo(function TranscriptRow({
     <>
       {(message.hasThinking || message.hasArtifact) && (
         <div className="wp-think">
-          {message.hasThinking ? "????" : "????"}
-          {message.hasThinking && message.hasArtifact ? " ? ????" : ""}
-          {responding ? "?????" : ""}
+          {message.hasThinking ? "思考过程" : "中间产物"}
+          {message.hasThinking && message.hasArtifact ? " · 中间产物" : ""}
+          {responding ? "（生成中）" : ""}
         </div>
       )}
       <MessagePartsBody
@@ -144,7 +144,7 @@ const TranscriptRow = memo(function TranscriptRow({
     <TypingIndicator
       label={
         run?.phase ? (PHASE_LABEL[run.phase] ?? run.phase)
-          : run?.status === "queued" ? "???" : "?"
+          : run?.status === "queued" ? "排队中" : "…"
       }
     />
   );
@@ -161,7 +161,7 @@ const TranscriptRow = memo(function TranscriptRow({
         <div className="wp-who">{senderName}{whoExtra}</div>
         <div
           className={bubClass}
-          title={isVoice ? "????" : undefined}
+          title={isVoice ? "点击播放" : undefined}
           onClick={isVoice ? () => onPlayVoice?.(message.id, message.content) : undefined}
           onContextMenu={(event) => {
             event.preventDefault();
@@ -173,7 +173,7 @@ const TranscriptRow = memo(function TranscriptRow({
             <>
               <span className="tri" />
               <span className="bars" aria-hidden="true"><i /><i /><i /><i /><i /></span>
-              <span className="sec">{voiceSeconds(message.content)}?</span>
+              <span className="sec">{voiceSeconds(message.content)}″</span>
             </>
           ) : (
             body
@@ -189,7 +189,7 @@ const TranscriptRow = memo(function TranscriptRow({
               }}
               onPointerDown={(event) => event.stopPropagation()}
             >
-              ??
+              停止
             </button>
           )}
         </div>

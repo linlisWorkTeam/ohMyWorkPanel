@@ -8,6 +8,6 @@ describe("Roster", () => {
     expect(src).toContain("wp-m-row");
     expect(src).toContain("useLongPress");
     expect(src).not.toMatch(/className="member-more"/);
-    expect(src).not.toContain("?");
+    expect(src).not.toContain("⋯");
   });
 });

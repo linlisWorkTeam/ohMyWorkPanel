@@ -21,52 +21,52 @@ export const THEMES: ThemeMeta[] = [
   {
     id: "cyberpunk",
     name: "Cyberpunk",
-    blurb: "????",
-    vibe: "???? ? ???? ? ???",
+    blurb: "霓虹夜城",
+    vibe: "抖音赛博 · 粉青撞色 · 扫描线",
     swatch: ["#0a0014", "#ff2bd6", "#00f0ff"],
     featured: true,
   },
   {
     id: "industrial",
     name: "Industrial",
-    blurb: "????",
-    vibe: "???? ? ??? ? ???",
+    blurb: "机械工坊",
+    vibe: "钢板铆钉 · 警戒条 · 齿轮感",
     swatch: ["#1a1c20", "#f5a623", "#ff6a00"],
     featured: true,
   },
   {
     id: "atlas",
     name: "Atlas",
-    blurb: "?????",
-    vibe: "??????",
+    blurb: "航图控制室",
+    vibe: "清爽日间默认",
     swatch: ["#e7eef5", "#0b1f33", "#1f9bb8"],
   },
   {
     id: "forge",
     name: "Forge",
-    blurb: "????",
-    vibe: "????",
+    blurb: "炭火工坊",
+    vibe: "暗暖炭火",
     swatch: ["#141114", "#e08a3c", "#2a211c"],
   },
   {
     id: "moss",
     name: "Moss",
-    blurb: "?????",
-    vibe: "????",
+    blurb: "苔痕工作室",
+    vibe: "柔和苔绿",
     swatch: ["#e8efe6", "#1f3a2e", "#6a8f4e"],
   },
   {
     id: "noir",
     name: "Noir",
-    blurb: "????",
-    vibe: "?????",
+    blurb: "墨稿夜台",
+    vibe: "高对比暗色",
     swatch: ["#0c0d10", "#f2ebe0", "#d94b3d"],
   },
   {
     id: "minimal",
-    name: "??",
-    blurb: "????",
-    vibe: "???? ? ??? ? ???",
+    name: "极简",
+    blurb: "冷灰纸面",
+    vibe: "纸面墨色 · 无装饰 · 无口音",
     swatch: ["#f4f5f7", "#17181a", "#5c5f66"],
   },
 ];
@@ -102,7 +102,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
-    // bg-app ???????DSH ???meta theme-color ????????
+    // bg-app 跟随主题背景（DSH 借鉴：meta theme-color 与页面底色一致）
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) {
       const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg-app").trim();
@@ -139,11 +139,11 @@ export function Brand({ compact = false }: { compact?: boolean }) {
   );
 }
 
-/** Seven equal stage cards for ?? ? ??. */
+/** Seven equal stage cards for 设置 · 外观. */
 export function ThemeSwitcher() {
   const { theme, setTheme } = useTheme();
   return (
-    <div className="wp-stage" role="group" aria-label="??????">
+    <div className="wp-stage" role="group" aria-label="切换界面主题">
       {THEMES.map((item) => (
         <button
           key={item.id}
@@ -165,7 +165,7 @@ export function ThemeSwitcher() {
   );
 }
 
-/** Header ?? popover ? compact 2-up grid matching docs/ui-demo.html */
+/** Header 🎨 popover — compact 2-up grid matching docs/ui-demo.html */
 export function HeaderThemePop({
   open,
   onPick,
@@ -176,7 +176,7 @@ export function HeaderThemePop({
   const { theme, setTheme } = useTheme();
   if (!open) return null;
   return (
-    <div className="header-pop theme-pop" role="listbox" aria-label="????">
+    <div className="header-pop theme-pop" role="listbox" aria-label="外观主题">
       <div className="header-theme-grid">
         {THEMES.map((item) => (
           <button
