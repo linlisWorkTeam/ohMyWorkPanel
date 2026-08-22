@@ -2,11 +2,11 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import type { DividerProps } from "./Divider";
 
 /**
- * 三栏 AppFrame 几何（DSH ui-layout 借鉴）：
- * - 左栏/右栏宽度可拖拽（约束见常量），几何只进 localStorage（不入 DB）；
- * - 左栏可折叠为 56px 控制轨（data-left="rail"）；
- * - 右栏关闭由业务方持有（App 的 showMembers），本 hook 仅感知 rightOpen；
- * - 窄屏让步：仅在「宽度穿越阈值」发生时自动收敛，避免跟手动操作打架。
+ * ?? AppFrame ???DSH ui-layout ????
+ * - ??/??????????????????? localStorage??? DB??
+ * - ?????? 56px ????data-left="rail"??
+ * - ???????????App ? showMembers??? hook ??? rightOpen?
+ * - ?????????????????????????????????
  */
 const LS = { leftW: "lp.frame.leftW", rightW: "lp.frame.rightW" };
 const RAIL_W = 56;
@@ -44,7 +44,9 @@ export function useAppFrame(options: UseAppFrameOptions = {}) {
   const rootRef = useRef<HTMLElement | null>(null);
   const [leftW, setLeftWState] = useState(() => readNum(LS.leftW, LEFT_START));
   const [rightW, setRightWState] = useState(() => readNum(LS.rightW, RIGHT_START));
-  const [leftMode, setLeftMode] = useState<"open" | "rail">("open");
+  const [leftMode, setLeftMode] = useState<"open" | "rail">(() =>
+    typeof window !== "undefined" && window.matchMedia("(max-width: 1080px)").matches ? "rail" : "open",
+  );
   const [dragging, setDragging] = useState(false);
   const leftWRef = useRef(leftW);
   leftWRef.current = leftW;
@@ -66,7 +68,7 @@ export function useAppFrame(options: UseAppFrameOptions = {}) {
     setLeftMode((mode) => (mode === "open" ? "rail" : "open"));
   }, []);
 
-  // 窄屏让步（仅在穿越阈值时自动收敛一次，避免与手动操作反复打架）
+  // ???????????????????????????????
   useEffect(() => {
     const el = rootRef.current;
     if (!el) return;

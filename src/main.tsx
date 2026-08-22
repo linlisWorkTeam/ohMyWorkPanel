@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { requiresAuth } from "./api";
 import { ThemeProvider } from "./theme";
+import "./shell/tokens.css";
 import "./styles.css";
 import "./themes.css";
 

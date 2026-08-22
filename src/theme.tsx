@@ -21,52 +21,52 @@ export const THEMES: ThemeMeta[] = [
   {
     id: "cyberpunk",
     name: "Cyberpunk",
-    blurb: "霓虹夜城",
-    vibe: "抖音赛博 · 粉青撞色 · 扫描线",
+    blurb: "????",
+    vibe: "???? ? ???? ? ???",
     swatch: ["#0a0014", "#ff2bd6", "#00f0ff"],
     featured: true,
   },
   {
     id: "industrial",
     name: "Industrial",
-    blurb: "机械工坊",
-    vibe: "钢板铆钉 · 警戒条 · 齿轮感",
+    blurb: "????",
+    vibe: "???? ? ??? ? ???",
     swatch: ["#1a1c20", "#f5a623", "#ff6a00"],
     featured: true,
   },
   {
     id: "atlas",
     name: "Atlas",
-    blurb: "航图控制室",
-    vibe: "清爽日间默认",
+    blurb: "?????",
+    vibe: "??????",
     swatch: ["#e7eef5", "#0b1f33", "#1f9bb8"],
   },
   {
     id: "forge",
     name: "Forge",
-    blurb: "炭火工坊",
-    vibe: "暗暖炭火",
+    blurb: "????",
+    vibe: "????",
     swatch: ["#141114", "#e08a3c", "#2a211c"],
   },
   {
     id: "moss",
     name: "Moss",
-    blurb: "苔痕工作室",
-    vibe: "柔和苔绿",
+    blurb: "?????",
+    vibe: "????",
     swatch: ["#e8efe6", "#1f3a2e", "#6a8f4e"],
   },
   {
     id: "noir",
     name: "Noir",
-    blurb: "墨稿夜台",
-    vibe: "高对比暗色",
+    blurb: "????",
+    vibe: "?????",
     swatch: ["#0c0d10", "#f2ebe0", "#d94b3d"],
   },
   {
     id: "minimal",
-    name: "极简",
-    blurb: "冷灰纸面",
-    vibe: "纸面墨色 · 无装饰 · 无口音",
+    name: "??",
+    blurb: "????",
+    vibe: "???? ? ??? ? ???",
     swatch: ["#f4f5f7", "#17181a", "#5c5f66"],
   },
 ];
@@ -102,7 +102,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
-    // bg-app 跟随主题背景（DSH 借鉴：meta theme-color 与页面底色一致）
+    // bg-app ???????DSH ???meta theme-color ????????
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) {
       const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg-app").trim();
@@ -139,47 +139,33 @@ export function Brand({ compact = false }: { compact?: boolean }) {
   );
 }
 
-/** Seven equal stage cards for 设置 · 外观. */
+/** Seven equal stage cards for ?? ? ??. */
 export function ThemeSwitcher() {
   const { theme, setTheme } = useTheme();
-
   return (
-    <div className="theme-switcher theme-switcher-settings" role="group" aria-label="切换界面主题">
-      <div className="theme-switcher-label">外观主题</div>
-      <p className="theme-switcher-hint">七套平级。即时生效，仅保存在本机。</p>
-      <div className="theme-stage-grid">
-        {THEMES.map((item) => {
-          const active = item.id === theme;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              className={`theme-card theme-card-${item.id} ${active ? "active" : ""}`}
-              aria-pressed={active}
-              onClick={() => setTheme(item.id)}
-            >
-              <span
-                className="theme-card-preview"
-                style={{
-                  background: `linear-gradient(135deg, ${item.swatch[0]} 0%, ${item.swatch[2]} 48%, ${item.swatch[1]} 100%)`,
-                }}
-              >
-                <span className="theme-card-shine" aria-hidden />
-                <span className="theme-card-badge">{item.blurb}</span>
-              </span>
-              <span className="theme-card-meta">
-                <strong>{item.name}</strong>
-                <small>{item.vibe}</small>
-              </span>
-            </button>
-          );
-        })}
-      </div>
+    <div className="wp-stage" role="group" aria-label="??????">
+      {THEMES.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          className={`wp-theme-card${item.id === theme ? " on" : ""}`}
+          aria-pressed={item.id === theme}
+          onClick={() => setTheme(item.id)}
+        >
+          <span
+            className="wp-theme-sw"
+            style={{
+              background: `linear-gradient(135deg, ${item.swatch[0]}, ${item.swatch[1]})`,
+            }}
+          />
+          <b>{item.name}</b>
+        </button>
+      ))}
     </div>
   );
 }
 
-/** Header 🎨 popover — compact 2-up grid matching docs/ui-demo.html */
+/** Header ?? popover ? compact 2-up grid matching docs/ui-demo.html */
 export function HeaderThemePop({
   open,
   onPick,
@@ -190,7 +176,7 @@ export function HeaderThemePop({
   const { theme, setTheme } = useTheme();
   if (!open) return null;
   return (
-    <div className="header-pop theme-pop" role="listbox" aria-label="外观主题">
+    <div className="header-pop theme-pop" role="listbox" aria-label="????">
       <div className="header-theme-grid">
         {THEMES.map((item) => (
           <button

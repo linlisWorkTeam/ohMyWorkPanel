@@ -2097,7 +2097,7 @@ dependencies = [
 
 [[package]]
 name = "linlis-work-panel"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "aes-gcm",
  "argon2",
