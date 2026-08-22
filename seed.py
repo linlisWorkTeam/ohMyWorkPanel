@@ -1,11 +1,11 @@
-﻿import uuid, sqlite3, time
+import uuid, sqlite3, time
 
 def id():
     return str(uuid.uuid4())
 
 now = int(time.time() * 1000)
 
-conn = sqlite3.connect('/AI/LinlisWorkPanel/data/linlis-work-panel.sqlite3')
+conn = sqlite3.connect('/AI/ohMyWorkPanel/data/ohmyworkpanel.sqlite3')
 c = conn.cursor()
 
 # Create user: 曲奇
@@ -17,7 +17,7 @@ c.execute('INSERT OR IGNORE INTO users(id, username, password_hash, created_at) 
 # Create group
 group_id = id()
 c.execute('INSERT OR IGNORE INTO groups(id, name, workspace_path, owner_member_id, admin_member_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-          (group_id, 'AI Agent 团队', '/AI/LinlisWorkPanel', user_id, None, now))
+          (group_id, 'AI Agent 团队', '/AI/ohMyWorkPanel', user_id, None, now))
 
 # Agent configurations
 agents = [

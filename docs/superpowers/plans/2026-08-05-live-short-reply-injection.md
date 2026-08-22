@@ -12,11 +12,11 @@
 3. 提示词拉取：`GET http://127.0.0.1:8790/v1/llm-prompt`（**已实测在线**，返回 `{mode, prompt, ttsMaxChars:50}`）
 4. 文档：`/AI/WorkPanelLive/docs/llm-prompt-panellive.md`（已存在）+ `docs/panellive-platform-requirements.md §6`（本次补）
 
-## 勘察结论（WorkPanel 侧缺口）
+## 勘察结论（ohMyWorkPanel 侧缺口）
 
 | 项 | 现状 | 缺口 |
 |---|---|---|
-| Live 会话状态 | `live.session.start/stop/cancel` 仅代理转发 PanelLive（a2a.rs:122-160），**WorkPanel 无任何 live 激活记录** | 需要"该群 Live 是否激活"标记 |
+| Live 会话状态 | `live.session.start/stop/cancel` 仅代理转发 PanelLive（a2a.rs:122-160），**ohMyWorkPanel 无任何 live 激活记录** | 需要"该群 Live 是否激活"标记 |
 | 注入点（chatbot） | scheduler.rs `run_agent` chatbot 快路径：`system`=人设+公告（L459-466） | system 无短回复约束 |
 | 注入点（CLI Agent） | `get_execution_context` 末尾拼 `prompt`（L382-396） | prompt 无短回复约束 |
 | 提示词来源 | 无 | 需拉 8790 + fallback |

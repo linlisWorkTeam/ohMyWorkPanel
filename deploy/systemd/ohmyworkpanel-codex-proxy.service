@@ -1,0 +1,14 @@
+# DEPRECATED — Codex Responses shim is now spawned by ohmyworkpanel-server.
+# Kept for reference only; deploy-canary disables this unit.
+[Unit]
+Description=DEPRECATED Linlis Codex proxy (use embedded sidecar in work-panel-server)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/bin/false
+RemainAfterExit=no
+
+[Install]
+WantedBy=multi-user.target

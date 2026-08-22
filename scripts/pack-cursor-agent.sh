@@ -40,7 +40,7 @@ bundle = {
     "schemaVersion": 1,
     "exportedAt": int(time.time() * 1000),
     "exportedBy": "pack-cursor-agent",
-    "source": "linlis-work-panel/v2.0.0-cursor-pack",
+    "source": "ohmyworkpanel/v2.0.0-cursor-pack",
     "codex": {"enabled": False},
     "claude": {"enabled": False},
     "opencode": {"enabled": False},

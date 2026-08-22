@@ -9,7 +9,7 @@ source: /AI/WorkPanelLive/docs/superpowers/specs/2026-08-05-doubao-voice-ux-cont
 
 ## 承接
 
-LinlisWorkPanel（Host）实现主聊天「按住说话」与气泡「播放」；媒体契约见 WorkPanelLive 契约文。
+ohMyWorkPanel（Host）实现主聊天「按住说话」与气泡「播放」；媒体契约见 WorkPanelLive 契约文。
 
 ## 行为
 

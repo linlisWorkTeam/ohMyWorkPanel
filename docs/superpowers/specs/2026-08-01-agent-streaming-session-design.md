@@ -12,7 +12,7 @@ status: approved
 2. 思考 / 中间产物 / 最终回复混在同一 `content` 字符串，无法分区展示。
 3. 调度是群级并发，不是「同一 Agent 串行」；连续 `@` 同一成员会并行抢跑。
 4. **Cursor CLI 每次 `@` 都新建 session**（`build_args` 仅 `-p`，无 `--resume`），群历史被整段塞进 prompt，上下文断裂且浪费。
-5. 在 Cursor CLI 后台页面对话时的回复不会自动回到 WorkPanel（渠道不同）；群内 `@` 路径的回复应写回消息气泡。本期修的是群内调用链，不是把本 CLI 聊天镜像到群。
+5. 在 Cursor CLI 后台页面对话时的回复不会自动回到 ohMyWorkPanel（渠道不同）；群内 `@` 路径的回复应写回消息气泡。本期修的是群内调用链，不是把本 CLI 聊天镜像到群。
 
 ## Goals
 
@@ -29,7 +29,7 @@ status: approved
 - 不自动 `promote-canary`
 - 不新建 `message_parts` 表
 - 不强求所有 CLI 都能完美识别 thinking（无信号 → 整段落 `final`）
-- 不把「当前这条 Cursor IDE/CLI 人工对话」同步进 WorkPanel 群聊
+- 不把「当前这条 Cursor IDE/CLI 人工对话」同步进 ohMyWorkPanel 群聊
 
 ## Architecture
 
@@ -162,7 +162,7 @@ Resume 失败（进程非 0 且 stderr/典型错误表明 session 无效）：�
 ```
 
 - 不自动 promote
-- 生产 `:8080` / `/AI/LinlisWorkPanel/data` 不动
+- 生产 `:8080` / `/AI/ohMyWorkPanel/data` 不动
 
 ## Testing
 

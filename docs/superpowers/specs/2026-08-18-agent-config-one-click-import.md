@@ -31,7 +31,7 @@ status: implemented
   "schemaVersion": 1,
   "exportedAt": 1724000000000,
   "exportedBy": "root",
-  "source": "linlis-work-panel/export",
+  "source": "ohmyworkpanel/export",
   "codex":   { "enabled": true,  "baseUrl": "http://127.0.0.1:18888/v1",
                "model": "deepseek-v4-flash", "apiKey": "sk-…", "authMode": "apikey" },
   "claude":  { "enabled": false, "baseUrl": "https://api.…", "authToken": "sk-…", "model": null },

@@ -11,7 +11,7 @@ import type { Group, GroupState, Member, RunPhaseEntry, TaskRun } from "../types
 import { ContextActionMenu, useLongPress, type ActionItem } from "./ContextActionMenu";
 
 /* ============================================================
-   WorkPanel UI furniture: 从 App.tsx 抽取的消息/成员/状态组件（P1 组件化）
+   ohMyWorkPanel UI furniture: 从 App.tsx 抽取的消息/成员/状态组件（P1 组件化）
    仅呈现/交互，不持有业务状态；所有颜色只走 --lp-* 语义 token。
    ============================================================ */
 
@@ -548,7 +548,7 @@ export function EmptyHome({ canCreate, onCreate }: { canCreate?: boolean; onCrea
   return (
     <div className="empty-home">
       <div className="eh-mark">L</div>
-      <strong className="eh-title">欢迎来到 WorkPanel</strong>
+      <strong className="eh-title">欢迎来到 ohMyWorkPanel</strong>
       <p className="eh-desc">这里还没有群聊。项目群绑定服务器工作区、用 @Agent 协作；聊天群则是一组机器人的轻对话。</p>
       <div className="eh-actions">
         {canCreate && (

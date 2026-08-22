@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
-/// WorkPanel process targets (excludes child Agent CLIs).
+/// ohMyWorkPanel process targets (excludes child Agent CLIs).
 pub const RSS_WARN_MIB: f64 = 120.0;
 pub const RSS_CRIT_MIB: f64 = 200.0;
 pub const CPU_WARN_PCT: f64 = 25.0;

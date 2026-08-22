@@ -65,7 +65,7 @@ export function ServerPathPicker({ value, onChange, onError }: Props) {
         <input
           value={manual}
           onChange={(e) => setManual(e.target.value)}
-          placeholder="服务器绝对路径，例如 /AI/LinlisWorkPanel"
+          placeholder="服务器绝对路径，例如 /AI/ohMyWorkPanel"
           required
         />
         <button type="button" onClick={() => { onChange(manual.trim()); void load(manual.trim() || "/"); }}>

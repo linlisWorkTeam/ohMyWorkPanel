@@ -13,7 +13,7 @@ import type {
 
 const API_BASE = "";
 const WS_BASE = `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}`;
-const TOKEN_KEY = "linlis_auth_token";
+const TOKEN_KEY = "ohmyworkpanel_auth_token";
 
 export const requiresAuth = true;
 

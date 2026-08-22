@@ -27,14 +27,14 @@ check_forbidden "no-hotel-fork" \
   src/App.tsx src-tauri/src/web.rs src-tauri/src/scheduler.rs src-tauri/src/commands.rs
 
 # Only generic proxy_extension in web.rs (no proxy_<name> handlers).
-if rg -n 'fn[[:space:]]+proxy_[a-zA-Z0-9_]+' src-tauri/src/web.rs 2>/dev/null | rg -v 'fn[[:space:]]+proxy_extension' >/tmp/linlis-purity-proxy.txt 2>/dev/null; then
-  if [[ -s /tmp/linlis-purity-proxy.txt ]]; then
+if rg -n 'fn[[:space:]]+proxy_[a-zA-Z0-9_]+' src-tauri/src/web.rs 2>/dev/null | rg -v 'fn[[:space:]]+proxy_extension' >/tmp/ohmyworkpanel-purity-proxy.txt 2>/dev/null; then
+  if [[ -s /tmp/ohmyworkpanel-purity-proxy.txt ]]; then
     echo "FAIL [no-dedicated-proxy]: web.rs must only define proxy_extension"
-    cat /tmp/linlis-purity-proxy.txt
+    cat /tmp/ohmyworkpanel-purity-proxy.txt
     FAIL=1
   fi
 fi
-rm -f /tmp/linlis-purity-proxy.txt
+rm -f /tmp/ohmyworkpanel-purity-proxy.txt
 
 # App must not hardcode a single-extension tab helper name.
 check_forbidden "no-app-ext-status-helper" \

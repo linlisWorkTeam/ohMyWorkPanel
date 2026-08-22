@@ -71,7 +71,7 @@ export const THEMES: ThemeMeta[] = [
   },
 ];
 
-const STORAGE_KEY = "linlis_workpanel_theme";
+const STORAGE_KEY = "ohmyworkpanel_theme";
 
 type ThemeContextValue = {
   theme: ThemeId;
@@ -132,8 +132,8 @@ export function Brand({ compact = false }: { compact?: boolean }) {
         <span className="brand-mark-core" />
       </span>
       <span className="brand-text">
-        <span className="brand-linlis">Linli&apos;s</span>
-        <span className="brand-workpanel">Workpanel</span>
+        <span className="brand-ohmy">ohMy</span>
+        <span className="brand-ohmyworkpanel">ohMyWorkPanel</span>
       </span>
     </div>
   );

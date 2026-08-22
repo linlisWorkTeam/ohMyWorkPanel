@@ -4,14 +4,14 @@ topic: widget-capability-placement
 status: draft
 ---
 
-# WorkPanel 小组件的形态判定与收敛路线（Widget Capability Placement）
+# ohMyWorkPanel 小组件的形态判定与收敛路线（Widget Capability Placement）
 
-> 配套：总设计 `2026-08-16-dsh-self-bootstrap-runtime.md`；群聊治理层 `2026-08-16-group-chat-governance-plane.md`；UI 设计语言 `2026-08-16-dsh-ui-language-workpanel.md`。
+> 配套：总设计 `2026-08-16-dsh-self-bootstrap-runtime.md`；群聊治理层 `2026-08-16-group-chat-governance-plane.md`；UI 设计语言 `2026-08-16-dsh-ui-language-ohmyworkpanel.md`。
 > 结论先行：**按 DSH 模式，「每个小组件单独建一个群」不宜继续。群聊是治理/协作平面，不是应用容器；小组件应下沉为「页签/能力」，只在「需要独立上下文 + 要人来议事拍板」时才有资格拥有一个群——而且那是一个项目群，不是一个 widget 群。**
 
 ## 问题 / 动机
 
-WorkPanel 上陆续做了很多小组件（面板类、工具类、语音/视听类等；当前已有 `panellive` Extend，另有 DSH Web 嵌入）。历史上容易把每个组件对应一个群来组织。DSH 模式引入后，群聊被重构为「意图/决策层」（`group-chat-governance-plane.md`），每个群会自动预制不可改的 `bootstrap-dsh`、带默认响应者、关联决策卡/审批——这些都是**治理设施**，不是**运行容器**。
+ohMyWorkPanel 上陆续做了很多小组件（面板类、工具类、语音/视听类等；当前已有 `panellive` Extend，另有 DSH Web 嵌入）。历史上容易把每个组件对应一个群来组织。DSH 模式引入后，群聊被重构为「意图/决策层」（`group-chat-governance-plane.md`），每个群会自动预制不可改的 `bootstrap-dsh`、带默认响应者、关联决策卡/审批——这些都是**治理设施**，不是**运行容器**。
 
 若给每个 widget 单独建群，会产生：
 
@@ -22,7 +22,7 @@ WorkPanel 上陆续做了很多小组件（面板类、工具类、语音/视听
 ## 两平面分清（映射到三层架构）
 
 ```text
-治理/协作平面（WorkPanel 群聊 + 结构化层）
+治理/协作平面（ohMyWorkPanel 群聊 + 结构化层）
   ├─ 意图/决策层  群聊：为什么做、谁批准、审计叙事
   └─ 结构化状态层 版本/Wave · 决策卡 · diff · 会话重放
 执行/能力平面（dsh / 扩展宿主）
@@ -51,7 +51,7 @@ WorkPanel 上陆续做了很多小组件（面板类、工具类、语音/视听
 
 ## 落地形态（三栏 UI 对应）
 
-| 三栏（`2026-08-16-dsh-ui-language-workpanel.md`） | widget 落点 |
+| 三栏（`2026-08-16-dsh-ui-language-ohmyworkpanel.md`） | widget 落点 |
 |---|---|
 | 左栏 导航 / 控制轨 | 「技能/扩展」入口：widget 注册列表、启停、健康 |
 | 中栏 工作区（群聊） | 页签（形态 A）或工具行/回合尾动作（形态 B），即点即用 |
@@ -69,7 +69,7 @@ WorkPanel 上陆续做了很多小组件（面板类、工具类、语音/视听
 
 ## 边界 / 不做
 
-- **不把「单会话」当群聊替代**：WorkPanel 保持多群模型（沿用 `2026-08-16-dsh-ui-language-workpanel.md` 边界）。
+- **不把「单会话」当群聊替代**：ohMyWorkPanel 保持多群模型（沿用 `2026-08-16-dsh-ui-language-ohmyworkpanel.md` 边界）。
 - **不建「widget 目录群」做集中管理**：集中管理只在结构化层/左栏扩展入口做，不进群聊。
 - **不因 widget 规模扩张群数**：群的增减只由治理/协作边界决定。
 - 形态 B 依赖 P2 能力热载，在此之前能力型 widget 暂以形态 A 页签承载，不阻塞上线。

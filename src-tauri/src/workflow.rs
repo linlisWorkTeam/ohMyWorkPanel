@@ -1,4 +1,4 @@
-//! WorkPanel V1.3.0 workflow: versions / roadmap / waves / ask helpers.
+//! ohMyWorkPanel V1.3.0 workflow: versions / roadmap / waves / ask helpers.
 
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};

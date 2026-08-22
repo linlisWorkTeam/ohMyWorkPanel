@@ -1,4 +1,4 @@
-# WorkPanel 平台侧方案 — PanelLive Extension Host + A2A 控制面（v0.5）
+# ohMyWorkPanel 平台侧方案 — PanelLive Extension Host + A2A 控制面（v0.5）
 
 > 状态：**实现中（Cursor Agent）** · 对齐默认 A1=WS-only / A2=cancel 兜底 / A3=成员可见+admin 开关 · 日期：2026-08-05
 > 契约来源：`docs/panellive-platform-requirements.md`、`docs/roadmap.md → v0.5`、`docs/superpowers/specs/2026-08-05-panellive-mock-mvp-design.md`
@@ -39,7 +39,7 @@
 ### T3 平台代理 + A2A 控制面（web.rs）
 - **UI 代理**：`GET /api/extensions/panellive/{*path}` → 反代 `127.0.0.1:8790/{path}`（同源，规避混合内容；Tauri/web 双模式可用）；iframe src = `/api/extensions/panellive/live.html`
 - **事件入口**：`POST /api/extensions/panellive/events`（PanelLive → 平台）
-  - 鉴权：`X-Panellive-Token` 头，与 `LINLIS_PANELLIVE_TOKEN` 环境变量比对（MVP 固定 token）
+  - 鉴权：`X-Panellive-Token` 头，与 `OHMYWORKPANEL_PANELLIVE_TOKEN` 环境变量比对（MVP 固定 token）
   - 载荷：JSON task envelope `{ taskId, skill, sessionId, payload, ts }`
   - skills 白名单：`live.transcribe.result` / `live.session.*`（其余拒绝）
   - **禁 PCM 校验**：payload 仅允许 `{ text, isFinal, lang? }` 等文本字段，白名单字段 + 大小上限（如 8KB）；出现非白名单字段/audio 类字段 → 400
@@ -79,7 +79,7 @@
 | PanelLive 缺 `/v1/session/stop` | MVP cancel 兜底；对齐点 A2 推动 PanelLive 补端点 |
 | `transcribe.result` 推送机制 PanelLive 侧未实现 | 平台先定契约（events 入口 + token），PanelLive 下迭代接入 |
 | events 入口无鉴权 → 伪造转写注入 | token 校验 + skill 白名单 + payload 字段白名单 |
-| 2GB 内存：PanelLive(node)+WorkPanel 并存 | enable 前置 health 校验防呆；监控 RSS，超限则提示 |
+| 2GB 内存：PanelLive(node)+ohMyWorkPanel 并存 | enable 前置 health 校验防呆；监控 RSS，超限则提示 |
 | `systemctl restart` 卡住（历史） | 晋升用 timeout；沿用 release-checklist 经验 |
 
 ## 5. 对齐点（需 root / PanelLive 方确认）

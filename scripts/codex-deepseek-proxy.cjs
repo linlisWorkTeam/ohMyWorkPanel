@@ -395,7 +395,7 @@ process.on('unhandledRejection', (err) => {
   console.error(`[${new Date().toISOString()}] unhandledRejection:`, err && err.stack ? err.stack : err);
 });
 
-const PORT = Number(process.env.LINLIS_CODEX_PROXY_PORT || 18888);
+const PORT = Number(process.env.OHMYWORKPANEL_CODEX_PROXY_PORT || 18888);
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`[${new Date().toISOString()}] Codex Responses↔ChatCompletions proxy on 127.0.0.1:${PORT} → ${TARGET}${TARGET_PATH}`);
 });

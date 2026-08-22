@@ -854,7 +854,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, user_id: Opt
          let default_ws = if group.workspace_path.trim().is_empty() {
              None
          } else {
-             let _ = crate::memory::ensure_linlis_layout(
+             let _ = crate::memory::ensure_ohmyworkpanel_layout(
                  std::path::Path::new(&group.workspace_path),
                  Some(&member_id),
              );
@@ -1417,7 +1417,7 @@ async fn get_message_channel_part_web(
  }
 
  async fn health_web() -> Json<serde_json::Value> {
-     Json(serde_json::json!({ "ok": true, "service": "linlis-work-panel" }))
+     Json(serde_json::json!({ "ok": true, "service": "ohmyworkpanel" }))
  }
 
  // === Agent Config（一键导入 / 导出 / 自检 / 安装）===

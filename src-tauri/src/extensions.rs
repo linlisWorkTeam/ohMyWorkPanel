@@ -1,5 +1,5 @@
 //! Extension Host — discover / load / proxy Extend services via manifest.
-//! PanelLive remains the default registered root; AIHotel and others via LINLIS_EXTENSION_ROOTS.
+//! PanelLive remains the default registered root; AIHotel and others via OHMYWORKPANEL_EXTENSION_ROOTS.
 
 use crate::db::{now, AppResult};
 use rusqlite::{params, Connection, OptionalExtension};
@@ -87,16 +87,16 @@ pub struct ExtensionStatus {
 }
 
 pub fn panellive_root() -> PathBuf {
-    std::env::var("LINLIS_PANELLIVE_ROOT")
+    std::env::var("OHMYWORKPANEL_PANELLIVE_ROOT")
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from("/AI/WorkPanelLive"))
 }
 
 /// Absolute roots containing `extension.manifest.json`.
-/// `LINLIS_EXTENSION_ROOTS` = `:` / `;` separated list; always merges `LINLIS_PANELLIVE_ROOT` fallback.
+/// `OHMYWORKPANEL_EXTENSION_ROOTS` = `:` / `;` separated list; always merges `OHMYWORKPANEL_PANELLIVE_ROOT` fallback.
 pub fn extension_roots() -> Vec<PathBuf> {
     let mut roots: Vec<PathBuf> = Vec::new();
-    if let Ok(raw) = std::env::var("LINLIS_EXTENSION_ROOTS") {
+    if let Ok(raw) = std::env::var("OHMYWORKPANEL_EXTENSION_ROOTS") {
         for part in raw.split(|c| c == ':' || c == ';') {
             let p = part.trim();
             if !p.is_empty() {
@@ -349,8 +349,8 @@ pub fn panellive_base_url(_manifest: &ExtensionManifest) -> String {
 }
 
 pub fn panellive_token() -> String {
-    std::env::var("LINLIS_PANELLIVE_TOKEN")
-        .or_else(|_| std::env::var("LINLIS_EXTENSION_TOKEN"))
+    std::env::var("OHMYWORKPANEL_PANELLIVE_TOKEN")
+        .or_else(|_| std::env::var("OHMYWORKPANEL_EXTENSION_TOKEN"))
         .unwrap_or_else(|_| "panellive-dev-token".into())
 }
 
@@ -489,7 +489,7 @@ mod tests {
 
     #[test]
     fn discover_defaults_to_panellive_and_skips_bad_root() {
-        // LINLIS_EXTENSION_ROOTS unset in test env; at least panellive default root is listed.
+        // OHMYWORKPANEL_EXTENSION_ROOTS unset in test env; at least panellive default root is listed.
         let roots = extension_roots();
         assert!(!roots.is_empty());
         // A root without manifest must be skipped silently.
@@ -544,11 +544,11 @@ mod tests {
 
     #[test]
     fn extension_roots_merges_env_without_dup() {
-        std::env::set_var("LINLIS_EXTENSION_ROOTS", "/AI/WorkPanelLive");
+        std::env::set_var("OHMYWORKPANEL_EXTENSION_ROOTS", "/AI/WorkPanelLive");
         let roots = extension_roots();
         let count = roots.iter().filter(|r| **r == panellive_root()).count();
         assert_eq!(count, 1, "panellive root must not be duplicated");
-        std::env::remove_var("LINLIS_EXTENSION_ROOTS");
+        std::env::remove_var("OHMYWORKPANEL_EXTENSION_ROOTS");
     }
 
 }

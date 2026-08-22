@@ -41,7 +41,7 @@ status: draft
 
 ### 2. 让「一次拍板」成为闭环内一等动作
 
-- `@架构Agent 讨论` → **@linlis-super-harness（WorkPanel 组完整自举执行者；普通群 @极简 bootstrap-dsh）** 出方案 + dry-run → **在群聊里直接呈现 diff/风险** → 管理员 `@批准` → 走灰度 → promote。
+- `@架构Agent 讨论` → **@linlis-super-harness（ohMyWorkPanel 组完整自举执行者；普通群 @极简 bootstrap-dsh）** 出方案 + dry-run → **在群聊里直接呈现 diff/风险** → 管理员 `@批准` → 走灰度 → promote。
 - 整条链从最初消息一路可追溯；审批是群聊原生行为（类似现有 `approve-prod-release.sh` 的群化版）。
 - 增加内置动作词（slash 命令），例如：`/propose`（发起提案）、`/approve #决策卡`、`/reject #决策卡`、`/replay #会话`、`/diff #版本`。
 
@@ -49,7 +49,7 @@ status: draft
 
 - 群内职能明确：**决策人（human admin）** / **提案 Agent** / **评审 Agent** / **执行 Agent** / **QA·门禁 Agent**。
 - **执行 Agent 固定为两级不可修改的 DSH 预制 Agent**（均 `system_locked` 不可编辑/移除）：
-  - **WorkPanel 组 = `linlis-super-harness`**：唯一拥有「面板自举/自改」完整流程执行权。
+  - **ohMyWorkPanel 组 = `linlis-super-harness`**：唯一拥有「面板自举/自改」完整流程执行权。
   - **普通群 = 极简 `bootstrap-dsh`**：仅组内 dsh 执行 + 基础干跑，无自举写回权。
   - 其余普通 Agent 一律无自举写入权限。
 - 谁有权提议、谁有权驳回、谁有权批准，写入规则（强化现有群公告 + AGENTS）。

@@ -10,10 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - 按 Diátaxis 最小子集建立 Tutorials、How-to、Explanation、Reference 文档入口。
+- 新增 MIT License，允许在许可条件下自由使用、修改、分发及商业使用。
 
 ### Changed
 
 - 收敛 README 为项目门面和快速上手入口。
+- 项目及 GitHub 仓库由 LinlisWorkPanel/workPanel 重命名为 ohMyWorkPanel。
+- 更新包名、Tauri 应用标识、运行时目录、服务名、部署路径和文档链接。
 
 ### Fixed
 
@@ -55,5 +58,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 安全修复或安全相关变更。
 ```
 
-[unreleased]: https://github.com/linlisWorkTeam/workPanel/compare/v2.0.0...HEAD
-[2.0.0]: https://github.com/linlisWorkTeam/workPanel/releases/tag/v2.0.0
+[unreleased]: https://github.com/linlisWorkTeam/ohMyWorkPanel/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/linlisWorkTeam/ohMyWorkPanel/releases/tag/v2.0.0

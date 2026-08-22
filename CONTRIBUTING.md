@@ -1,6 +1,6 @@
 # Contributing
 
-感谢参与 LinlisWorkPanel。请保持改动小而清晰，并优先补充与行为变化对应的文档。
+感谢参与 ohMyWorkPanel。请保持改动小而清晰，并优先补充与行为变化对应的文档。
 
 ## 本地开发环境
 

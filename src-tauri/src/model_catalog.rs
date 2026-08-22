@@ -41,7 +41,7 @@ fn cache() -> &'static Mutex<CursorCache> {
 }
 
 fn sync_interval_secs() -> Option<u64> {
-    match std::env::var("LINLIS_CURSOR_MODEL_SYNC_SECS") {
+    match std::env::var("OHMYWORKPANEL_CURSOR_MODEL_SYNC_SECS") {
         Ok(raw) => {
             let trimmed = raw.trim();
             if trimmed.is_empty() {
@@ -245,7 +245,7 @@ pub fn start_cursor_model_sync_loop() {
             Err(e) => eprintln!("model_catalog: cursor sync join error: {e}"),
         }
         let Some(secs) = sync_interval_secs() else {
-            eprintln!("model_catalog: periodic sync disabled (LINLIS_CURSOR_MODEL_SYNC_SECS=0)");
+            eprintln!("model_catalog: periodic sync disabled (OHMYWORKPANEL_CURSOR_MODEL_SYNC_SECS=0)");
             return;
         };
         let mut ticker = tokio::time::interval(Duration::from_secs(secs));

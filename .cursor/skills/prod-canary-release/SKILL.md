@@ -1,12 +1,12 @@
 ---
 name: prod-canary-release
 description: >-
-  LinlisWorkPanel production/canary dual-slot release: freeze, deploy canary, promote.
+  ohMyWorkPanel production/canary dual-slot release: freeze, deploy canary, promote.
   Use when deploying, promoting canary to prod, freezing production, or when the user
   mentions 生产/灰度/canary/promote/发布.
 ---
 
-# LinlisWorkPanel — 生产 / 灰度发布
+# ohMyWorkPanel — 生产 / 灰度发布
 
 项目内副本；个人全局 skill 名为 `linlis-prod-canary`（`~/.cursor/skills/linlis-prod-canary/`）。内容以仓库脚本为准。
 
@@ -15,9 +15,9 @@ description: >-
 | | prod | canary |
 |---|---|---|
 | Port | 8080 | 8081 |
-| Artifacts | `/opt/linlis-workpanel/prod` | `/opt/linlis-workpanel/canary` |
-| Data | `/AI/LinlisWorkPanel/data` | `/AI/LinlisWorkPanel/data-canary` |
-| Unit | `linlis-work-panel.service` | `linlis-work-panel-canary.service` |
+| Artifacts | `/opt/ohmyworkpanel/prod` | `/opt/ohmyworkpanel/canary` |
+| Data | `/AI/ohMyWorkPanel/data` | `/AI/ohMyWorkPanel/data-canary` |
+| Unit | `ohmyworkpanel.service` | `ohmyworkpanel-canary.service` |
 
 ## Workflow
 
@@ -36,13 +36,13 @@ export CARGO_BUILD_JOBS=1 NODE_OPTIONS=--max-old-space-size=1024
 
 ## Hard rules
 
-- **生产发版门禁**：无 `/opt/linlis-workpanel/PROD_APPROVE`（由 `approve-prod-release.sh` 写入，15 分钟一次性）则 `promote`/`freeze` 直接拒绝。Agent 不得创建该文件或设 `LINLIS_ALLOW_PROD_WITHOUT_APPROVAL`。
+- **生产发版门禁**：无 `/opt/ohmyworkpanel/PROD_APPROVE`（由 `approve-prod-release.sh` 写入，15 分钟一次性）则 `promote`/`freeze` 直接拒绝。Agent 不得创建该文件或设 `OHMYWORKPANEL_ALLOW_PROD_WITHOUT_APPROVAL`。
 - `deploy-canary` 只同步 canary unit、只重启 canary；禁止改写 prod unit、禁止杀死 `:18888`
 - Canary Codex `:18889`；prod Codex `:18888`（勿共用）
 - Prod must not serve workspace `dist/` or `target/release`
 - Never share data dirs between prod and canary
-- Promote never overwrites `/AI/LinlisWorkPanel/data`
-- Keep group **LinlisWorkPanel** + `root`/`root` on prod
+- Promote never overwrites `/AI/ohMyWorkPanel/data`
+- Keep group **ohMyWorkPanel** + `root`/`root` on prod
 - Sync canary unit after edits with `/bin/cp -f`；prod unit 变更须单独批准
 
 ## Verify

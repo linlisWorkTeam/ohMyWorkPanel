@@ -1,16 +1,16 @@
-# WorkPanel 扩展宿主指南（V1.3.0）
+# ohMyWorkPanel 扩展宿主指南（V1.3.0）
 
 平台只做 **发现 / 开关 / 同源反代 / 页签壳 / A2A skill 校验**。扩展业务留在扩展仓。
 
-需求来源：AIHotel `2026-08-06-workpanel-extension-host-v130-requirements.md`。  
+需求来源：AIHotel `2026-08-06-ohmyworkpanel-extension-host-v130-requirements.md`。
 认领：[`docs/superpowers/specs/2026-08-06-extension-host-v130-claim.md`](../superpowers/specs/2026-08-06-extension-host-v130-claim.md)。
 
 ## 1. 发现
 
 | 来源 | 说明 |
 |---|---|
-| `LINLIS_EXTENSION_ROOTS` | `:` 或 `;` 分隔的绝对路径，每项含 `extension.manifest.json` |
-| `LINLIS_PANELLIVE_ROOT` | 兼容回落，默认 `/AI/WorkPanelLive`，始终并入列表 |
+| `OHMYWORKPANEL_EXTENSION_ROOTS` | `:` 或 `;` 分隔的绝对路径，每项含 `extension.manifest.json` |
+| `OHMYWORKPANEL_PANELLIVE_ROOT` | 兼容回落，默认 `/AI/WorkPanelLive`，始终并入列表 |
 | `/AI/AIHotel` | 若磁盘上存在 manifest 则自动加入（可用 ROOTS 覆盖顺序） |
 
 重启 Web 服务后生效。

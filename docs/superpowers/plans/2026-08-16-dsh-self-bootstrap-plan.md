@@ -6,7 +6,7 @@
 ## 状态
 
 - **P0 ✅ 已完成**：`dsh` headless 适配器（`adapters/dsh.rs`）+ 群聊「跳转 DSH Web」内嵌 :3080。
-- **P2 ⚠️ 代码已齐，待 build/verify**：`system_locked`（模型/迁移/`MEMBER_SELECT`/`member_from_row`）；WorkPanel 组 `linlis-super-harness` seed；普通群极简 `bootstrap-dsh-<group>` seed；commands.rs + web.rs 五处成员 mutation 守卫；前端成员行只读+「系统」徽标。**尚未编译/测试，也未发布**。
+- **P2 ⚠️ 代码已齐，待 build/verify**：`system_locked`（模型/迁移/`MEMBER_SELECT`/`member_from_row`）；ohMyWorkPanel 组 `linlis-super-harness` seed；普通群极简 `bootstrap-dsh-<group>` seed；commands.rs + web.rs 五处成员 mutation 守卫；前端成员行只读+「系统」徽标。**尚未编译/测试，也未发布**。
 - **P1 / P3 / UI-P0**：待立项（见计划任务与 UI spec）。
 - **不变式**：先立「群聊治理层」再上能力热载；DSH 保持进程隔离 + 锁版本。
 
@@ -21,7 +21,7 @@
 
 ### P1 —— ACP 会话回灌与重放
 1. 新增 ACP 长驻适配器（`adapters/acp.rs`）：spawn dsh ACP 进程，走 `initialize/session/new/session/prompt/session/update/cancel`。
-2. `session/update` 的 `agent_message_chunk` 回灌 → WorkPanel `task_run`/`message`/`run_event`；保留 `session_ref` 句柄。
+2. `session/update` 的 `agent_message_chunk` 回灌 → ohMyWorkPanel `task_run`/`message`/`run_event`；保留 `session_ref` 句柄。
 3. 群聊内该「会话重放」视图 + 一键分叉（把分叉后的新 run 挂到原版本下）。
 4. 全量留痕限窗口（参考滚动摘要），避免存储膨胀。
 5. 门禁：`cargo test --lib` + Vitest + 灰度 smoke。
@@ -29,19 +29,19 @@
 ### P2 —— 预制两级 bootstrap（不可改）+ 扩展宿主能力化 + 可逆注册
 1. **预制两级模板**：
    - 普通群/新建项目群 seed 自动创建极简 `bootstrap-dsh-<group>`（`adapter=dsh`，**无自举写回权**）。
-   - WorkPanel 组（`is_system=1`）创建 `linlis-super-harness`（`adapter=dsh`，**唯一完整自举写回权**）。
+   - ohMyWorkPanel 组（`is_system=1`）创建 `linlis-super-harness`（`adapter=dsh`，**唯一完整自举写回权**）。
    - 两者 `agent_profiles.system_locked=1`。
 2. **不可改强制**：前端成员行对 `system_locked` 只读；后端 `remove_member`/`set_admin`/`update_member_model_cmd`/`update_member_workspace_cmd` 一律拒绝；健康检查 + 就绪态展示。
 3. `extensions.rs` 引入「能力注册」抽象：注册/反注册成对（diff → dry-run → apply → rollback）。
-4. DSH 插件/manifest 写回：允许灰度槽热载「工具/适配器/服务」类扩展（UI 页签沿用现有同源代理）；写回能力**只挂 WorkPanel 组 `linlis-super-harness`**，普通群极简 `bootstrap-dsh` 无写回权。
+4. DSH 插件/manifest 写回：允许灰度槽热载「工具/适配器/服务」类扩展（UI 页签沿用现有同源代理）；写回能力**只挂 ohMyWorkPanel 组 `linlis-super-harness`**，普通群极简 `bootstrap-dsh` 无写回权。
 5. 决策卡落地：`decision` 表 + `/propose` `/approve` `/reject` slash + 版本页来源展示。
 6. 治理护栏：审批人必须是人；无任何 Agent 路径能绕过 `manually_approved` 直接 promote。
 7. 同源代理 `/api/extensions/dsh/...`（补上 P0 未做的直连治理）。
 
 ### P3 —— 自举闭环（统一经 linlis-super-harness 执行）
-1. WorkPanel 组「面板自改」：建议 → `@linlis-super-harness`（唯一完整自举执行者）提案/干跑 → 版本/Wave 立项 → 灰度（热载 DSH 写回能力）→ 审批 → promote → 可回滚。
+1. ohMyWorkPanel 组「面板自改」：建议 → `@linlis-super-harness`（唯一完整自举执行者）提案/干跑 → 版本/Wave 立项 → 灰度（热载 DSH 写回能力）→ 审批 → promote → 可回滚。
 2. 把 `approve-prod-release.sh` 群化为群聊内的审批动作（`/approve`），保留 root 一次性批准语义。
-3. 端到端演示：通过 WorkPanel 组群聊 `@linlis-super-harness` 给面板加一个自带扩展并上线。
+3. 端到端演示：通过 ohMyWorkPanel 组群聊 `@linlis-super-harness` 给面板加一个自带扩展并上线。
 
 ### P4 —— subagent / 跨机委派（远期）
 1. 子任务可委托到另一进程/另一机器/另一产品的 ACP 端点。

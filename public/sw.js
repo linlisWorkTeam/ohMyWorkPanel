@@ -1,5 +1,5 @@
-/* LinlisWorkPanel web SW — network-first for app shells/assets to avoid stale UI after canary deploys */
-const CACHE_VERSION = "linlis-web-v2";
+/* ohMyWorkPanel web SW — network-first for app shells/assets to avoid stale UI after canary deploys */
+const CACHE_VERSION = "ohmyworkpanel-web-v2";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const PAGE_CACHE = `${CACHE_VERSION}-pages`;
 

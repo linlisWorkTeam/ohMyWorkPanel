@@ -4,10 +4,10 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="color-scheme" content="dark light" />
-<title>WorkPanel × DSH UI Demo — 三栏 AppFrame 交互原型</title>
+<title>ohMyWorkPanel × DSH UI Demo — 三栏 AppFrame 交互原型</title>
 <style>
 /* ==========================================================================
-   WorkPanel × DeepSeek Harness — 设计演示（单文件、零依赖）
+   ohMyWorkPanel × DeepSeek Harness — 设计演示（单文件、零依赖）
    ● token 分层：--s-* (static 色板) / --lp-* (alias 语义别名)；组件只用 alias
    ● 6 套主题各自只定义 token 值，渲染路径唯一的切点是 <body data-theme>
    ● 三栏 AppFrame：可拖拽分界 / 左栏折叠 56px 控制轨 / 右栏可关 / 窄屏让步
@@ -171,7 +171,7 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--lp-ring,
   background: linear-gradient(135deg, var(--lp-accent-soft), var(--lp-accent)); color: var(--lp-text-invert);
   font-weight:800; font-size:12px; box-shadow: 0 0 18px var(--lp-accent-soft); }
 .brand-text { display:flex; flex-direction:column; line-height:1.15; min-width:0; }
-.brand-linlis { font-size:10.5px; color: var(--lp-text-faint); letter-spacing:.06em; }
+.brand-ohmy { font-size:10.5px; color: var(--lp-text-faint); letter-spacing:.06em; }
 .brand-wp { font-size:14px; font-weight:700; white-space:nowrap; }
 .left-head { display:flex; align-items:center; justify-content:space-between; padding:6px 12px 4px 16px;
   color: var(--lp-text-faint); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; flex:none; }
@@ -389,7 +389,7 @@ kbd { font-family:var(--font-mono); font-size:10px; border:1px solid var(--lp-bo
       <section class="left" id="leftPane">
         <div class="brand">
           <span class="brand-mark">L</span>
-          <span class="brand-text"><span class="brand-linlis">Linli's</span><span class="brand-wp">WorkPanel</span></span>
+          <span class="brand-text"><span class="brand-ohmy">ohMy</span><span class="brand-wp">ohMyWorkPanel</span></span>
         </div>
         <div class="left-head"><span>工作区 · 群</span><button class="icon-btn" data-tip="新建群" style="width:24px;height:24px;font-size:14px">＋</button></div>
         <div class="group-list" id="groupList"></div>
@@ -412,7 +412,7 @@ kbd { font-family:var(--font-mono); font-size:10px; border:1px solid var(--lp-bo
       <section class="mid">
         <header class="chat-header">
           <div class="chat-title">
-            <h1><span id="groupTitle">Linli's WorkPanel 开发</span><span class="chip">project</span></h1>
+            <h1><span id="groupTitle">ohMyWorkPanel 开发</span><span class="chip">project</span></h1>
             <p id="groupSub">Codex · Claude · OpenCode · Cursor · A2A-Bot · 5 名成员</p>
           </div>
           <div class="header-right">
@@ -492,8 +492,8 @@ kbd { font-family:var(--font-mono); font-size:10px; border:1px solid var(--lp-bo
 <div class="help-overlay" id="helpOverlay">
   <div class="help-box">
     <button class="icon-btn close" id="helpClose">✕</button>
-    <h2>WorkPanel × DeepSeek Harness — 交互原型说明</h2>
-    <p class="sub">不是静态图：这是「三栏 AppFrame + token 设计系统 + 招牌 UX」的可交互演示。每项都对应 dsh 里真实存在的组件，也是 WorkPanel 借鉴的目标。</p>
+    <h2>ohMyWorkPanel × DeepSeek Harness — 交互原型说明</h2>
+    <p class="sub">不是静态图：这是「三栏 AppFrame + token 设计系统 + 招牌 UX」的可交互演示。每项都对应 dsh 里真实存在的组件，也是 ohMyWorkPanel 借鉴的目标。</p>
     <table>
       <tr><th>#</th><th>交互 / 设计</th><th>对应 dsh 组件</th><th>本机怎么试</th></tr>
       <tr><td>1</td><td>三栏拖拽调宽（带最小宽度约束）</td><td>ui-layout ResizablePane</td><td>拖中缝 / 右缝分界</td></tr>
@@ -516,7 +516,7 @@ kbd { font-family:var(--font-mono); font-size:10px; border:1px solid var(--lp-bo
 "use strict";
 /* ================== 数据 ================== */
 const GROUPS = [
-  { id:"g1", name:"Linli's WorkPanel 开发", kind:"project", sub:"Codex · Claude · OpenCode · Cursor", unread:0, tone:"L" },
+  { id:"g1", name:"ohMyWorkPanel 开发", kind:"project", sub:"Codex · Claude · OpenCode · Cursor", unread:0, tone:"L" },
   { id:"g2", name:"Ops 值班", kind:"project", sub:"发布 / 灰度 / 指标", unread:3, tone:"O" },
   { id:"g3", name:"豆包语音调研", kind:"chat", sub:"Live 语音 UX · 气泡", unread:0, tone:"D" },
   { id:"g4", name:"聊天闲谈", kind:"chat", sub:"无业务 workspace", unread:1, tone:"聊" },
@@ -817,7 +817,7 @@ function renderRight(){
   $("#paneDetails").innerHTML = `
     <div class="sec-title" style="margin-top:4px"><span>会话 · 生命周期</span></div>
     <div class="info-line"><b>运行设置</b> · 流式分区 / keep-alive on</div>
-    <div class="info-line"><b>工作区</b><span class="path">/AI/LinlisWorkPanel</span></div>
+    <div class="info-line"><b>工作区</b><span class="path">/AI/ohMyWorkPanel</span></div>
     <div class="info-line"><b>适配器</b> · codex / claude / opencode / cursor</div>
     <div class="info-line"><b>心跳</b> · 30s 静默重连</div>
     <div class="sec-title"><span>模型</span></div>

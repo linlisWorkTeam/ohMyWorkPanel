@@ -430,7 +430,7 @@ fn get_execution_context(state: &SchedulerState, run_id: &str) -> AppResult<Exec
         crate::context_seams::section("announcement", "group.announcement", &announcement_block),
         crate::context_seams::section("epitaph", "docs/epitaph", &epitaph_block),
         crate::context_seams::section("live", "live_prompt", &live_block),
-        crate::context_seams::section("memory", ".linlis/memory", &memory_block),
+        crate::context_seams::section("memory", ".ohmyworkpanel/memory", &memory_block),
         crate::context_seams::section("wiki", "WorkPanelWiki.retrieve", &wiki_block),
         crate::context_seams::section("experience", "experiences", &experience_block),
     ]
@@ -677,7 +677,7 @@ async fn run_agent(
         context.agent.workspace_path.as_deref(),
         context.group.is_system,
     )?;
-    let _ = memory::ensure_linlis_layout(std::path::Path::new(&context.group.workspace_path), Some(&context.agent.id));
+    let _ = memory::ensure_ohmyworkpanel_layout(std::path::Path::new(&context.group.workspace_path), Some(&context.agent.id));
 
     let model = context.agent.model.as_deref();
     // Member profile key is optional; adapters::codex::resolve_api_key also reads

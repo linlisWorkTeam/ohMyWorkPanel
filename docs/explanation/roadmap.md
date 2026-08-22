@@ -1,4 +1,4 @@
-# LinlisWorkPanel Roadmap
+# ohMyWorkPanel Roadmap
 
 本文只记录面向使用者的版本方向。季度是预估窗口，不是承诺发布日期；“已排期”也不等于已经发布。
 
@@ -9,7 +9,7 @@
 - Cursor 脱敏环境包；
 - DSH 壳层相关能力。
 
-详细发布信息以 Git 标签和 [GitHub Releases](https://github.com/linlisWorkTeam/workPanel/releases) 为准。
+详细发布信息以 Git 标签和 [GitHub Releases](https://github.com/linlisWorkTeam/ohMyWorkPanel/releases) 为准。
 
 ## 已排期或进行中
 

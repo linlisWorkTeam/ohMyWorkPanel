@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | Vite 开发地址 | `http://127.0.0.1:1420` | `pnpm dev`、Tauri 开发模式 |
 | 前端环境变量前缀 | `VITE_`、`TAURI_` | Vite 构建时读取 |
-| 适配器目录环境变量 | `LINLIS_ADAPTER_ROOTS` | 扫描额外的 `*.adapter.json` |
+| 适配器目录环境变量 | `OHMYWORKPANEL_ADAPTER_ROOTS` | 扫描额外的 `*.adapter.json` |
 
 ## 数据
 

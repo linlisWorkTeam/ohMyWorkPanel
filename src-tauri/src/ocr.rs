@@ -70,7 +70,7 @@ pub fn ocr_image_base64(base64_data: &str) -> AppResult<String> {
         .map_err(|e| format!("Base64 解码失败: {e}"))?;
 
     let dir = std::env::temp_dir();
-    let path = dir.join(format!("linlis_ocr_{}.png", crate::db::id()));
+    let path = dir.join(format!("ohmyworkpanel_ocr_{}.png", crate::db::id()));
     let mut file = std::fs::File::create(&path).map_err(|e| format!("创建临时文件失败: {e}"))?;
     file.write_all(&bytes).map_err(|e| format!("写入临时文件失败: {e}"))?;
     drop(file);

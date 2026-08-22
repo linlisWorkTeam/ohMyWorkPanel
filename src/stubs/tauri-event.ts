@@ -26,7 +26,7 @@ let linkState: WsLinkState = "connected";
 let closedAt = 0;
 let releasingTimer: ReturnType<typeof setInterval> | null = null;
 let healthTimer: ReturnType<typeof setInterval> | null = null;
-const TOKEN_KEY = "linlis_auth_token";
+const TOKEN_KEY = "ohmyworkpanel_auth_token";
 
 function publishLink(state: WsLinkState) {
   linkState = state;

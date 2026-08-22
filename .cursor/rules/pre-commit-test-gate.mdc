@@ -23,7 +23,7 @@ alwaysApply: true
 
 ## 2. 跑通全部自动化测试门禁
 
-在仓库根目录执行（不得用 `LINLIS_SKIP_TEST_GATE=1` 绕过）：
+在仓库根目录执行（不得用 `OHMYWORKPANEL_SKIP_TEST_GATE=1` 绕过）：
 
 ```bash
 pnpm run test:gate
@@ -36,4 +36,4 @@ pnpm run test:gate
 
 - 回复/交接中简要写明：测试设计结论 + 门禁已通过。
 - 真 CLI smoke（`smoke-adapters.ps1`）**不**替代门禁；缺 CLI 不阻塞，但门禁必须绿。
-- 测试不得写入生产数据目录 `/AI/LinlisWorkPanel/data`。
+- 测试不得写入生产数据目录 `/AI/ohMyWorkPanel/data`。

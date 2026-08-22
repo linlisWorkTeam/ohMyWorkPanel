@@ -17,7 +17,7 @@ status: checklist
 | `src-tauri/src/adapters/mod.rs` | `AdapterKind::Dsh`（parse/as_str/candidates/build_args/单测） |
 | `src-tauri/src/adapters/models.rs` | `"dsh" => &[]`（模型归 dsh profile） |
 | `src-tauri/src/models.rs` | `Member.system_locked: bool` |
-| `src-tauri/src/db.rs` | 迁移 `agent_profiles.system_locked`；`MEMBER_SELECT` + `member_from_row`；`ensure_workpanel_super_harness`、`ensure_minimal_bootstrap_dsh`、`assert_member_mutable` |
+| `src-tauri/src/db.rs` | 迁移 `agent_profiles.system_locked`；`MEMBER_SELECT` + `member_from_row`；`ensure_ohmyworkpanel_super_harness`、`ensure_minimal_bootstrap_dsh`、`assert_member_mutable` |
 | `src-tauri/src/commands.rs` | 守卫（remove/set_admin/改模型/改工作区）+ 建群 seed 极简 bootstrap |
 | `src-tauri/src/web.rs` | 守卫（remove/purge/admin/model/workspace）+ 建群 seed 极简 bootstrap |
 | `src/types.ts` | adapter 联合加 `"dsh"`；`Member.systemLocked` |
@@ -31,7 +31,7 @@ status: checklist
 |---|---|
 | `docs/superpowers/specs/2026-08-16-dsh-self-bootstrap-runtime.md` | 总设计（两级自举 Agent / 闭环 / 路线 P0–P4 / 护栏） |
 | `docs/superpowers/specs/2026-08-16-group-chat-governance-plane.md` | 群聊治理层（决策卡/审批/slash） |
-| `docs/superpowers/specs/2026-08-16-dsh-ui-language-workpanel.md` | DSH UI 三栏语言（工作区=群聊、右栏=Agent） |
+| `docs/superpowers/specs/2026-08-16-dsh-ui-language-ohmyworkpanel.md` | DSH UI 三栏语言（工作区=群聊、右栏=Agent） |
 | `docs/superpowers/plans/2026-08-16-dsh-self-bootstrap-plan.md` | 执行计划（P0 ✅ / P2 ⚠️ 待 build·发布） |
 | `docs/release-runbook-2026-08-16-dsh-self-bootstrap.md` | 发布 Runbook（本地→GitHub→灰度→生产） |
 | `docs/release-manifest-2026-08-16.md` | 本变更清单 |
@@ -45,14 +45,14 @@ status: checklist
    - `Member { ... }` 字面量是否遗漏 `system_locked`（唯一标准构造点是 `db::member_from_row`，已补）；
    - `put_member_workspace_web` 里出现**两个连续 `let conn`**（Rust 同名遮蔽合法、可编译，建议顺手合并为一个）。
 2. `cargo test --no-default-features --lib` + `pnpm run test:gate` + `pnpm run build:web` 全绿。
-3. 启动后自迁移 `system_locked` 列；WorkPanel 种子组出现只读「系统」`linlis-super-harness`；新建项目群出现极简 `bootstrap-dsh-<group>`。
+3. 启动后自迁移 `system_locked` 列；ohMyWorkPanel 种子组出现只读「系统」`linlis-super-harness`；新建项目群出现极简 `bootstrap-dsh-<group>`。
 4. 对锁定 Agent 调 remove/admin/改模型/改工作区（Tauri 与 Web 两条路径）→ 后端拒绝“平台锁定的自举 Agent 不可修改或移除”。
 5. `dsh web` :3080 时，「跳转 DSH Web」内嵌可用。
 
 ## C2. Git 提交 / PR 描述（可直接复制）
 
 ```bash
-cd /AI/LinlisWorkPanel
+cd /AI/ohMyWorkPanel
 git add -A
 git commit -m "feat: dsh 自举执行者 P0+P2（适配器/DSH Web 嵌入/两级 bootstrap/system_locked 只读）"
 
@@ -60,7 +60,7 @@ git commit -m "feat: dsh 自举执行者 P0+P2（适配器/DSH Web 嵌入/两级
 feat: DSH 自举接入 P0 + P2
 
 - P0: dsh headless 适配器 + 群聊「跳转 DSH Web」内嵌 :3080
-- P2: 两级不可改自举 Agent（普通群 bootstrap-dsh-<group> / WorkPanel 组 linlis-super-harness）
+- P2: 两级不可改自举 Agent（普通群 bootstrap-dsh-<group> / ohMyWorkPanel 组 linlis-super-harness）
   - agent_profiles.system_locked 幂等迁移 + Member.systemLocked
   - 种子/建群自动落位；桌面(commands)与 Web(web.rs) 成员 mutation 全守卫
   - 前端成员行只读 + 「系统」徽标

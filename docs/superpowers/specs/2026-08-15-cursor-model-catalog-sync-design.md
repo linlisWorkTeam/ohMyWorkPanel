@@ -12,7 +12,7 @@
 
 | 项 | 约定 |
 |---|---|
-| 触发 | 进程启动立即刷一次；之后默认每 **6h**（`LINLIS_CURSOR_MODEL_SYNC_SECS`，`0`=只启动刷一次） |
+| 触发 | 进程启动立即刷一次；之后默认每 **6h**（`OHMYWORKPANEL_CURSOR_MODEL_SYNC_SECS`，`0`=只启动刷一次） |
 | 命令 | `cursor-agent` / `agent` `--list-models`，超时 45s，`spawn_blocking` |
 | 解析 | `id - label` 行；跳过标题/Tip |
 | 合并 | live 非空 → 用 live（保留 CLI 顺序）；否则静态 fallback |

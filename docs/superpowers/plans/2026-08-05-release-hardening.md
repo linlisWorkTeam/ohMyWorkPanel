@@ -14,19 +14,19 @@ owner: OpenClaw (PM) → Cursor Agent (impl)
 
 | 需求 | 现状 | 缺口 |
 |---|---|---|
-| P1 种子群不可删 + 跨工作空间 | `ensure_default_seed` 已建 `seed-group-workpanel`（root/Codex/OpenClaw/Cursor）；**无任何 delete group 路由**（删除天然不存在） | 无显式 `is_system` 标记/guard；agent workspace 全锁在群工作区下（`resolve_agent_workspace_under_group`），**无跨工作空间能力** |
+| P1 种子群不可删 + 跨工作空间 | `ensure_default_seed` 已建 `seed-group-ohmyworkpanel`（root/Codex/OpenClaw/Cursor）；**无任何 delete group 路由**（删除天然不存在） | 无显式 `is_system` 标记/guard；agent workspace 全锁在群工作区下（`resolve_agent_workspace_under_group`），**无跨工作空间能力** |
 | P2 发布断连 60s 超时重传 | 前端已有指数退避重连（max 30s）+ `ws_reconnected` 事件；App.tsx:386 仅**任务终态** resync | 无 60s 发布等待窗口；无心跳探活发布状态；重连后进行中任务不续传（丢 delta） |
 | P3 Agent 响应心跳 + 聚焦感知 | 服务端 keepalive 仅 agent 档案保活（warm_status）；WS 有 20s 客户端心跳（NAT） | **无 run 进行中的进度心跳**；无聚焦感知；无动态频率；运行设置无心跳项 |
 | P4 CPU/内存可视 | `metrics.rs` 已有 RSS/CPU 采样（/proc/self）→ logs(source=perf)，**60s 一次** | 无查询 API；前端不可见；要求 20s 后台存储 + 设置页 5s 刷新 |
 
 ## 方案
 
-### P1 — WorkPanel 种子群加固
+### P1 — ohMyWorkPanel 种子群加固
 
-1. `groups` 表加 `is_system INTEGER NOT NULL DEFAULT 0`（迁移：ensure/migrate 时 `ALTER TABLE` 幂等）；`seed-group-workpanel` 置 1。
+1. `groups` 表加 `is_system INTEGER NOT NULL DEFAULT 0`（迁移：ensure/migrate 时 `ALTER TABLE` 幂等）；`seed-group-ohmyworkpanel` 置 1。
 2. 删除守卫：任何删除群路径拒绝 `is_system=1`（现无删除功能，guard 留给未来）+ 单测。
 3. 跨工作空间：`resolve_agent_workspace_under_group` 增加特例——**仅种子群 + agent 显式配置绝对 workspace_path** 时允许绝对路径（跳出群目录），其余行为不变。
-4. 信任边界说明：放宽仅限 WorkPanel 自维护群；文档写入 epitaph。
+4. 信任边界说明：放宽仅限 ohMyWorkPanel 自维护群；文档写入 epitaph。
 
 ### P2 — 发布断连 60s 超时重传
 

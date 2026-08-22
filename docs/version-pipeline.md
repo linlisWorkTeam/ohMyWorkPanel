@@ -4,7 +4,7 @@ topic: version-pipeline
 status: active
 ---
 
-# LinlisWorkPanel 版本流水线（发展方向锁定）
+# ohMyWorkPanel 版本流水线（发展方向锁定）
 
 > **本文是产品/平台演进的单一事实源（SSOT）。**  
 > 新功能先在本文件占位（轨道 + 阶段），再开 Feature / 写 epitaph；禁止「东改西改」无版本归属的散弹改动。  
@@ -65,7 +65,7 @@ status: active
 | 项 | 状态 |
 |---|---|
 | 灰度冒烟 + **promote 生产**（bin+dist，不碰 prod DB） | ✅ |
-| 验收说明 | `docs/superpowers/specs/2026-08-04-workpanel-base-v1.0.0-acceptance.md` |
+| 验收说明 | `docs/superpowers/specs/2026-08-04-ohmyworkpanel-base-v1.0.0-acceptance.md` |
 | 验证记录 | `epitaph/2026-08-04-v1.0.0-base-release-verify.md` |
 
 **含义**：Base 之后，默认「生产可用协作面板」；其后改动按轨道增量，经灰度再晋升。
@@ -99,9 +99,9 @@ status: active
 | 工作区边界 | Live Extend ↔ Host 仓/群拍板（文档） | `specs/2026-08-05-workspace-boundary-live-host.md` |
 | 发布 | promote 已完成；**git tag `v1.2.0` = `0750306`**；不碰 prod DB | 本阶段 |
 
-### 阶段 5 — **WorkPanel V1.3.0（工作流）**（已打 tag `v1.3.0` = `8e3869d`）
+### 阶段 5 — **ohMyWorkPanel V1.3.0（工作流）**（已打 tag `v1.3.0` = `8e3869d`）
 
-> 与历史 epitaph「v1.3 双槽位」不同名不同义。全量设计：[`specs/2026-08-06-workpanel-v1.3.0-workflow-era-design.md`](superpowers/specs/2026-08-06-workpanel-v1.3.0-workflow-era-design.md)。
+> 与历史 epitaph「v1.3 双槽位」不同名不同义。全量设计：[`specs/2026-08-06-ohmyworkpanel-v1.3.0-workflow-era-design.md`](superpowers/specs/2026-08-06-ohmyworkpanel-v1.3.0-workflow-era-design.md)。
 
 | 切片 | 内容 | 状态 |
 |---|---|---|
@@ -119,7 +119,7 @@ status: active
 | P1 | 平滑发版 Drain + 重启重入队；Cursor 4.6 模型目录；群公告/工作区设置入口恢复 | ✅（前序补丁） |
 | **I1** | **Agent 配置一键导入**：顶部「Agent 配置」页（仅管理员）——服务器导出配置包 → 本地一键导入（写 `~/.codex`/`~/.claude`/`~/.cursor`/通用 `files`，同步 agent_profiles，持久化+启动自动重放）；缺失 CLI 自动安装（best-effort）；环境自检；release 槽位自带 codex shim 脚本（开箱即用，新机无需重新 vibecoding） | ✅ 代码（spec：`specs/2026-08-18-agent-config-one-click-import.md`；本机端到端验证；待 ECS 灰度） |
 
-### 阶段 6 — **WorkPanel V2.0.0**（Cursor 环境包 + DSH 壳层）
+### 阶段 6 — **ohMyWorkPanel V2.0.0**（Cursor 环境包 + DSH 壳层）
 
 > 相对 v1.3.0 的 breaking UX（三栏壳跟 `ui-demo.html`）+ 开箱配置包。**不**把 cursor-agent 二进制或登录态打进 Git。
 
@@ -132,7 +132,7 @@ status: active
 
 ### 阶段 7 — **v2.1.0（下一站，已立项）** 前台壳层扩展 + 七主题
 
-> 未打 tag。与 HEAD 白屏修复（`032d4f9`）合并发一个 release。Spec：[`specs/2026-08-22-workpanel-v2.1-chrome-extend-design.md`](superpowers/specs/2026-08-22-workpanel-v2.1-chrome-extend-design.md)；示意图 [`ui-v2.1-shell.html`](ui-v2.1-shell.html)。
+> 未打 tag。与 HEAD 白屏修复（`032d4f9`）合并发一个 release。Spec：[`specs/2026-08-22-ohmyworkpanel-v2.1-chrome-extend-design.md`](superpowers/specs/2026-08-22-ohmyworkpanel-v2.1-chrome-extend-design.md)；示意图 [`ui-v2.1-shell.html`](ui-v2.1-shell.html)。
 
 | 切片 | 内容 | 状态 |
 |---|---|---|
@@ -144,7 +144,7 @@ status: active
 
 ### 阶段 7.1 — **v2.1.1（下一站）** 按 shell 稿兑现视觉
 
-> 前台允许灵活重构，用 **patch** 不另开 2.2。交互契约仍是 v2.1.0；本阶段只让主壳 DOM/token 跟 [`ui-v2.1-shell.html`](ui-v2.1-shell.html) 一致，稿外页面换皮不换版式。Spec：[`specs/2026-08-22-workpanel-v2.1.1-shell-visual-parity-design.md`](superpowers/specs/2026-08-22-workpanel-v2.1.1-shell-visual-parity-design.md)。实现计划：[`plans/2026-08-22-v2.1.1-shell-visual-parity.md`](superpowers/plans/2026-08-22-v2.1.1-shell-visual-parity.md)。
+> 前台允许灵活重构，用 **patch** 不另开 2.2。交互契约仍是 v2.1.0；本阶段只让主壳 DOM/token 跟 [`ui-v2.1-shell.html`](ui-v2.1-shell.html) 一致，稿外页面换皮不换版式。Spec：[`specs/2026-08-22-ohmyworkpanel-v2.1.1-shell-visual-parity-design.md`](superpowers/specs/2026-08-22-ohmyworkpanel-v2.1.1-shell-visual-parity-design.md)。实现计划：[`plans/2026-08-22-v2.1.1-shell-visual-parity.md`](superpowers/plans/2026-08-22-v2.1.1-shell-visual-parity.md)。
 
 | 切片 | 内容 | 状态 |
 |---|---|---|
@@ -161,11 +161,11 @@ status: active
 |---|---|---|---|
 | **A 工作群** | 绑定 workspace 的 Agent 协作（主产品） | @ 调度、串行、A2A、公告、**版本/Wave 工作流**、经验/记忆、**交接运行时注入**、**CLI 适配器 Manifest（内部多 CLI）** | 把工作群做成纯社交 IM；把 CLI 插件塞进 IM connector / Extend 页签 |
 | **B 发布与稳态** | 双槽位自迭代不断供 | 门禁、灰度公告、探活/心跳/指标、promote 审批 | Agent 擅自 promote；打断 stop→start |
-| **C 扩展宿主** | manifest 动态 Extend（含 PanelLive / AIHotel） | `LINLIS_EXTENSION_ROOTS`、通用反代/页签/A2A | 平台写扩展业务；为每扩展抄 proxy_* |
+| **C 扩展宿主** | manifest 动态 Extend（含 PanelLive / AIHotel） | `OHMYWORKPANEL_EXTENSION_ROOTS`、通用反代/页签/A2A | 平台写扩展业务；为每扩展抄 proxy_* |
 | **D 聊天群** | `groupKind=chat`，无业务 workspace；轻对话 | Phase 1：体验地基（见下） | 未拍板前不做多平台中枢大工程 |
 | **E 质量** | 门禁绿 + 策略文档同步 | 纯函数/调度单测；补缺口见 testing-strategy | 用真 CLI smoke 替代门禁 |
 | **F 工作流 V1.3.0** | Git Tag 版本 + Ask + Wave | 见阶段 5 设计文 | 一次做完 S1–S4；自动无审批 promote |
-| **G 自举运行时** | 借 DSH 自举能力：会话可回放/分叉、能力可热载/可回滚、subagent 跨进程委派；**自举只由预制不可改的两级自举 Agent 执行（WorkPanel 组 `linlis-super-harness` 完整 / 普通群极简 `bootstrap-dsh`）** | 群聊治理层（决策卡/审批）先行；两级 `system_locked` 不可修改；完整自举写回权只挂 `linlis-super-harness`；DSH 进程隔离 + 锁版本；自举动作必须经群聊人类批准 | 把 dsh 内核寄生进 WorkPanel；agent 自我批准/绕过灰度；普通 Agent 或极简 bootstrap-dsh 拥有面板自举写回权 |
+| **G 自举运行时** | 借 DSH 自举能力：会话可回放/分叉、能力可热载/可回滚、subagent 跨进程委派；**自举只由预制不可改的两级自举 Agent 执行（ohMyWorkPanel 组 `linlis-super-harness` 完整 / 普通群极简 `bootstrap-dsh`）** | 群聊治理层（决策卡/审批）先行；两级 `system_locked` 不可修改；完整自举写回权只挂 `linlis-super-harness`；DSH 进程隔离 + 锁版本；自举动作必须经群聊人类批准 | 把 dsh 内核寄生进 ohMyWorkPanel；agent 自我批准/绕过灰度；普通 Agent 或极简 bootstrap-dsh 拥有面板自举写回权 |
 
 ### 轨道 D — 聊天群（已对齐的方向，待拍板开工）
 
@@ -214,9 +214,9 @@ status: active
 | [`docs/release-checklist.md`](release-checklist.md) | 发版检查 |
 | [`docs/panellive-platform-requirements.md`](panellive-platform-requirements.md) | Live 契约 |
 | [`docs/roadmap.md`](roadmap.md) | 历史勾选 + 指向本文 |
-| [`docs/superpowers/specs/2026-08-06-workpanel-v1.3.0-workflow-era-design.md`](superpowers/specs/2026-08-06-workpanel-v1.3.0-workflow-era-design.md) | V1.3.0 工作流全量设计 |
+| [`docs/superpowers/specs/2026-08-06-ohmyworkpanel-v1.3.0-workflow-era-design.md`](superpowers/specs/2026-08-06-ohmyworkpanel-v1.3.0-workflow-era-design.md) | V1.3.0 工作流全量设计 |
 | [`docs/superpowers/specs/2026-08-16-dsh-self-bootstrap-runtime.md`](superpowers/specs/2026-08-16-dsh-self-bootstrap-runtime.md) | 轨道 G：DSH 自举接入总设计（会两级不可改自举 Agent） |
 | [`docs/superpowers/specs/2026-08-21-cli-adapter-manifest.md`](superpowers/specs/2026-08-21-cli-adapter-manifest.md) | 轨道 A：CLI 适配器 Manifest（**accepted** SSOT） |
-| [`docs/superpowers/specs/2026-08-16-dsh-ui-language-workpanel.md`](superpowers/specs/2026-08-16-dsh-ui-language-workpanel.md) | 借鉴 DSH UI 设计语言（三栏：工作区=群聊，右栏=Agent） |
+| [`docs/superpowers/specs/2026-08-16-dsh-ui-language-ohmyworkpanel.md`](superpowers/specs/2026-08-16-dsh-ui-language-ohmyworkpanel.md) | 借鉴 DSH UI 设计语言（三栏：工作区=群聊，右栏=Agent） |
 | [`docs/superpowers/specs/2026-08-16-widget-capability-placement.md`](superpowers/specs/2026-08-16-widget-capability-placement.md) | 小组件形态判定与收敛路线（widget=页签/能力，不单独建群） |
-| [`docs/superpowers/specs/2026-08-22-workpanel-v2.1.1-shell-visual-parity-design.md`](superpowers/specs/2026-08-22-workpanel-v2.1.1-shell-visual-parity-design.md) | v2.1.1：主壳按 `ui-v2.1-shell.html` 重画 + 全站 token 别名 |
+| [`docs/superpowers/specs/2026-08-22-ohmyworkpanel-v2.1.1-shell-visual-parity-design.md`](superpowers/specs/2026-08-22-ohmyworkpanel-v2.1.1-shell-visual-parity-design.md) | v2.1.1：主壳按 `ui-v2.1-shell.html` 重画 + 全站 token 别名 |

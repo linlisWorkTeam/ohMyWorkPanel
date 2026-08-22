@@ -5,6 +5,8 @@ use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation}
 use serde::{Deserialize, Serialize};
 use chrono::Utc;
 
+// Keep the existing signing secret during the repository rename so active
+// sessions are not invalidated solely because the public project name changed.
 const JWT_SECRET: &str = "linlis-work-panel-jwt-secret-2026";
 
 #[derive(Debug, Serialize, Deserialize)]

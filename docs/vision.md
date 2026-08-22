@@ -1,6 +1,6 @@
 # Vision
 
-LinlisWorkPanel 是一个**本地优先的多 Agent 群聊桌面应用**，让用户在自己的机器上组建 AI Agent 协作团队。
+ohMyWorkPanel 是一个**本地优先的多 Agent 群聊桌面应用**，让用户在自己的机器上组建 AI Agent 协作团队。
 
 ## 核心理念
 

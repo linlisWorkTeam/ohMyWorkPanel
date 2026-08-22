@@ -8,7 +8,7 @@ status: active
 
 ## 做了什么
 
-- 发现：`LINLIS_EXTENSION_ROOTS` + panellive 回落；多扩展 `GET/PUT .../extensions[/{id}]`
+- 发现：`OHMYWORKPANEL_EXTENSION_ROOTS` + panellive 回落；多扩展 `GET/PUT .../extensions[/{id}]`
 - 反代：`ANY /api/extensions/{extId}/{*path}` → `proxy_extension`
 - 前端：`collectExtensionTabViews` + `ExtensionPanel`；设置 Extend 多开关
 - A2A：按 manifest `a2aSkills` 校验；非 live skill 宿主 ack

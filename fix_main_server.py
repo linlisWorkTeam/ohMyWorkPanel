@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 with open(sys.argv[1], 'r') as f:
     c = f.read()
 c = c.replace('.nest_service("/", ServeDir::new(&dist_dir))', '.fallback_service(ServeDir::new(&dist_dir))')

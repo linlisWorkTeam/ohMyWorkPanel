@@ -1,11 +1,11 @@
 /// Codex talks Responses API; we bridge via local shim to DeepSeek-model upstream
 /// (OpenCode Zen Go by default — hosts deepseek-* with the host API key).
-/// Override with `LINLIS_CODEX_BASE_URL` (e.g. `https://api.deepseek.com/v1` when you have a DeepSeek key).
+/// Override with `OHMYWORKPANEL_CODEX_BASE_URL` (e.g. `https://api.deepseek.com/v1` when you have a DeepSeek key).
 pub const DEFAULT_BASE_URL: &str = "http://127.0.0.1:18888/v1";
 pub const DEFAULT_MODEL: &str = "deepseek-v4-flash";
 
 pub fn base_url() -> String {
-    std::env::var("LINLIS_CODEX_BASE_URL")
+    std::env::var("OHMYWORKPANEL_CODEX_BASE_URL")
         .ok()
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
@@ -19,12 +19,12 @@ fn non_empty(value: Option<String>) -> Option<String> {
 }
 
 /// Resolve OPENAI_API_KEY for Codex child processes (systemd often lacks shell env).
-/// Order: member/explicit → `LINLIS_CODEX_API_KEY` → `OPENAI_API_KEY` → `~/.codex/auth.json`.
+/// Order: member/explicit → `OHMYWORKPANEL_CODEX_API_KEY` → `OPENAI_API_KEY` → `~/.codex/auth.json`.
 pub fn resolve_api_key(explicit: Option<&str>) -> Option<String> {
     resolve_api_key_with(
         explicit,
         || {
-            non_empty(std::env::var("LINLIS_CODEX_API_KEY").ok())
+            non_empty(std::env::var("OHMYWORKPANEL_CODEX_API_KEY").ok())
                 .or_else(|| non_empty(std::env::var("OPENAI_API_KEY").ok()))
         },
         || read_openai_key_from_auth_path(&default_auth_path()),

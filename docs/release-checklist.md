@@ -14,9 +14,9 @@
 ```bash
 ./scripts/deploy-canary.sh
 # 脚本在 restart 前会 drain-wait（拒新 @、等 running=0，超时仍重启并由启动恢复重入队）
-systemctl is-active linlis-work-panel-canary.service
+systemctl is-active ohmyworkpanel-canary.service
 # 部署灰度后生产仍须 active
-systemctl is-active linlis-work-panel.service
+systemctl is-active ohmyworkpanel.service
 ```
 
 - [ ] canary HTTP `/` → 200
@@ -39,13 +39,13 @@ systemctl is-active linlis-work-panel.service
 ./scripts/promote-canary.sh   # drain-wait → stop→start；勿用易中断的裸 restart 半截
 ```
 
-- [ ] promote 结束后 `linlis-work-panel.service` **active**（不是 dead）
-- [ ] `/` → 200；root 登录；**LinlisWorkPanel** 群仍在
+- [ ] promote 结束后 `ohmyworkpanel.service` **active**（不是 dead）
+- [ ] `/` → 200；root 登录；**ohMyWorkPanel** 群仍在
 - [ ] §F 前端壳冒烟在 **生产** 再跑一遍
 - [ ] 若经域名/HTTPS：再确认实时流（`wss`）一次
 - [ ] auth proxy / nginx（若启用）仍可访问对外入口
-- [ ] **未**覆盖 `/AI/LinlisWorkPanel/data`
-- [ ] （可选）生产 watchdog 已启用：`linlis-work-panel-watchdog.timer`（`scripts/ensure-prod-up.sh`，仅拉起死服务，不 promote）
+- [ ] **未**覆盖 `/AI/ohMyWorkPanel/data`
+- [ ] （可选）生产 watchdog 已启用：`ohmyworkpanel-watchdog.timer`（`scripts/ensure-prod-up.sh`，仅拉起死服务，不 promote）
 
 `promote-canary.sh` 在 stop 之后设有 EXIT/INT/TERM trap，中断时仍会尝试 `systemctl start` 生产，避免永久 dead。
 

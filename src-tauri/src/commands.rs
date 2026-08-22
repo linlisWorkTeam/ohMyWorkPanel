@@ -265,7 +265,7 @@ pub fn add_member(input: AddMemberInput, state: State<'_, AppState>) -> AppResul
         let default_ws = if group.workspace_path.trim().is_empty() {
             None
         } else {
-            let _ = crate::memory::ensure_linlis_layout(
+            let _ = crate::memory::ensure_ohmyworkpanel_layout(
                 std::path::Path::new(&group.workspace_path),
                 Some(&member_id),
             );
@@ -849,7 +849,7 @@ pub fn list_logs(
 
 #[tauri::command]
 pub fn count_logs(level: Option<String>, state: State<'_, AppState>) -> AppResult<i64> {
-    logger::count_logs(&open_db(&state.db_path)?, level.as_deref())
+    logger::count_logs(&open_db(&state.db_path)?, level.as_deref(), None)
 }
 
 #[tauri::command]

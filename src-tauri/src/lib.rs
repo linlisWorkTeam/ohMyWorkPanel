@@ -43,6 +43,8 @@ use std::{
 
 #[cfg(feature = "gui")]
 use tauri::Manager;
+#[cfg(feature = "gui")]
+use std::fs;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -62,7 +64,7 @@ pub fn run() {
                 .app_data_dir()
                 .map_err(|e| std::io::Error::other(e.to_string()))?;
             fs::create_dir_all(&dir)?;
-            let db_path = dir.join("linlis-work-panel.sqlite3");
+            let db_path = dir.join("ohmyworkpanel.sqlite3");
             init_db(&db_path).map_err(std::io::Error::other)?;
             app.manage(AppState {
                 db_path,
@@ -134,7 +136,7 @@ pub fn run() {
             commands::update_member_model_cmd,
         ])
         .run(tauri::generate_context!())
-        .expect("Failed to launch LinlisWorkPanel");
+        .expect("Failed to launch ohMyWorkPanel");
 }
 
 #[cfg(not(feature = "gui"))]

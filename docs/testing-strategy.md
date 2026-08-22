@@ -4,7 +4,7 @@ topic: automated-testing-strategy
 status: active
 ---
 
-# LinlisWorkPanel 自动化测试策略
+# ohMyWorkPanel 自动化测试策略
 
 ## 目标
 
@@ -16,7 +16,7 @@ status: active
 | 门禁绑 canary | `deploy-canary.sh` **构建前**强制跑 `scripts/test-gate.sh` |
 | 内存受限 | `CARGO_BUILD_JOBS=1`、门禁内 `NODE_OPTIONS=--max-old-space-size=768`、cargo 子 shell `ulimit -v` ≈1.8GB |
 | 不测真 CLI | Codex/Claude/Cursor 真机调用走尽力 smoke，**不进门禁** |
-| 数据隔离 | 测试只用 tempfile / `data-canary`；永不写 `/AI/LinlisWorkPanel/data` |
+| 数据隔离 | 测试只用 tempfile / `data-canary`；永不写 `/AI/ohMyWorkPanel/data` |
 
 ## 当前基线（2026-08-05 复核）
 
@@ -121,7 +121,7 @@ deploy-canary.sh
 |---|---|
 | 入口 | [`scripts/test-gate.sh`](../scripts/test-gate.sh) |
 | 调用点 | [`scripts/deploy-canary.sh`](../scripts/deploy-canary.sh) 构建之前 |
-| 跳过 | 仅破窗：`LINLIS_SKIP_TEST_GATE=1`（日常禁止） |
+| 跳过 | 仅破窗：`OHMYWORKPANEL_SKIP_TEST_GATE=1`（日常禁止） |
 | `BUILD=skip` | **仍跑门禁** |
 | 本地等价 | `pnpm run test:gate` |
 

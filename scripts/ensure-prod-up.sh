@@ -3,9 +3,9 @@
 # Safe to run frequently from systemd timer. Never promotes or overwrites artifacts.
 set -euo pipefail
 
-PROD_UNIT=linlis-work-panel.service
-PROXY_UNIT=linlis-work-panel-proxy.service
-LOG_TAG=linlis-prod-watchdog
+PROD_UNIT=ohmyworkpanel.service
+PROXY_UNIT=ohmyworkpanel-proxy.service
+LOG_TAG=ohmyworkpanel-prod-watchdog
 
 log() { logger -t "$LOG_TAG" -- "$*"; echo "$*"; }
 

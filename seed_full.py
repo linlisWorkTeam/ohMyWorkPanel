@@ -1,6 +1,6 @@
-﻿import sqlite3, uuid, time
+import sqlite3, uuid, time
 
-DB = '/AI/LinlisWorkPanel/data/linlis-work-panel.sqlite3'
+DB = '/AI/ohMyWorkPanel/data/ohmyworkpanel.sqlite3'
 
 def new_id():
     return str(uuid.uuid4())
@@ -51,7 +51,7 @@ c.execute('INSERT OR IGNORE INTO users(id, username, password_hash, created_at) 
 
 group_id = new_id()
 c.execute('INSERT OR IGNORE INTO groups(id, name, workspace_path, owner_member_id, admin_member_id, created_at) VALUES (?,?,?,?,?,?)',
-          (group_id, 'AI Agent 团队', '/AI/LinlisWorkPanel', user_id, None, now))
+          (group_id, 'AI Agent 团队', '/AI/ohMyWorkPanel', user_id, None, now))
 
 agents = [
     ('超大杯Codex', 'codex', '#2b6cb0', '项目开发主力，但不是所有时间都在线'),

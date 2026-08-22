@@ -1,7 +1,7 @@
 {
-  "name": "Linlis WorkPanel",
-  "short_name": "WorkPanel",
-  "description": "Linli's multi-agent workpanel",
+  "name": "ohMyWorkPanel",
+  "short_name": "ohMyWorkPanel",
+  "description": "ohMyWorkPanel multi-agent collaboration panel",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

@@ -1,0 +1,26 @@
+[Unit]
+Description=ohMyWorkPanel Web Server (CANARY — test slot)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/ohmyworkpanel/canary
+ExecStart=/opt/ohmyworkpanel/canary/bin/ohmyworkpanel-server
+Environment=OHMYWORKPANEL_DATA_DIR=/AI/ohMyWorkPanel/data-canary
+Environment=OHMYWORKPANEL_WEB_DIST=/opt/ohmyworkpanel/canary/dist
+Environment=OHMYWORKPANEL_PORT=8081
+Environment=OHMYWORKPANEL_ROOT=/AI/ohMyWorkPanel
+Environment=OHMYWORKPANEL_CODEX_PROXY_SCRIPT=/AI/ohMyWorkPanel/scripts/codex-deepseek-proxy.cjs
+# Separate from prod :18888 so canary restart never steals/kills production Codex shim.
+Environment=OHMYWORKPANEL_CODEX_PROXY_PORT=18889
+Environment=OHMYWORKPANEL_CODEX_BASE_URL=http://127.0.0.1:18889/v1
+Environment=OHMYWORKPANEL_PANELLIVE_ROOT=/AI/WorkPanelLive
+Environment=OHMYWORKPANEL_EXTENSION_ROOTS=/AI/WorkPanelLive:/AI/AIHotel
+Environment=OHMYWORKPANEL_WIKI_ROOT=/AI/WorkPanelWiki
+Environment=OHMYWORKPANEL_WIKI_RETRIEVE=1
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

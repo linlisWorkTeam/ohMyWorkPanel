@@ -37,4 +37,5 @@ dist.tar.gz
 
 # Local runtime state (agents memory / local panel data) — never commit
 .linlis/
+.ohmyworkpanel/
 .local-panel/
