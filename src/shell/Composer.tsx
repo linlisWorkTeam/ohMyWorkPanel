@@ -17,8 +17,8 @@ export function Composer({
     <div className="wp-composer-wrap">
       {quote && (
         <div className="wp-quote-bar">
-          <span>?? {quote.author}?{quote.excerpt}</span>
-          <button type="button" aria-label="????" onClick={onClearQuote}>?</button>
+          <span>引用 {quote.author}：{quote.excerpt}</span>
+          <button type="button" aria-label="取消引用" onClick={onClearQuote}>×</button>
         </div>
       )}
       <div className="wp-composer">

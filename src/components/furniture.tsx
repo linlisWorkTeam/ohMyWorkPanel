@@ -11,8 +11,8 @@ import type { Group, GroupState, Member, RunPhaseEntry, TaskRun } from "../types
 import { ContextActionMenu, useLongPress, type ActionItem } from "./ContextActionMenu";
 
 /* ============================================================
-   WorkPanel UI furniture: ? App.tsx ?????/??/?????P1 ????
-   ???/????????????????? --lp-* ?? token?
+   WorkPanel UI furniture: 从 App.tsx 抽取的消息/成员/状态组件（P1 组件化）
+   仅呈现/交互，不持有业务状态；所有颜色只走 --lp-* 语义 token。
    ============================================================ */
 
 export const MessageBubble = memo(function MessageBubble({
@@ -59,7 +59,7 @@ export const MessageBubble = memo(function MessageBubble({
   ) : (
     <TypingIndicator label={
       run?.phase ? (PHASE_LABEL[run.phase] ?? run.phase)
-        : run?.status === "queued" ? "???" : "?"
+        : run?.status === "queued" ? "排队中" : "…"
     } />
   );
   const showSpeak = Boolean(voiceUxEnabled && hasContent && !responding && onPlayVoice);
@@ -82,21 +82,21 @@ export const MessageBubble = memo(function MessageBubble({
       document.body.removeChild(ta);
     }
   };
-  const senderName = sender?.displayName ?? "?????";
+  const senderName = sender?.displayName ?? "已移除成员";
   const items: ActionItem[] = [
-    { id: "copy", label: "??", onSelect: () => void copyMessage() },
-    { id: "quote", label: "??", onSelect: () => onQuote?.(message, senderName) },
+    { id: "copy", label: "复制", onSelect: () => void copyMessage() },
+    { id: "quote", label: "引用", onSelect: () => onQuote?.(message, senderName) },
   ];
   if (showSpeak) {
     items.push({
       id: "speak",
-      label: playing ? "????" : "??",
+      label: playing ? "播放中…" : "朗读",
       disabled: playing,
       onSelect: () => onPlayVoice?.(message.id, message.content),
     });
   }
   if (canRetry && run) {
-    items.push({ id: "retry", label: "??", onSelect: () => onRun(run, "retry") });
+    items.push({ id: "retry", label: "重试", onSelect: () => onRun(run, "retry") });
   }
   const openMenu = (x: number, y: number) => setMenu({ x, y });
   const hold = useLongPress(openMenu);
@@ -132,7 +132,7 @@ export const MessageBubble = memo(function MessageBubble({
               }}
               onPointerDown={(event) => event.stopPropagation()}
             >
-              ??
+              停止
             </button>
           )}
         </div>
@@ -169,7 +169,7 @@ export function MessagePartsBody({
                 groupId={groupId}
                 messageId={messageId}
                 channel="thinking"
-                label="????"
+                label="思考过程"
                 streaming={streaming}
               />
             )}
@@ -178,7 +178,7 @@ export function MessagePartsBody({
                 groupId={groupId}
                 messageId={messageId}
                 channel="artifact"
-                label="????"
+                label="中间产物"
                 streaming={streaming}
               />
             )}
@@ -196,7 +196,7 @@ export function MessagePartsBody({
           groupId={groupId}
           messageId={messageId}
           channel="thinking"
-          label="????"
+          label="思考过程"
           streaming={streaming}
         />
       )}
@@ -205,7 +205,7 @@ export function MessagePartsBody({
           groupId={groupId}
           messageId={messageId}
           channel="artifact"
-          label="????"
+          label="中间产物"
           streaming={streaming}
         />
       )}
@@ -269,12 +269,12 @@ export function LazyChannelPart({
     >
       <summary>
         {label}
-        {streaming ? "?????" : ""}
-        {!open ? " ? ????" : ""}
+        {streaming ? "（生成中）" : ""}
+        {!open ? " · 点击加载" : ""}
       </summary>
-      {loading && text == null && <pre className="part-loading">????</pre>}
+      {loading && text == null && <pre className="part-loading">加载中…</pre>}
       {error && <pre className="part-error">{error}</pre>}
-      {text != null && <pre>{text || "???"}</pre>}
+      {text != null && <pre>{text || "（空）"}</pre>}
     </details>
   );
 }
@@ -297,7 +297,7 @@ export function TypingIndicator({ label }: { label: string }) {
   );
 }
 
-export /** run ?????P2????????????? */
+export /** run 阶段轨迹（P2）：懒加载展开阶段时间线。 */
 function PhaseTrail({ runId }: { runId: string }) {
   const [open, setOpen] = useState(false);
   const [entries, setEntries] = useState<RunPhaseEntry[] | null>(null);
@@ -315,7 +315,7 @@ function PhaseTrail({ runId }: { runId: string }) {
   return (
     <div className="qc-trail">
       <button type="button" className="mini-btn qc-trail-toggle" onClick={() => void toggle()}>
-        {open ? "? ????" : "? ????"}
+        {open ? "▲ 收起轨迹" : "▼ 展开轨迹"}
       </button>
       {open && (
         <ol className="phase-trail">
@@ -326,8 +326,8 @@ function PhaseTrail({ runId }: { runId: string }) {
               <time>{time(entry.createdAt)}</time>
             </li>
           ))}
-          {entries === null && <li className="phase-empty">????</li>}
-          {entries !== null && entries.length === 0 && <li className="phase-empty">??????</li>}
+          {entries === null && <li className="phase-empty">加载中…</li>}
+          {entries !== null && entries.length === 0 && <li className="phase-empty">暂无阶段记录</li>}
         </ol>
       )}
     </div>
@@ -344,43 +344,43 @@ export function RunQueuePane({ runs, members, onCancel, onReview }: {
     .filter((r) => r.status === "running" || r.status === "queued")
     .sort((a, b) => (a.startedAt ?? a.createdAt) - (b.startedAt ?? b.createdAt));
   const review = runs.filter((r) => r.status === "awaiting_review");
-  const nameOf = (id: string) => members.find((m) => m.id === id)?.displayName ?? "?????";
+  const nameOf = (id: string) => members.find((m) => m.id === id)?.displayName ?? "已移除成员";
   if (active.length === 0 && review.length === 0) {
-    return <div className="queue-empty">?????????????</div>;
+    return <div className="queue-empty">当前没有排队或待审批的任务</div>;
   }
   return (
     <>
-      <div className="sec-title"><span>??? ? ??</span><span>{active.length}</span></div>
+      <div className="sec-title"><span>执行中 · 排队</span><span>{active.length}</span></div>
       {active.map((run) => (
         <div key={run.id} className="queue-card">
           <div className="qc-top">
             <span className="qc-name">{nameOf(run.agentMemberId)}</span>
             <span className="qc-id">{run.id.slice(0, 8)}</span>
-            <span className={`st ${run.status}`}>{run.status === "running" ? "???" : "???"}</span>
+            <span className={`st ${run.status}`}>{run.status === "running" ? "执行中" : "排队中"}</span>
           </div>
-          <div className="qc-phase">{run.phase ? (PHASE_LABEL[run.phase] ?? run.phase) : run.status === "queued" ? "????" : "????"}</div>
+          <div className="qc-phase">{run.phase ? (PHASE_LABEL[run.phase] ?? run.phase) : run.status === "queued" ? "等待调度" : "执行中…"}</div>
           <div className="qc-bar"><i /></div>
           <div className="qc-sub">
             <span>{time(run.createdAt)}</span>
-            <button type="button" className="mini-btn qc-cancel" onClick={() => onCancel(run)}>??</button>
+            <button type="button" className="mini-btn qc-cancel" onClick={() => onCancel(run)}>取消</button>
           </div>
           <PhaseTrail runId={run.id} />
         </div>
       ))}
       {review.length > 0 && (
         <>
-          <div className="sec-title"><span>???</span><span>{review.length}</span></div>
+          <div className="sec-title"><span>待审批</span><span>{review.length}</span></div>
           {review.map((run) => (
             <div key={run.id} className="queue-card review">
               <div className="qc-top">
                 <span className="qc-name">{nameOf(run.agentMemberId)}</span>
-                <span className="st review">???</span>
+                <span className="st review">待审批</span>
               </div>
-              <div className="qc-sub">?? {run.reviewerMemberId ? nameOf(run.reviewerMemberId) : "???"} ? ??????????</div>
+              <div className="qc-sub">交由 {run.reviewerMemberId ? nameOf(run.reviewerMemberId) : "审批人"} · 批准后由调度自动继续</div>
               {run.reviewStatus === "pending" && (
                 <div className="qc-actions">
-                  <button type="button" className="mini-btn qc-approve" onClick={() => onReview(run, "approved")}>? ??</button>
-                  <button type="button" className="mini-btn qc-reject" onClick={() => onReview(run, "rejected")}>? ?????????</button>
+                  <button type="button" className="mini-btn qc-approve" onClick={() => onReview(run, "approved")}>✓ 批准</button>
+                  <button type="button" className="mini-btn qc-reject" onClick={() => onReview(run, "rejected")}>✕ 拒绝（返回待修改）</button>
                 </div>
               )}
             </div>
@@ -411,25 +411,25 @@ export function MemberRow({ member, group, runs, detecting, online, askMode, onA
   }, [responding]);
   const activeRuns = queueOpen ? runsForAgentActive(runs, member.id) : [];
   const idleRuntime =
-    member.runtimeStatus === "ready" ? "???" : member.runtimeStatus === "unavailable" ? "???" : "???";
-  const busyOrIdle = detecting ? "????" : busy ?? idleRuntime;
+    member.runtimeStatus === "ready" ? "已就绪" : member.runtimeStatus === "unavailable" ? "不可用" : "待检测";
+  const busyOrIdle = detecting ? "检测中…" : busy ?? idleRuntime;
   const statusText = member.kind === "agent"
-    ? `${member.adapter}${member.model ? ` ? ${member.model}` : ""}`
+    ? `${member.adapter}${member.model ? ` · ${member.model}` : ""}`
     : member.kind === "chatbot"
-      ? `${member.adapter ?? "chatbot"} ? ${member.model || "deepseek-v4-flash"}`
+      ? `${member.adapter ?? "chatbot"} · ${member.model || "deepseek-v4-flash"}`
       : member.invitePending
-        ? "?????"
-        : member.roleDescription || "????";
+        ? "邀请未接受"
+        : member.roleDescription || "本地成员";
   const stateLabel = member.kind === "user"
-    ? (online ? "??" : member.invitePending ? "??" : "??")
-    : detecting ? "???" : busy ? "???" : idleRuntime;
+    ? (online ? "在线" : member.invitePending ? "等待" : "离线")
+    : detecting ? "检测中" : busy ? "执行中" : idleRuntime;
   const stateKind = detecting ? "" : busy ? "busy" : member.runtimeStatus === "unavailable" ? "bad" : online || member.runtimeStatus === "ready" ? "ok" : "";
   const rosterAction = memberRosterAction(member);
   const items: ActionItem[] = [];
   if (member.kind === "agent") {
     items.push({
       id: "detect",
-      label: detecting ? "???" : "??",
+      label: detecting ? "检测中" : "检测",
       disabled: Boolean(detecting),
       onSelect: () => onDetect(member),
     });
@@ -438,8 +438,8 @@ export function MemberRow({ member, group, runs, detecting, online, askMode, onA
     items.push({
       id: "admin",
       label: isAdmin
-        ? (group.groupKind === "chat" ? "??????" : "????")
-        : (group.groupKind === "chat" ? "??????" : "???"),
+        ? (group.groupKind === "chat" ? "撤销默认响应" : "撤销管理")
+        : (group.groupKind === "chat" ? "设为默认响应" : "设管理"),
       onSelect: () => onAdmin(isAdmin ? null : member.id),
     });
   }
@@ -447,25 +447,25 @@ export function MemberRow({ member, group, runs, detecting, online, askMode, onA
     for (const model of modelOptions) {
       items.push({
         id: `model:${model}`,
-        label: member.model === model ? `?? ? ${model} ?` : `??? ${model}`,
+        label: member.model === model ? `模型 · ${model} ✓` : `切换为 ${model}`,
         onSelect: () => onModel(member, model),
       });
     }
   }
   if (member.kind === "agent" && member.adapter === "dsh") {
-    items.push({ id: "dsh", label: "?? DSH Web", onSelect: () => onOpenDsh?.(member) });
+    items.push({ id: "dsh", label: "跳转 DSH Web", onSelect: () => onOpenDsh?.(member) });
   }
   if (member.invitePending) {
     items.push({
       id: "revoke-invite",
-      label: "????",
+      label: "撤销邀请",
       danger: true,
       onSelect: () => onRemove(member),
     });
   } else if (!member.systemLocked && member.id !== group.ownerMemberId) {
     items.push({
       id: "remove",
-      label: rosterAction === "delete" ? "??" : "??",
+      label: rosterAction === "delete" ? "删除" : "移除",
       danger: true,
       onSelect: () => onRemove(member),
     });
@@ -473,7 +473,7 @@ export function MemberRow({ member, group, runs, detecting, online, askMode, onA
   if (items.length === 0) {
     items.push({
       id: "copy-name",
-      label: "????",
+      label: "复制名称",
       onSelect: () => void navigator.clipboard.writeText(member.displayName),
     });
   }
@@ -492,14 +492,14 @@ export function MemberRow({ member, group, runs, detecting, online, askMode, onA
       <div className="member-details">
         <strong>
           {member.displayName}
-          {member.id === group.ownerMemberId && <em>??</em>}
+          {member.id === group.ownerMemberId && <em>群主</em>}
           {isAdmin && (
-            <em className="admin-badge">{group.groupKind === "chat" ? "????" : "???"}</em>
+            <em className="admin-badge">{group.groupKind === "chat" ? "默认响应" : "管理员"}</em>
           )}
           {askMode && <em className="ask-badge">Ask</em>}
-          {member.kind === "chatbot" && <em className="admin-badge">???</em>}
-            {member.systemLocked && <em className="admin-badge" title="??????? Agent?????/??">??</em>}
-          {member.invitePending && <em className="invite-badge">???</em>}
+          {member.kind === "chatbot" && <em className="admin-badge">机器人</em>}
+            {member.systemLocked && <em className="admin-badge" title="平台锁定的自举 Agent，不可修改/移除">系统</em>}
+          {member.invitePending && <em className="invite-badge">链接中</em>}
         </strong>
         <span>
           {member.kind === "agent" && busy ? (
@@ -508,21 +508,21 @@ export function MemberRow({ member, group, runs, detecting, online, askMode, onA
               className="member-queue-toggle"
               onClick={() => setQueueOpen((open) => !open)}
               aria-expanded={queueOpen}
-              title={queueOpen ? "??????" : "??????"}
+              title={queueOpen ? "收起排队任务" : "展开排队任务"}
             >
               {statusText}
             </button>
           ) : (
             statusText
           )}
-          {member.tags ? ` ? ?? ${member.tags}` : ""}
+          {member.tags ? ` · 🏷 ${member.tags}` : ""}
         </span>
         {queueOpen && activeRuns.length > 0 && (
           <ul className="member-queue-list">
             {activeRuns.map((run) => (
               <li key={run.id}>
-                <span>{run.status === "running" ? "???" : "???"} ? {run.id.slice(0, 8)}</span>
-                <button type="button" className="danger" onClick={() => onCancelRun(run)}>??</button>
+                <span>{run.status === "running" ? "执行中" : "排队中"} · {run.id.slice(0, 8)}</span>
+                <button type="button" className="danger" onClick={() => onCancelRun(run)}>取消</button>
               </li>
             ))}
           </ul>
@@ -540,22 +540,22 @@ export function Avatar({ member, responding, online }: { member?: Member; respon
     </span>
   );
 }
-export function Status({ status }: { status: string }) { return <span className={`status ${status}`}>{({ queued: "???", running: "???", awaiting_review: "???", changes_requested: "???", completed: "??", failed: "??", cancelled: "???", interrupted: "???" } as Record<string, string>)[status] ?? status}</span>; }
-export function ReviewBadge({ reviewStatus }: { reviewStatus: string }) { return <span className={`review-badge ${reviewStatus}`}>{({ pending: "???", approved: "???", rejected: "???" } as Record<string, string>)[reviewStatus] ?? reviewStatus}</span>; }
+export function Status({ status }: { status: string }) { return <span className={`status ${status}`}>{({ queued: "排队中", running: "运行中", awaiting_review: "待审阅", changes_requested: "待修改", completed: "完成", failed: "失败", cancelled: "已停止", interrupted: "已中断" } as Record<string, string>)[status] ?? status}</span>; }
+export function ReviewBadge({ reviewStatus }: { reviewStatus: string }) { return <span className={`review-badge ${reviewStatus}`}>{({ pending: "审阅中", approved: "已通过", rejected: "被退回" } as Record<string, string>)[reviewStatus] ?? reviewStatus}</span>; }
 
-/** ??????????"?????????"????? */
+/** 无群欢迎页（替代永远"正在打开本地群聊…"的空态）。 */
 export function EmptyHome({ canCreate, onCreate }: { canCreate?: boolean; onCreate?: () => void }) {
   return (
     <div className="empty-home">
       <div className="eh-mark">L</div>
-      <strong className="eh-title">???? WorkPanel</strong>
-      <p className="eh-desc">????????????????????? @Agent ??????????????????</p>
+      <strong className="eh-title">欢迎来到 WorkPanel</strong>
+      <p className="eh-desc">这里还没有群聊。项目群绑定服务器工作区、用 @Agent 协作；聊天群则是一组机器人的轻对话。</p>
       <div className="eh-actions">
         {canCreate && (
-          <button type="button" className="eh-primary" onClick={onCreate}>? ????</button>
+          <button type="button" className="eh-primary" onClick={onCreate}>＋ 新建群聊</button>
         )}
       </div>
-      <p className="eh-hints"><kbd>Ctrl/?+1</kbd> ????? ? <kbd>Ctrl/?+2</kbd> ????</p>
+      <p className="eh-hints"><kbd>Ctrl/⌘+1</kbd> 左栏控制轨 · <kbd>Ctrl/⌘+2</kbd> 成员面板</p>
     </div>
   );
 }

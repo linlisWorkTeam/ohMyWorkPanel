@@ -11,8 +11,8 @@ describe("Shell chrome", () => {
     expect(src).toContain('className="wp-left"');
     expect(src).toContain('className="wp-mid"');
     expect(src).toContain('className="wp-wave"');
-    expect(src).not.toContain("title=\"????\"");
-    expect(src).not.toContain(">??<");
+    expect(src).not.toContain("title=\"外观主题\"");
+    expect(src).not.toContain(">🎨<");
     expect(css).toMatch(/\.wp-shell\s*\{[^}]*grid-template-columns/);
   });
 
@@ -21,7 +21,7 @@ describe("Shell chrome", () => {
     expect(css).toMatch(/\.wp-shell:not\(:has\(\.wp-right\s*>\s*\*\)\)[^}]*--right:\s*0/);
   });
 
-  it("zeros overlay columns at ?1080px and drawers onto wp-left / wp-right", () => {
+  it("zeros overlay columns at ≤1080px and drawers onto wp-left / wp-right", () => {
     const idx = css.indexOf("@media (max-width: 1080px)");
     expect(idx).toBeGreaterThan(-1);
     const chunk = css.slice(idx, idx + 1600);

@@ -24,7 +24,7 @@ export function Roster(props: RosterProps): JSX.Element {
   const { members } = props;
   return (
     <div className="wp-roster">
-      <p className="wp-roster-hint">?????????? / ??? / ??????????</p>
+      <p className="wp-roster-hint">右键或长按成员：检测 / 设管理 / 移除（行上不摊按钮）</p>
       {members.map((member) => (
         <RosterRow key={member.id} {...props} member={member} />
       ))}
@@ -62,24 +62,24 @@ function RosterRow({
   }, [responding]);
   const activeRuns = queueOpen ? runsForAgentActive(runs, member.id) : [];
   const idleRuntime =
-    member.runtimeStatus === "ready" ? "???" : member.runtimeStatus === "unavailable" ? "???" : "???";
+    member.runtimeStatus === "ready" ? "已就绪" : member.runtimeStatus === "unavailable" ? "不可用" : "待检测";
   const statusText = member.kind === "agent"
-    ? `${member.adapter}${member.model ? ` ? ${member.model}` : ""}`
+    ? `${member.adapter}${member.model ? ` · ${member.model}` : ""}`
     : member.kind === "chatbot"
-      ? `${member.adapter ?? "chatbot"} ? ${member.model || "deepseek-v4-flash"}`
+      ? `${member.adapter ?? "chatbot"} · ${member.model || "deepseek-v4-flash"}`
       : member.invitePending
-        ? "?????"
-        : member.roleDescription || "????";
+        ? "邀请未接受"
+        : member.roleDescription || "本地成员";
   const stateLabel = member.kind === "user"
-    ? (online ? "??" : member.invitePending ? "??" : "??")
-    : detecting ? "???" : busy ? "???" : idleRuntime;
+    ? (online ? "在线" : member.invitePending ? "等待" : "离线")
+    : detecting ? "检测中" : busy ? "执行中" : idleRuntime;
   const stateKind = detecting ? "" : busy ? "busy" : member.runtimeStatus === "unavailable" ? "bad" : online || member.runtimeStatus === "ready" ? "ok" : "";
   const rosterAction = memberRosterAction(member);
   const items: ActionItem[] = [];
   if (member.kind === "agent") {
     items.push({
       id: "detect",
-      label: detecting ? "???" : "??",
+      label: detecting ? "检测中" : "检测",
       disabled: Boolean(detecting),
       onSelect: () => onDetect(member),
     });
@@ -88,8 +88,8 @@ function RosterRow({
     items.push({
       id: "admin",
       label: isAdmin
-        ? (group.groupKind === "chat" ? "??????" : "????")
-        : (group.groupKind === "chat" ? "??????" : "???"),
+        ? (group.groupKind === "chat" ? "撤销默认响应" : "撤销管理")
+        : (group.groupKind === "chat" ? "设为默认响应" : "设管理"),
       onSelect: () => onAdmin(isAdmin ? null : member.id),
     });
   }
@@ -97,25 +97,25 @@ function RosterRow({
     for (const model of modelOptions) {
       items.push({
         id: `model:${model}`,
-        label: member.model === model ? `?? ? ${model} ?` : `??? ${model}`,
+        label: member.model === model ? `模型 · ${model} ✓` : `切换为 ${model}`,
         onSelect: () => onModel(member, model),
       });
     }
   }
   if (member.kind === "agent" && member.adapter === "dsh") {
-    items.push({ id: "dsh", label: "?? DSH Web", onSelect: () => onOpenDsh?.(member) });
+    items.push({ id: "dsh", label: "跳转 DSH Web", onSelect: () => onOpenDsh?.(member) });
   }
   if (member.invitePending) {
     items.push({
       id: "revoke-invite",
-      label: "????",
+      label: "撤销邀请",
       danger: true,
       onSelect: () => onRemove(member),
     });
   } else if (!member.systemLocked && member.id !== group.ownerMemberId) {
     items.push({
       id: "remove",
-      label: rosterAction === "delete" ? "??" : "??",
+      label: rosterAction === "delete" ? "删除" : "移除",
       danger: true,
       onSelect: () => onRemove(member),
     });
@@ -123,7 +123,7 @@ function RosterRow({
   if (items.length === 0) {
     items.push({
       id: "copy-name",
-      label: "????",
+      label: "复制名称",
       onSelect: () => void navigator.clipboard.writeText(member.displayName),
     });
   }
@@ -158,14 +158,14 @@ function RosterRow({
       <div className="wp-m-meta">
         <div className="wp-m-name">
           {member.displayName}
-          {member.id === group.ownerMemberId && <em className="lead">??</em>}
+          {member.id === group.ownerMemberId && <em className="lead">群主</em>}
           {isAdmin && (
-            <em className="lead">{group.groupKind === "chat" ? "????" : "???"}</em>
+            <em className="lead">{group.groupKind === "chat" ? "默认响应" : "管理员"}</em>
           )}
           {rowAskMode && <em>Ask</em>}
-          {member.kind === "chatbot" && <em>???</em>}
-          {member.systemLocked && <em title="??????? Agent?????/??">??</em>}
-          {member.invitePending && <em>???</em>}
+          {member.kind === "chatbot" && <em>机器人</em>}
+          {member.systemLocked && <em title="平台锁定的自举 Agent，不可修改/移除">系统</em>}
+          {member.invitePending && <em>链接中</em>}
         </div>
         <div className="wp-m-sub">
           {member.kind === "agent" && busy ? (
@@ -173,21 +173,21 @@ function RosterRow({
               type="button"
               onClick={() => setQueueOpen((open) => !open)}
               aria-expanded={queueOpen}
-              title={queueOpen ? "??????" : "??????"}
+              title={queueOpen ? "收起排队任务" : "展开排队任务"}
             >
               {statusText}
             </button>
           ) : (
             statusText
           )}
-          {member.tags ? ` ? ${member.tags}` : ""}
+          {member.tags ? ` · ${member.tags}` : ""}
         </div>
         {queueOpen && activeRuns.length > 0 && (
           <ul>
             {activeRuns.map((run) => (
               <li key={run.id}>
-                <span>{run.status === "running" ? "???" : "???"} ? {run.id.slice(0, 8)}</span>
-                <button type="button" onClick={() => onCancelRun(run)}>??</button>
+                <span>{run.status === "running" ? "执行中" : "排队中"} · {run.id.slice(0, 8)}</span>
+                <button type="button" onClick={() => onCancelRun(run)}>取消</button>
               </li>
             ))}
           </ul>

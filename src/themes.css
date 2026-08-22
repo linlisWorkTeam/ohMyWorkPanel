@@ -19,7 +19,7 @@ html {
   --bg-app-glow: none;
 }
 
-/* ?? Theme tokens ?? */
+/* ── Theme tokens ── */
 :root,
 [data-theme="atlas"] {
   --font-display: var(--font);
@@ -57,11 +57,11 @@ html {
   --hover-sidebar: #16324d;
   --ring: #1f9bb866;
   color-scheme: light;
-  /* ??????P0.1 ??? */
+  /* 语义状态色（P0.1 新增） */
   --success: #1f8f5c;
   --warn: #b7791f;
   --error: var(--danger);
-  /* ?? LP ??????P0.1 ??????? token ?? ? ???????? */
+  /* ── LP 语义别名层（P0.1 新增，均由既有 token 组合 → 零视觉回归）── */
   --lp-bg-app: var(--bg);
   --lp-bg-sidebar: var(--surf);
   --lp-bg-panel: var(--surf);
@@ -270,7 +270,7 @@ html {
   --error: var(--danger);
 }
 
-/* ?? Global chrome rewrite (overrides legacy hardcodes) ?? */
+/* ── Global chrome rewrite (overrides legacy hardcodes) ── */
 html, body, #root { min-height: 100%; background: var(--bg); }
 body {
   margin: 0;
@@ -318,7 +318,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   backdrop-filter: saturate(1.05);
 }
 
-/* ?? ??????DSH ui-layout ???P0.3? ?? */
+/* ── 三栏分界条（DSH ui-layout 借鉴，P0.3） ── */
 .app-shell .divider {
   width: 100%;
   height: 100%;
@@ -346,12 +346,12 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   box-shadow: 0 0 10px var(--ring);
 }
 
-/* ?????????????????? */
+/* 右栏关闭：右列与右分界归零，中栏占满 */
 .app-shell[data-right="closed"] {
   grid-template-columns: var(--left-w) 8px minmax(500px, 1fr) 0 0;
 }
 
-/* ?? ??????56px?????????? Drawer? ?? */
+/* ── 左栏控制轨（56px，仅宽屏；移动端仍是 Drawer） ── */
 .rail-toggle {
   color: var(--text-on-sidebar-soft);
   font-size: 12px;
@@ -932,7 +932,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .auth-switch { border: 0; background: transparent; color: var(--accent-strong); font-size: 12px; font-weight: 700; cursor: pointer; padding: 0; text-align: left; }
 .auth-error { background: var(--elev); border: 1px solid var(--line); color: var(--ink); border-radius: 8px; padding: 8px 10px; font-size: 12px; }
 
-/* Theme picker lives in ???? only */
+/* Theme picker lives in 运行设置 only */
 
 .loading { color: var(--text-faint); }
 .error-toast { background: var(--elev); border: 1px solid var(--line); color: var(--ink); }
@@ -958,7 +958,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .responding-badge { background: color-mix(in srgb, var(--accent) 16%, transparent) !important; color: var(--accent-strong) !important; }
 .status.running, .status.queued { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent-strong); }
 
-/* ?? Day divider & mention menu ?? */
+/* ── Day divider & mention menu ── */
 .day-block { display: contents; }
 .day-divider {
   display: flex; align-items: center; gap: 12px; margin: 18px 0 6px;
@@ -976,7 +976,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 }
 .empty-chat-sub { color: var(--text-faint); font-size: 11px; }
 
-/* ?? Preset roles picker (create group) ?? */
+/* ── Preset roles picker (create group) ── */
 .preset-roles { display: grid; gap: 8px; }
 .preset-roles-label { font-size: 12px; font-weight: 600; color: var(--text-soft); }
 .preset-roles-grid { display: grid; gap: 6px; max-height: 200px; overflow-y: auto; }
@@ -993,10 +993,10 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .preset-role-body small { color: var(--text-faint); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .preset-role-check { font-size: 13px; font-weight: 800; color: var(--accent); width: 16px; text-align: center; }
 
-/* ?? PM refreshing indicator ?? */
+/* ── PM refreshing indicator ── */
 .pm-refreshing { margin-left: auto; font-size: 10px; color: var(--text-faint); font-weight: 600; padding: 6px 4px; }
 
-/* ?? P0.4 ????? ? ?? token???????/??/???????? themes.css ??? styles.css? ?? */
+/* ── P0.4 残留硬编码 → 语义 token（第一片：状态/日志/操作按钮，叠加于 themes.css 不回流 styles.css） ── */
 .status.running, .status.queued, .review-badge.pending, .log-info {
   background: color-mix(in srgb, var(--accent) 16%, transparent);
   color: var(--accent-strong);
@@ -1049,13 +1049,13 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .own .bubble-play-btn { background: color-mix(in srgb, var(--accent) 18%, transparent); }
 
 
-/* ?? Focus visibility (a11y) ?? */
+/* ── Focus visibility (a11y) ── */
 button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, a:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
 
-/* ?? Mobile / narrow layouts ?? */
+/* ── Mobile / narrow layouts ── */
 @media (max-width: 1080px) {
   .app-shell { grid-template-columns: 1fr; }
   .app-shell[data-left="rail"],
@@ -1116,9 +1116,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .auth-card, .theme-swatch, .send-button, .avatar.responding, .typing-dots i, .stream-caret { animation: none !important; transition: none !important; }
 }
 
-/* ??????????????????????????????????????????????????????????????
-   P1 ???????DSH ????????? --lp-* ?? token?
-   ?????????????????????????????????????????????????????????????? */
+/* ══════════════════════════════════════════════════════════════
+   P1 家具视觉升级（DSH 设计语言；全部消费 --lp-* 语义 token）
+   ══════════════════════════════════════════════════════════════ */
 .message-row { gap: 12px; }
 .message-content { min-width: 0; }
 .message-meta { height: auto; margin-bottom: 5px; gap: 8px; }
@@ -1129,7 +1129,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .own .bubble { border-color: color-mix(in srgb, var(--lp-accent) 28%, var(--lp-border-l1)); }
 .bubble.streaming { border-color: color-mix(in srgb, var(--lp-accent) 42%, var(--lp-border-l1)); }
 
-/* ????????/??/??/??????????????????? */
+/* 操作条常驻（复制/赞踩/停止/重试）；悬停显示会撑开气泡导致列表抖动 */
 .m-actions { display: flex; align-items: center; gap: 4px; margin-top: 5px; padding-left: 2px; }
 .mini-btn {
   border: 0; background: transparent; color: var(--lp-text-tertiary);
@@ -1140,7 +1140,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .mini-btn.vote.on { color: var(--lp-accent); background: var(--lp-bg-active); }
 .mini-sep { width: 1px; height: 12px; background: var(--lp-border-l1); margin: 0 2px; }
 
-/* Agent ??/????? */
+/* Agent 思考/产物卡片化 */
 .part-thinking, .part-artifact {
   border: 1px solid var(--lp-border-l1);
   border-radius: 10px;
@@ -1154,13 +1154,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   cursor: pointer; user-select: none; list-style: none;
 }
 .part-thinking > summary::-webkit-details-marker, .part-artifact > summary::-webkit-details-marker { display: none; }
-.part-thinking > summary::before { content: "? "; color: var(--lp-accent); }
-.part-artifact > summary::before { content: "? "; color: var(--lp-accent); }
+.part-thinking > summary::before { content: "≡ "; color: var(--lp-accent); }
+.part-artifact > summary::before { content: "◈ "; color: var(--lp-accent); }
 .part-artifact { border-left: 3px solid var(--lp-accent); }
 .part-thinking pre, .part-artifact pre { margin: 6px 0 0; color: var(--lp-text-secondary); }
 .message-parts { gap: 8px; }
 
-/* ??? + ???? */
+/* 成员行 + 队列卡片 */
 .member-row { border: 1px solid transparent; border-radius: 10px; padding: 8px 9px; transition: border-color .15s ease, background .15s ease; }
 .member-row:hover { border-color: var(--lp-border-l1); }
 .member-row.is-responding { border-color: color-mix(in srgb, var(--lp-accent) 30%, transparent); background: var(--lp-bg-active); }
@@ -1185,17 +1185,17 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   outline-color: var(--lp-ring);
 }
 
-/* composer ?? */
+/* composer 升级 */
 .composer-wrap { border-radius: 16px 16px 0 0; padding: 14px 20px 12px; }
 .composer-wrap textarea { height: auto; min-height: 58px; }
 .composer-actions { padding-top: 6px; gap: 8px; }
 
-/* ??/???????? */
+/* 状态/复审徽标统一胶囊 */
 .status, .review-badge { border-radius: 999px; padding: 2px 9px; font-size: 10px; }
 
-/* ??????????????????????????????????????????????????????????????
-   P2 goal bar?Wave ????+ ????/?????
-   ?????????????????????????????????????????????????????????????? */
+/* ══════════════════════════════════════════════════════════════
+   P2 goal bar（Wave 常驻条）+ 右栏队列/待审批卡片
+   ══════════════════════════════════════════════════════════════ */
 .goal-bar {
   flex: none;
   display: flex;
@@ -1241,7 +1241,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   color: var(--lp-text-tertiary);
 }
 
-/* ?????? */
+/* 右栏队列页签 */
 .sec-title {
   display: flex;
   align-items: center;
@@ -1341,7 +1341,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .qc-approve:hover { filter: brightness(1.1); }
 .qc-reject:hover { filter: brightness(1.1); }
 
-/* run ?????P2? */
+/* run 阶段轨迹（P2） */
 .qc-trail { margin-top: 6px; }
 .qc-trail-toggle { padding: 2px 8px; }
 .phase-trail {
@@ -1373,7 +1373,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .phase-empty { color: var(--lp-text-tertiary); border-left: 2px solid transparent; }
 
 
-/* composer ??? + goal bar ?? */
+/* composer 工具行 + goal bar 交互 */
 .composer-tools { display: flex; align-items: center; gap: 10px; padding: 0 2px 7px; }
 .composer-tools .tool-btn {
   width: 28px; height: 28px; border-radius: 8px;
@@ -1396,7 +1396,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .goal-bar:hover { background: color-mix(in srgb, var(--lp-accent) 12%, var(--lp-bg-active)); }
 .goal-bar:focus-visible { outline: 2px solid var(--lp-ring); outline-offset: -2px; }
 
-/* ??/Agent ???????????????????????????? */
+/* 成员/Agent 面板开关（桌面与移动端均可见；修复桌面右栏关后无法重开） */
 .chat-header .members-toggle {
   border: 0;
   background: transparent;
@@ -1413,7 +1413,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .chat-header .members-toggle:hover { background: var(--lp-bg-hover); color: var(--lp-text-primary); }
 .chat-header .members-toggle[aria-pressed="true"] { color: var(--lp-accent); background: var(--lp-bg-active); }
 
-/* ????? */
+/* 无群欢迎页 */
 .empty-home {
   height: 100%;
   display: grid;
@@ -1443,10 +1443,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .empty-home .eh-primary:hover { filter: brightness(1.12); }
 .empty-home .eh-hints { display: flex; gap: 10px; align-items: center; color: var(--lp-text-tertiary); font-size: 11px; margin: 8px 0 0; }
 
-/* ??????????????????????????????????????????????????????????????
-   ui-demo.html ?????--s-* ????? --bg-*????????
-   ???????????????????????????
-   ?????????????????????????????????????????????????????????????? */
+/* ══════════════════════════════════════════════════════════════
+   ui-demo.html 壳层对齐：--s-* 色板覆盖旧 --bg-*，去掉城市底图，
+   组件只用语义色。本段必须在文件末尾以压过前面的硬编码。
+   ══════════════════════════════════════════════════════════════ */
 
 :root,
 [data-theme="atlas"] {
