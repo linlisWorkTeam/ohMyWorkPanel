@@ -1,4 +1,4 @@
-# PRD：LinlisWorkPanel 手机端 Web 版本（方案 A：响应式适配 + PWA）
+# PRD：ohMyWorkPanel 手机端 Web 版本（方案 A：响应式适配 + PWA）
 
 - 作者：曲奇 🍪（PM）
 - 日期：2026-08-03
@@ -7,7 +7,7 @@
 
 ## 1. 背景与目标
 
-LinlisWorkPanel 目前是 Tauri 2 桌面应用，但已具备 `build:web` 纯 Web 构建模式（api-web.ts 走 HTTP/WS + token 鉴权），Rust 服务端已在 8080 端口提供 Web 版页面。手机浏览器可访问但体验差（960px 最小宽度导致横向滚动、三栏布局无法操作）。
+ohMyWorkPanel 目前是 Tauri 2 桌面应用，但已具备 `build:web` 纯 Web 构建模式（api-web.ts 走 HTTP/WS + token 鉴权），Rust 服务端已在 8080 端口提供 Web 版页面。手机浏览器可访问但体验差（960px 最小宽度导致横向滚动、三栏布局无法操作）。
 
 **目标**：在不改动后端与数据模型的前提下，让 Web 版在手机端（窄屏触屏设备）可用、好用，并支持 PWA「添加到主屏幕」获得类 App 体验。
 
@@ -60,7 +60,7 @@ LinlisWorkPanel 目前是 Tauri 2 桌面应用，但已具备 `build:web` 纯 We
 
 ### 4.3 PWA
 - 新增 `public/manifest.webmanifest`（或沿用 dist 输出约定）：
-  - name: Linlis WorkPanel，short_name: WorkPanel，display: standalone，background/theme color 取现有配色（#202a3a / #eff2f5）
+  - name: ohMyWorkPanel，short_name: ohMyWorkPanel，display: standalone，background/theme color 取现有配色（#202a3a / #eff2f5）
   - icons: 复用 `assets/` 现有图标，补齐 192px / 512px 尺寸（用现有源图缩放生成，若无 512 源图则放大导出）
 - 新增 `public/sw.js`（或 vite-plugin-pwa 引入，二选一，**倾向轻量手写**，避免新增构建依赖）：
   - 基础缓存：静态资源（/assets/*）cache-first，网络优先回退缓存（HTML）

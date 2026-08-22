@@ -28,7 +28,7 @@ pub struct Group {
     pub group_kind: String,
     #[serde(default)]
     pub archived: bool,
-    /// Built-in seed / system group (e.g. LinlisWorkPanel); not deletable.
+    /// Built-in seed / system group (e.g. ohMyWorkPanel); not deletable.
     #[serde(default)]
     pub is_system: bool,
     /// Unread message count for the current viewer (web list API).
@@ -74,7 +74,7 @@ pub struct Member {
     #[serde(default)]
     pub invite_pending: bool,
     /// Platform-locked bootstrap agent (seed system groups): read-only, cannot be
-    /// edited/removed/reassigned by users; only WorkPanel group's agent holds full
+    /// edited/removed/reassigned by users; only ohMyWorkPanel group's agent holds full
     /// self-bootstrap write capability (linlis-super-harness).
     #[serde(default)]
     pub system_locked: bool,

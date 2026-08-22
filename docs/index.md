@@ -1,4 +1,4 @@
-# LinlisWorkPanel 文档
+# ohMyWorkPanel 文档
 
 本目录面向项目使用者和贡献者，按 Diátaxis 的四类文档组织：
 

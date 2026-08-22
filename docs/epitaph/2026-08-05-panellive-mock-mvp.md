@@ -12,7 +12,7 @@ status: active
 - **PanelLive Mock MVP** at `/AI/WorkPanelLive`：HTTP mock STT/TTS + Live 页；`npm run smoke` 通过；默认 `127.0.0.1:8790`
 - **平台契约**：`docs/panellive-platform-requirements.md`；`docs/roadmap.md` 新增 v0.5
 - **设计/计划**：`docs/superpowers/specs|plans/2026-08-05-panellive-mock-mvp*`
-- **群通知（prod :8080 / LinlisWorkPanel）**：3 条 roadmap todo；A2A 消息 `@Codex @Cursor Agent @OpenClaw`（message `00980bb7-…`，3 个 runIds）
+- **群通知（prod :8080 / ohMyWorkPanel）**：3 条 roadmap todo；A2A 消息 `@Codex @Cursor Agent @OpenClaw`（message `00980bb7-…`，3 个 runIds）
 
 ## Locked product decisions
 
@@ -37,5 +37,5 @@ cd /AI/WorkPanelLive && npm run smoke
 
 ## Open follow-ups
 
-- WorkPanel Extension Host / Live 页签 / A2A skills 由平台 Agent 认领
+- ohMyWorkPanel Extension Host / Live 页签 / A2A skills 由平台 Agent 认领
 - 下一刀：dashscope 真 STT/TTS

@@ -16,7 +16,7 @@ status: active
 ## Built
 
 - 同源代理 `GET/POST /api/extensions/panellive/{*path}` → `127.0.0.1:8790`（无 JWT）
-- `POST .../events` + `X-Panellive-Token`（默认 `panellive-dev-token` / env `LINLIS_PANELLIVE_TOKEN`）
+- `POST .../events` + `X-Panellive-Token`（默认 `panellive-dev-token` / env `OHMYWORKPANEL_PANELLIVE_TOKEN`）
 - `baseUrl` 改为 `/api/extensions/panellive`；PanelLive `live.html` 自动加 API_BASE 前缀
 - enable 未就绪 → **409**
 

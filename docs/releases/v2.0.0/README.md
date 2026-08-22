@@ -1,4 +1,4 @@
-# WorkPanel v2.0.0 — Cursor Agent 环境包
+# ohMyWorkPanel v2.0.0 — Cursor Agent 环境包
 
 把 **Cursor Agent** 在本机可运行所需的依赖打成可导入配置包（**不含登录凭据 / 不含 CLI 二进制**）。
 
@@ -16,7 +16,7 @@
 
 ## 怎么用
 
-1. 管理员打开 WorkPanel「Agent 配置」→ 导入上述 JSON（可勾选自动安装缺失 CLI）。
+1. 管理员打开 ohMyWorkPanel「Agent 配置」→ 导入上述 JSON（可勾选自动安装缺失 CLI）。
 2. 或从本机重新生成脱敏包：`./scripts/pack-cursor-agent.sh > /tmp/cursor-agent.bundle.json`（不会写入密钥字段）。
 3. 导入只更新**已有**成员；`system_locked` 跳过。种子成员 id 需为 `seed-member-cursor` 或显示名匹配「Cursor Agent」。
 
@@ -25,7 +25,7 @@
 - Node.js 20+
 - Cursor CLI 在 `PATH`（`~/.local/bin` 或 `~/.local/share/cursor-agent/versions/<ver>/cursor-agent`）
 - 本机已登录 Cursor 账号（配置包不携带 session）
-- WorkPanel 二进制能 spawn `agent` / `cursor-agent`
+- ohMyWorkPanel 二进制能 spawn `agent` / `cursor-agent`
 
 ## 风险
 

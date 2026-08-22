@@ -73,7 +73,7 @@
 | GET/PUT | `/api/settings`（含心跳 Auto / 聚焦秒 / 后台秒） |
 | POST | `/api/ocr`、`/api/ocr/base64` |
 | GET | `/api/preset-roles` |
-| GET | `/api/adapters`（CLI 目录：内置 ∪ `LINLIS_ADAPTER_ROOTS` 的 `*.adapter.json`） |
+| GET | `/api/adapters`（CLI 目录：内置 ∪ `OHMYWORKPANEL_ADAPTER_ROOTS` 的 `*.adapter.json`） |
 
 ## 路线图 / 特性 / 编排
 

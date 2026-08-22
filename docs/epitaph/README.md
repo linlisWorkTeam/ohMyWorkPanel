@@ -24,7 +24,7 @@ Active handoff notes for future agents.
 | 2026-08-10 | [OpenClaw stderr 回显 + 响应契约测](./2026-08-10-openclaw-echo-contracts.md) | active |
 | 2026-08-06 | [V1.3.0 工作流灰度](./2026-08-06-v1.3.0-workflow-canary.md) | active |
 | 2026-08-06 | [Codex 代理 tools/tool_calls 修复](./2026-08-06-codex-proxy-tools.md) | active |
-| 2026-08-06 | [V1.3.0 工作流时代设计](../superpowers/specs/2026-08-06-workpanel-v1.3.0-workflow-era-design.md) | draft-for-review |
+| 2026-08-06 | [V1.3.0 工作流时代设计](../superpowers/specs/2026-08-06-ohmyworkpanel-v1.3.0-workflow-era-design.md) | draft-for-review |
 | 2026-08-06 | [v1.2.0 生产基线 promote](./2026-08-06-v1.2.0-baseline-promote.md) | active（tag 已补） |
 | 2026-08-05 | [版本流水线 SSOT](../version-pipeline.md) | active（非 epitaph，索引挂此） |
 | 2026-08-05 | [Live/Host 工作区边界拍板](../superpowers/specs/2026-08-05-workspace-boundary-live-host.md) | decided |

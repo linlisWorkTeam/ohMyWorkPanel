@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Mandatory quality gate before canary deploy. Fail-closed.
-# Break-glass only: LINLIS_SKIP_TEST_GATE=1
+# Break-glass only: OHMYWORKPANEL_SKIP_TEST_GATE=1
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${ROOT}"
 
-if [[ "${LINLIS_SKIP_TEST_GATE:-}" == "1" ]]; then
-  echo "WARNING: LINLIS_SKIP_TEST_GATE=1 - skipping test gate (break-glass only)" >&2
+if [[ "${OHMYWORKPANEL_SKIP_TEST_GATE:-}" == "1" ]]; then
+  echo "WARNING: OHMYWORKPANEL_SKIP_TEST_GATE=1 - skipping test gate (break-glass only)" >&2
   exit 0
 fi
 

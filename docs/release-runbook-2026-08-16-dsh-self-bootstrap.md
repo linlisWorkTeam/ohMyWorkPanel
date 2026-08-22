@@ -6,7 +6,7 @@ status: checklist
 
 # 发布 Runbook：DSH 自举接入（P0 + P2 切片）
 
-> 目标流程：**本地调试 OK → 合入 GitHub → ECS 上的 WorkPanel 自举更新到灰度(:8081) → 灰度转生产(:8080)**。
+> 目标流程：**本地调试 OK → 合入 GitHub → ECS 上的 ohMyWorkPanel 自举更新到灰度(:8081) → 灰度转生产(:8080)**。
 > 本文件是给“有 shell / 网络”的执行环境用的操作清单；当前会话因 Windows bash 禁用 + 无外网，无法代为执行第 2 步之后的内容。
 
 ## 0. 范围（本批内容）
@@ -15,7 +15,7 @@ status: checklist
 - **P2 切片（本批新增）**：两级自举 Agent 的数据层与只读强制：
   - `Member.system_locked`（Rust 模型 + 前端 `systemLocked`）
   - 迁移 `agent_profiles.system_locked`（幂等 `ALTER TABLE`，启动自动生效）
-  - WorkPanel 种子组 `linlis-super-harness`（`system_locked=1`，`ensure_default_seed` 自动落）
+  - ohMyWorkPanel 种子组 `linlis-super-harness`（`system_locked=1`，`ensure_default_seed` 自动落）
   - 后端守卫 `assert_member_mutable`（拒绝 remove/set_admin/改模型/改工作区）
   - 前端成员行只读 + 「系统」徽标
 - **未做（后续立项）**：普通群极简 `bootstrap-dsh-<group>` 的逐群 seed、web.rs 同名守卫、UI-P0 三栏 AppFrame、P1 ACP 会话回放、P3 自举闭环。
@@ -23,7 +23,7 @@ status: checklist
 ## 1. 本地验证（必须全绿）
 
 ```bash
-cd /AI/LinlisWorkPanel
+cd /AI/ohMyWorkPanel
 
 # 前端类型与单测
 pnpm install
@@ -43,7 +43,7 @@ pnpm run build             # Vite 前端产物
 
 **重点人工核对**
 1. 启动后自动迁移：`agent_profiles.system_locked` 列存在（幂等 ALTER，无需手工 SQL）。
-2. 种子组 `LinlisWorkPanel`（`is_system=1`）成员含 **linlis-super-harness**（adapter=dsh, system_locked=1），无“检测/设管理/移除/改模型/改工作区”入口，显示「系统」徽标。
+2. 种子组 `ohMyWorkPanel`（`is_system=1`）成员含 **linlis-super-harness**（adapter=dsh, system_locked=1），无“检测/设管理/移除/改模型/改工作区”入口，显示「系统」徽标。
 3. 尝试对 linlis-super-harness 调 remove/set_admin/改模型 → 后端返回“平台锁定的自举 Agent 不可修改或移除”。
 4. 普通成员不受影响（system_locked=0）。
 5. `dsh web` 在 :3080 时，「跳转 DSH Web」可打开内嵌页面。
@@ -51,21 +51,21 @@ pnpm run build             # Vite 前端产物
 ## 2. 合入 GitHub
 
 ```bash
-cd /AI/LinlisWorkPanel
+cd /AI/ohMyWorkPanel
 git add -A
 # 按项目提交规范：类型前缀，中文/英文均可
 git commit -m "feat: dsh 自举执行者 P0+P2 切片（适配器/嵌入/两级自举 Agent/system_locked）"
 git push origin master
 ```
 
-## 3. ECS：让 WorkPanel 自举更新灰度（:8081）
+## 3. ECS：让 ohMyWorkPanel 自举更新灰度（:8081）
 
-> ECS 上 WorkPanel 是通过“自举”机制拉新代码的。按 README 的 Web 运维路径：
+> ECS 上 ohMyWorkPanel 是通过“自举”机制拉新代码的。按 README 的 Web 运维路径：
 
 ```bash
-# 在 ECS（工作区 /AI/LinlisWorkPanel）上
+# 在 ECS（工作区 /AI/ohMyWorkPanel）上
 ssh <ecs-host>          # 进入 ECS
-cd /AI/LinlisWorkPanel
+cd /AI/ohMyWorkPanel
 git pull origin master   # 拉取本次发布内容（合入 GitHub 后）
 
 export CARGO_BUILD_JOBS=1 NODE_OPTIONS=--max-old-space-size=1024
@@ -74,7 +74,7 @@ export CARGO_BUILD_JOBS=1 NODE_OPTIONS=--max-old-space-size=1024
 ```
 
 **灰度验证（:8081）**
-- 登录 :8081（默认 root/root），进入 WorkPanel 组：
+- 登录 :8081（默认 root/root），进入 ohMyWorkPanel 组：
   - 成员栏出现只读「系统」linlis-super-harness；
   - 建一个 dsh Agent 跑 `@` 任务（headless）；
   - 「跳转 DSH Web」可打开 :3080（ECS 上需先启动 `dsh web`）。
@@ -94,8 +94,8 @@ export CARGO_BUILD_JOBS=1 NODE_OPTIONS=--max-old-space-size=1024
 
 ## 5. 发布后核对（对外输出口径）
 
-- 对外一句话：**“引入不可修改的两级 DSH 自举 Agent（普通群极简 bootstrap-dsh、WorkPanel 组 linlis-super-harness），把面板自我更新收敛到受人类审批、可审计、可回滚的单一通道。”**
-- 需随版本输出的文档：`docs/superpowers/specs/2026-08-16-dsh-self-bootstrap-runtime.md`、`docs/superpowers/specs/2026-08-16-group-chat-governance-plane.md`、`docs/superpowers/specs/2026-08-16-dsh-ui-language-workpanel.md`。
+- 对外一句话：**“引入不可修改的两级 DSH 自举 Agent（普通群极简 bootstrap-dsh、ohMyWorkPanel 组 linlis-super-harness），把面板自我更新收敛到受人类审批、可审计、可回滚的单一通道。”**
+- 需随版本输出的文档：`docs/superpowers/specs/2026-08-16-dsh-self-bootstrap-runtime.md`、`docs/superpowers/specs/2026-08-16-group-chat-governance-plane.md`、`docs/superpowers/specs/2026-08-16-dsh-ui-language-ohmyworkpanel.md`。
 
 ## 6. 回滚预案
 

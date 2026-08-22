@@ -13,7 +13,7 @@ status: active
 ## Built this session
 
 **为何看起来不像 demo**
-- P0–P2 把 `--lp-*`、Divider、goal bar **螺栓在旧 WorkPanel chrome 上**：城市底图、聊天/版本/设置胶囊、composer 外置发送、右栏六七个页签。Gate 只跑 tsc/拖拽/主题，从未像素对照 HTML。
+- P0–P2 把 `--lp-*`、Divider、goal bar **螺栓在旧 ohMyWorkPanel chrome 上**：城市底图、聊天/版本/设置胶囊、composer 外置发送、右栏六七个页签。Gate 只跑 tsc/拖拽/主题，从未像素对照 HTML。
 
 **壳层对齐（本次）**
 - 6 套主题末尾覆盖 `--s-*` 色板，`--lp-*` / `--bg-*` 双写；去掉 cyberpunk/industrial 城市 SVG；Atlas/Moss 侧栏改为与 demo 相同的浅底深字。
@@ -39,7 +39,7 @@ status: active
 
 ## Locked product decisions
 
-- 壳层以 `docs/ui-demo.html` 为准，不是旧 WorkPanel 胶囊头。
+- 壳层以 `docs/ui-demo.html` 为准，不是旧 ohMyWorkPanel 胶囊头。
 - Cyberpunk 主色跟 demo：`#00f0ff`（不再粉青城市图）。
 - 斜杠仍只有 `/board /approve /wave`，不加 `/play /pause /advance /release`。
 - 本机 Windows `:8082` ≠ Linux 灰度 `:8081` / 生产 `:8080`。Agent 不得伪造 `approve-prod-release` 或动生产 unit。
@@ -55,9 +55,9 @@ status: active
 ## How to run / verify
 
 - 前端：`npm test`（本机 PATH 无 `pnpm` 时）→ **79 passed / 23 files**（含上述 4 个新测）。
-- `npm run build:web` → `dist/`；`:8082` 的 `LINLIS_WEB_DIST` 指向该 dist。
+- `npm run build:web` → `dist/`；`:8082` 的 `OHMYWORKPANEL_WEB_DIST` 指向该 dist。
 - 视觉：`http://127.0.0.1:8082/` Ctrl+Shift+R。CDP 曾测：`--lp-accent=#00f0ff`、`body::before` opacity 0、折叠轨宽 56、右栏三页签、思考过程点击后 `#root` 仍在。
-- 登录 seed：`root` / `root`。数据：`D:\AI\LinlisWorkPanel\.local-panel\data`。
+- 登录 seed：`root` / `root`。数据：`D:\AI\ohMyWorkPanel\.local-panel\data`。
 
 ## Do not regress
 

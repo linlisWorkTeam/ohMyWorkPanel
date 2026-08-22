@@ -150,7 +150,7 @@ export function App() {
   const [adminInAsk, setAdminInAsk] = useState(false);
   const [extensions, setExtensions] = useState<ExtensionStatus[]>([]);
   const [extTogglingId, setExtTogglingId] = useState<string | null>(null);
-  const [workspacePath, setWorkspacePath] = useState("/AI/LinlisWorkPanel");
+  const [workspacePath, setWorkspacePath] = useState("/AI/ohMyWorkPanel");
   const [createGroupKind, setCreateGroupKind] = useState<"project" | "chat">("project");
   const [showArchived, setShowArchived] = useState(false);
   const [sendKeyMode, setSendKeyMode] = useState<SendKeyMode>(() => loadSendKeyMode());
@@ -1584,7 +1584,7 @@ export function App() {
             <div className="extension-settings">
               <h3 className="settings-section-title">运行 · Extend</h3>
               {extensions.length === 0 ? (
-                <p className="form-hint">未发现扩展（检查 LINLIS_EXTENSION_ROOTS / 清单文件）。</p>
+                <p className="form-hint">未发现扩展（检查 OHMYWORKPANEL_EXTENSION_ROOTS / 清单文件）。</p>
               ) : (
                 extensions.map((ext) => (
                   <div key={ext.id} className="extension-settings-row">
@@ -1816,7 +1816,7 @@ function AuthScreen({ error, onError, onAuthed }: { error: string | null; onErro
         <form className="modal-form" onSubmit={(e) => void submit(e)}>
           <label>用户名<input autoFocus value={username} onChange={(e) => setUsername(e.target.value)} required autoComplete="username" /></label>
           <label>密码<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete={mode === "login" ? "current-password" : "new-password"} /></label>
-          <button className="primary-wide" type="submit" disabled={busy}>{busy ? "请稍候…" : mode === "login" ? "进入 Workpanel" : "注册并进入"}</button>
+          <button className="primary-wide" type="submit" disabled={busy}>{busy ? "请稍候…" : mode === "login" ? "进入 ohMyWorkPanel" : "注册并进入"}</button>
         </form>
         <button type="button" className="auth-switch" onClick={() => { setMode(mode === "login" ? "register" : "login"); onError(null); }}>
           {mode === "login" ? "没有账号？注册" : "已有账号？登录"}

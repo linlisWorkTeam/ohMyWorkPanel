@@ -10,13 +10,13 @@
 #   # or: ./scripts/freeze-prod.sh ...
 set -euo pipefail
 
-PROD_APPROVAL_FILE="${PROD_APPROVAL_FILE:-/opt/linlis-workpanel/PROD_APPROVE}"
+PROD_APPROVAL_FILE="${PROD_APPROVAL_FILE:-/opt/ohmyworkpanel/PROD_APPROVE}"
 PROD_APPROVAL_MAX_AGE_SEC="${PROD_APPROVAL_MAX_AGE_SEC:-900}"
 
 require_prod_approval() {
   local action="${1:-production change}"
-  if [[ "${LINLIS_ALLOW_PROD_WITHOUT_APPROVAL:-}" == "1" ]]; then
-    echo "WARNING: LINLIS_ALLOW_PROD_WITHOUT_APPROVAL=1 — skipping approval gate for: ${action}" >&2
+  if [[ "${OHMYWORKPANEL_ALLOW_PROD_WITHOUT_APPROVAL:-}" == "1" ]]; then
+    echo "WARNING: OHMYWORKPANEL_ALLOW_PROD_WITHOUT_APPROVAL=1 — skipping approval gate for: ${action}" >&2
     return 0
   fi
 
@@ -29,7 +29,7 @@ Production promote/freeze requires an explicit admin one-shot token:
 Then re-run this script within ${PROD_APPROVAL_MAX_AGE_SEC}s.
 
 Agents: do NOT create ${PROD_APPROVAL_FILE} and do NOT set
-LINLIS_ALLOW_PROD_WITHOUT_APPROVAL unless the human root explicitly
+OHMYWORKPANEL_ALLOW_PROD_WITHOUT_APPROVAL unless the human root explicitly
 ordered this production release in the current message.
 EOF
     return 2

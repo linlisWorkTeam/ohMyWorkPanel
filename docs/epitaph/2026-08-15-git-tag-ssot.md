@@ -26,7 +26,7 @@ status: active
 | 历史 epitaph「v1.3 双槽位」 | 不是 git tag `v1.3.0` |
 
 ## Known pitfalls
-- 三个「1.3」易混：git tag `v1.3.0`、产品里程碑「WorkPanel V1.3.0」、epitaph「v1.3 双槽位」。
+- 三个「1.3」易混：git tag `v1.3.0`、产品里程碑「ohMyWorkPanel V1.3.0」、epitaph「v1.3 双槽位」。
 - 改 tag 立刻影响版本页；移动/删除已推送 tag 需人工明确授权。
 
 ## How to run / verify

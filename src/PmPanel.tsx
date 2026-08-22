@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
 import { boundWorkForItem, pickDefaultAssigneeId, seedChecklistTitles } from "./roadmapUi";
 import type {

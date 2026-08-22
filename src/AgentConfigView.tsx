@@ -117,7 +117,7 @@ export function AgentConfigView({ onError, onStatusChange }: Props) {
       const text = JSON.stringify(bundle, null, 2);
       setExportText(text);
       download(
-        `linlis-agent-config-${includeSecrets ? "with-secrets" : "no-secrets"}-${Date.now()}.json`,
+        `ohmyworkpanel-agent-config-${includeSecrets ? "with-secrets" : "no-secrets"}-${Date.now()}.json`,
         text,
       );
     } catch (e: unknown) {
@@ -219,7 +219,7 @@ export function AgentConfigView({ onError, onStatusChange }: Props) {
       <section className="wf-section">
         <h2>一键导入（本地 / 新安装）</h2>
         <p className="wf-hint">
-          粘贴从服务器导出的配置包（<code>linlis-agent-config-*.json</code>），或选择该文件。
+          粘贴从服务器导出的配置包（<code>ohmyworkpanel-agent-config-*.json</code>），或选择该文件。
           导入会：写 <code>~/.codex</code>、<code>~/.claude</code>、<code>~/.cursor</code>、
           通用 <code>files</code>（备份后合并）→ 同步成员（agent_profiles）→ 持久化并随启动自动重放。
         </p>
@@ -302,7 +302,7 @@ export function AgentConfigView({ onError, onStatusChange }: Props) {
       <section className="wf-section">
         <h2>使用说明（release 开箱即用）</h2>
         <ol className="wf-ol">
-          <li><strong>服务器（首台）</strong>：在已 vibecoding 配好 Agent 的 ECS 上登录面板 → 「Agent 配置」→ 「导出配置包（含密钥）」→ 保存 <code>linlis-agent-config-with-secrets.json</code>。</li>
+          <li><strong>服务器（首台）</strong>：在已 vibecoding 配好 Agent 的 ECS 上登录面板 → 「Agent 配置」→ 「导出配置包（含密钥）」→ 保存 <code>ohmyworkpanel-agent-config-with-secrets.json</code>。</li>
           <li><strong>本地 / 新机器</strong>：安装面板 release → 「Agent 配置」→ 粘贴该包 → 「一键导入并配置」→ 缺失 CLI 自动安装，缺哪个就点「自动安装」。</li>
           <li>此后每次启动会 <strong>自动重放</strong>（幂等补写缺失配置），新用户无需重新 vibecoding。</li>
           <li>扩展性：未知 CLI 可用包内 <code>files</code>（home 相对路径 → 内容）额外携带配置；密钥字段不含密钥时导入不会误写。</li>

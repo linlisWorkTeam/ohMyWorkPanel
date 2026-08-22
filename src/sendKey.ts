@@ -1,6 +1,6 @@
 export type SendKeyMode = "enter" | "ctrlEnter";
 
-const STORAGE_KEY = "linlis_send_key_mode";
+const STORAGE_KEY = "ohmyworkpanel_send_key_mode";
 
 export function loadSendKeyMode(): SendKeyMode {
   try {

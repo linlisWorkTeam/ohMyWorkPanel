@@ -10,9 +10,9 @@ alwaysApply: true
 ## 禁止（无当轮人工批准时）
 
 - 运行 `./scripts/promote-canary.sh`、`./scripts/freeze-prod.sh`
-- `systemctl stop/restart` `linlis-work-panel.service` / `linlis-work-panel-proxy.service`
-- 改写 `/opt/linlis-workpanel/prod/**`、生产 data、`/etc/systemd/system/linlis-work-panel.service`
-- 创建 `/opt/linlis-workpanel/PROD_APPROVE` 或设置 `LINLIS_ALLOW_PROD_WITHOUT_APPROVAL=1` 来绕过门禁
+- `systemctl stop/restart` `ohmyworkpanel.service` / `ohmyworkpanel-proxy.service`
+- 改写 `/opt/ohmyworkpanel/prod/**`、生产 data、`/etc/systemd/system/ohmyworkpanel.service`
+- 创建 `/opt/ohmyworkpanel/PROD_APPROVE` 或设置 `OHMYWORKPANEL_ALLOW_PROD_WITHOUT_APPROVAL=1` 来绕过门禁
 
 ## 允许（无需生产批准）
 

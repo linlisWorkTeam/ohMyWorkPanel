@@ -54,7 +54,7 @@ impl Default for AgentConfigBundle {
             schema_version: SCHEMA_VERSION,
             exported_at: None,
             exported_by: None,
-            source: Some("linlis-work-panel".into()),
+            source: Some("ohmyworkpanel".into()),
             codex: CodexConfig::default(),
             claude: ClaudeConfig::default(),
             cursor: CursorConfig::default(),
@@ -418,7 +418,7 @@ pub fn build_bundle(db_path: &Path, include_secrets: bool) -> Result<AgentConfig
             }
         }
     }
-    bundle.source = Some("linlis-work-panel/export".into());
+    bundle.source = Some("ohmyworkpanel/export".into());
     Ok(bundle)
 }
 
@@ -1088,7 +1088,7 @@ fn codex_resolved_key(explicit: Option<&str>) -> Option<String> {
 pub fn status(db_path: &Path) -> AgentEnvStatus {
     let home = home_dir();
     let node_path = crate::adapters::find_executable_on_path("node");
-    let shim_port = std::env::var("LINLIS_CODEX_PROXY_PORT")
+    let shim_port = std::env::var("OHMYWORKPANEL_CODEX_PROXY_PORT")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(18888);

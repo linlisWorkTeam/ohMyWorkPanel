@@ -213,7 +213,7 @@ pub fn load_dir(dir: &Path) -> Result<Vec<AdapterManifest>, String> {
 fn scan_roots() -> HashMap<String, AdapterManifest> {
     let mut map = HashMap::new();
     let mut roots: Vec<PathBuf> = Vec::new();
-    if let Ok(raw) = std::env::var("LINLIS_ADAPTER_ROOTS") {
+    if let Ok(raw) = std::env::var("OHMYWORKPANEL_ADAPTER_ROOTS") {
         for part in raw.split(|c| c == ':' || c == ';') {
             let p = part.trim();
             if !p.is_empty() {
@@ -221,7 +221,7 @@ fn scan_roots() -> HashMap<String, AdapterManifest> {
             }
         }
     }
-    if let Ok(root) = std::env::var("LINLIS_ROOT") {
+    if let Ok(root) = std::env::var("OHMYWORKPANEL_ROOT") {
         roots.push(PathBuf::from(root).join("adapters"));
     }
     for root in roots {

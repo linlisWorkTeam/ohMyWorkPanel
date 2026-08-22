@@ -10,15 +10,15 @@ track: A
 
 > **本文是轨道 A「内部多 CLI 插件化」的 SSOT。** 实现必须按切片灰度；禁止一次拆光 `AdapterKind`。  
 > 动机：公司内有多类自研/采购 CLI，不能每接一家就改枚举并发版。  
-> 宿主：**只在 WorkPanel 适配器层**；不放 IM connector，不放 Extend 页签。
+> 宿主：**只在 ohMyWorkPanel 适配器层**；不放 IM connector，不放 Extend 页签。
 
 ## 1. 锁定结论（勿漂移）
 
 | # | 决定 |
 |---|---|
-| L1 | 插件化做在 **WorkPanel**，不是 connector、不是 Extend |
+| L1 | 插件化做在 **ohMyWorkPanel**，不是 connector、不是 Extend |
 | L2 | CLI 唯一 spawn 入口仍是 **`adapters::run_streaming`**（cwd=群工作区、取消、drain、同 Agent 串行） |
-| L3 | **终态全部 CLI 声明化**：随包或 `LINLIS_ADAPTER_ROOTS` 下的 `*.adapter.json`；枚举只当迁移 fallback，迁完删除 |
+| L3 | **终态全部 CLI 声明化**：随包或 `OHMYWORKPANEL_ADAPTER_ROOTS` 下的 `*.adapter.json`；枚举只当迁移 fallback，迁完删除 |
 | L4 | **异步切片**到达终态；每一刀独立灰度；同名 json 覆盖内置，稳了再删代码 |
 | L5 | argv **只允许数组 + `{prompt}`/`{model}`/`{session}` 占位符**；禁止 `sh -c` / 任意 shell 字符串 |
 | L6 | **`mock` 保留**，不进 CLI manifest（不 spawn，默认体验 / 测试 / 新建成员缺省） |
@@ -48,7 +48,7 @@ user | agent | chatbot
 
 `adapter` 字符串缺失时回落 `"mock"`。`chatbot-*` 即使误标在 agent 上，调度仍走 chatbot 快路径（现有 `is_chatbot_adapter`）。
 
-## 3. WorkPanel vs connector
+## 3. ohMyWorkPanel vs connector
 
 按「这条程序在干什么」分类，不按「都叫 CLI」。
 
@@ -57,11 +57,11 @@ user | agent | chatbot
 QQ / 微信 / Welink     ≠    acme / cursor / opencode
         │                           │
         ▼                           ▼
-   connector（轨道 D）         WorkPanel adapters（轨道 A）
+   connector（轨道 D）         ohMyWorkPanel adapters（轨道 A）
    统一消息进出群              spawn + 流式回气泡 + 取消
 ```
 
-| 判据 | WorkPanel Manifest | connector（尚未实现） |
+| 判据 | ohMyWorkPanel Manifest | connector（尚未实现） |
 |---|---|---|
 | 触发 | 群里 `@成员` | 平台 webhook / 长连接推消息进群 |
 | 工作区 | `cwd=群 workspace` | 无业务 workspace |
@@ -76,7 +76,7 @@ Welink/QQ 同步桥 → connector。内部 coding/ops CLI → 本文。HTTP 无�
 
 | 来源 | 说明 |
 |---|---|
-| `LINLIS_ADAPTER_ROOTS` | `:` / `;` 分隔目录，扫描 `*.adapter.json` |
+| `OHMYWORKPANEL_ADAPTER_ROOTS` | `:` / `;` 分隔目录，扫描 `*.adapter.json` |
 | 随仓 `adapters/*.adapter.json` | 迁出的内置（OpenCode 起） |
 | 代码枚举 | **仅迁移期 fallback**；同名以文件为准 |
 

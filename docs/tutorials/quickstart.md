@@ -1,4 +1,4 @@
-# Tutorial：第一次运行 LinlisWorkPanel
+# Tutorial：第一次运行 ohMyWorkPanel
 
 本教程使用浏览器开发模式，完成安装、启动、登录和第一次群聊。它不要求配置真实 Agent CLI；如果只想确认界面能启动，做到第 3 步即可。
 
@@ -13,12 +13,12 @@
 ## 2. 获取代码并安装依赖
 
 ```bash
-git clone https://github.com/linlisWorkTeam/workPanel.git
-cd workPanel
+git clone https://github.com/linlisWorkTeam/ohMyWorkPanel.git
+cd ohMyWorkPanel
 pnpm install
 ```
 
-如果仓库目录名称不同，请把 `cd workPanel` 替换为实际目录。
+如果仓库目录名称不同，请把 `cd ohMyWorkPanel` 替换为实际目录。
 
 ## 3. 启动开发服务
 
@@ -40,7 +40,7 @@ pnpm dev
 
 ## 5. 触发 Agent 任务（可选）
 
-先在运行 LinlisWorkPanel 的机器上安装并登录一个受支持的 CLI，再在群聊中使用其成员名称进行 `@` 提及：
+先在运行 ohMyWorkPanel 的机器上安装并登录一个受支持的 CLI，再在群聊中使用其成员名称进行 `@` 提及：
 
 ```text
 @agent 请检查当前工作区并回复一行摘要

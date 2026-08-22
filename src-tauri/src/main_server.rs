@@ -9,11 +9,11 @@ use tokio::sync::broadcast;
 use tower_http::cors::CorsLayer;
 use tower_http::services::{ServeDir, ServeFile};
 
-use linlis_work_panel_lib::db;
-use linlis_work_panel_lib::event_sender::EventSender;
-use linlis_work_panel_lib::logger;
-use linlis_work_panel_lib::scheduler::SchedulerState;
-use linlis_work_panel_lib::web;
+use ohmyworkpanel_lib::db;
+use ohmyworkpanel_lib::event_sender::EventSender;
+use ohmyworkpanel_lib::logger;
+use ohmyworkpanel_lib::scheduler::SchedulerState;
+use ohmyworkpanel_lib::web;
 
 /// Prevent browsers from caching index.html (stale shell → old JS without login page).
 async fn html_no_cache(req: Request<axum::body::Body>, next: Next) -> Response {
@@ -38,18 +38,18 @@ async fn html_no_cache(req: Request<axum::body::Body>, next: Next) -> Response {
 
 #[tokio::main]
 async fn main() {
-    // Data directory: LINLIS_DATA_DIR > XDG/platform default
-    let data_dir: PathBuf = if let Ok(dir) = env::var("LINLIS_DATA_DIR") {
+    // Data directory: OHMYWORKPANEL_DATA_DIR > XDG/platform default
+    let data_dir: PathBuf = if let Ok(dir) = env::var("OHMYWORKPANEL_DATA_DIR") {
         PathBuf::from(dir)
     } else if cfg!(target_os = "windows") {
         env::var("APPDATA")
-            .map(|p| PathBuf::from(p).join("linlis-work-panel"))
+            .map(|p| PathBuf::from(p).join("ohmyworkpanel"))
             .unwrap_or_else(|_| PathBuf::from("data"))
     } else {
         let home = env::var("HOME").unwrap_or_else(|_| "/root".into());
-        PathBuf::from(home).join(".local/share/linlis-work-panel")
+        PathBuf::from(home).join(".local/share/ohmyworkpanel")
     };
-    let db_path = data_dir.join("linlis-work-panel.sqlite3");
+    let db_path = data_dir.join("ohmyworkpanel.sqlite3");
 
     if let Some(parent) = db_path.parent() {
         std::fs::create_dir_all(parent).expect("create db data dir");
@@ -59,10 +59,10 @@ async fn main() {
     println!("DB: {}", db_path.display());
 
     // 启动时幂等重放已导入的 Agent 配置（开箱即用：缺失配置自动补写）。
-    if let Err(e) = linlis_work_panel_lib::agent_config::auto_apply_on_startup(&db_path) {
+    if let Err(e) = ohmyworkpanel_lib::agent_config::auto_apply_on_startup(&db_path) {
         eprintln!("Agent config auto-apply: {e}");
     }
-    linlis_work_panel_lib::reload_cli_adapter_manifests();
+    ohmyworkpanel_lib::reload_cli_adapter_manifests();
 
     let (tx, _) = broadcast::channel::<String>(256);
 
@@ -79,25 +79,25 @@ async fn main() {
         db_path: db_path.clone(),
         tx: tx.clone(),
         sched: sched.clone(),
-        presence: Arc::new(linlis_work_panel_lib::presence::PresenceRegistry::default()),
+        presence: Arc::new(ohmyworkpanel_lib::presence::PresenceRegistry::default()),
     });
 
     // Start background scheduler for agent runs
     web::start_scheduler_background(sched.clone());
-    linlis_work_panel_lib::keepalive::start_keepalive_loop(sched);
-    linlis_work_panel_lib::metrics::start_perf_loop(db_path.clone());
+    ohmyworkpanel_lib::keepalive::start_keepalive_loop(sched);
+    ohmyworkpanel_lib::metrics::start_perf_loop(db_path.clone());
     // Cursor --list-models → live catalog (other adapters: TODO in model_catalog)
-    linlis_work_panel_lib::model_catalog::start_cursor_model_sync_loop();
+    ohmyworkpanel_lib::model_catalog::start_cursor_model_sync_loop();
 
     // Codex Responses shim on :18888 — owned by this process (or reuse if already bound).
-    let _codex_proxy = linlis_work_panel_lib::codex_proxy::start_embedded().await;
+    let _codex_proxy = ohmyworkpanel_lib::codex_proxy::start_embedded().await;
     println!(
         "Codex proxy: port={} managed_sidecar={}",
         _codex_proxy.port(),
         _codex_proxy.managed_child()
     );
 
-    let dist_dir = env::var("LINLIS_WEB_DIST").unwrap_or_else(|_| "../dist".to_string());
+    let dist_dir = env::var("OHMYWORKPANEL_WEB_DIST").unwrap_or_else(|_| "../dist".to_string());
     println!("Static: {}", dist_dir);
 
     let index = format!("{}/index.html", dist_dir.trim_end_matches('/'));
@@ -108,15 +108,15 @@ async fn main() {
         .fallback_service(ServeDir::new(&dist_dir).fallback(ServeFile::new(index)))
         .layer(middleware::from_fn(html_no_cache));
 
-    let port = env::var("LINLIS_PORT").unwrap_or_else(|_| "8080".into());
+    let port = env::var("OHMYWORKPANEL_PORT").unwrap_or_else(|_| "8080".into());
     let addr = format!("0.0.0.0:{port}");
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
         .unwrap_or_else(|e| panic!("bind to {addr}: {e}"));
-    println!("LinlisWorkPanel Web Server -> http://{addr}");
+    println!("ohMyWorkPanel Web Server -> http://{addr}");
     // Log server start
     if let Ok(conn) = db::open_db(&db_path) {
-        logger::info(&conn, "server", "LinlisWorkPanel Web Server started", Some(&format!("{{\"addr\":\"{}\"}}", addr)));
+        logger::info(&conn, "server", "ohMyWorkPanel Web Server started", Some(&format!("{{\"addr\":\"{}\"}}", addr)));
     }
     axum::serve(listener, app).await.expect("serve");
 }

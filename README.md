@@ -1,11 +1,11 @@
-# LinlisWorkPanel
+# ohMyWorkPanel
 
 本地优先的多 Agent 协作面板：把工作群、工作区和 Agent 任务放在同一个界面中。
 
 ## Badges
 
 [![Build](https://img.shields.io/badge/build-not_configured-lightgrey)](#)
-[![License](https://img.shields.io/badge/license-not_declared-lightgrey)](#)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 ## Features
 
@@ -79,6 +79,4 @@ Web 部署场景中的工作区路径必须是服务器绝对路径，不是浏�
 
 ## License
 
-当前仓库未声明许可证。
-
-<!-- TODO: 根据项目实际补充 LICENSE 文件、版权主体和许可证链接。 -->
+本项目使用 [MIT License](LICENSE)，允许商业使用、修改和再发布，但请保留版权声明与许可证文本。

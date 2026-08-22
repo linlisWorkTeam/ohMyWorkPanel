@@ -6,6 +6,7 @@
 
 - [本地运行与停止](run-locally.md)
 - [运行测试与门禁](run-tests.md)
+- [仓库改名后的 ECS 更新](repository-rename.md)
 
 ## 计划补充
 

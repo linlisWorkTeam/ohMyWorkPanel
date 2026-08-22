@@ -11,7 +11,7 @@ source "$(dirname "$0")/release-layout.sh"
 source "$(dirname "$0")/lib/prod-approval.sh"
 
 MODE="${1:-from-running}"
-RUNNING_BIN="${RUNNING_BIN:-/usr/local/bin/linlis-work-panel-server}"
+RUNNING_BIN="${RUNNING_BIN:-/usr/local/bin/ohmyworkpanel-server}"
 
 echo "==> freeze-prod: mode=${MODE} slot=${PROD_SLOT}"
 require_prod_approval "freeze-prod (write production slot artifacts)"
@@ -43,13 +43,13 @@ if [[ ! -f "${SRC_DIST}/index.html" ]]; then
   exit 1
 fi
 
-/bin/cp -f "${SRC_BIN}" "${PROD_SLOT}/bin/linlis-work-panel-server"
-chmod +x "${PROD_SLOT}/bin/linlis-work-panel-server"
+/bin/cp -f "${SRC_BIN}" "${PROD_SLOT}/bin/ohmyworkpanel-server"
+chmod +x "${PROD_SLOT}/bin/ohmyworkpanel-server"
 rm -rf "${PROD_SLOT}/dist"
 /bin/cp -a "${SRC_DIST}" "${PROD_SLOT}/dist"
 
 STAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-SHA="$(sha256sum "${PROD_SLOT}/bin/linlis-work-panel-server" | awk '{print $1}')"
+SHA="$(sha256sum "${PROD_SLOT}/bin/ohmyworkpanel-server" | awk '{print $1}')"
 cat > "${PROD_SLOT}/meta/RELEASE.json" <<EOF
 {
   "slot": "prod",
@@ -64,4 +64,4 @@ EOF
 echo "Frozen prod binary sha256=${SHA}"
 echo "Dist: ${PROD_SLOT}/dist"
 echo "Data (unchanged): ${PROD_DATA}"
-echo "Point systemd at ${PROD_SLOT} then: systemctl restart linlis-work-panel.service"
+echo "Point systemd at ${PROD_SLOT} then: systemctl restart ohmyworkpanel.service"

@@ -7,7 +7,7 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
 fn project_root() -> PathBuf {
-    if let Ok(root) = std::env::var("LINLIS_ROOT") {
+    if let Ok(root) = std::env::var("OHMYWORKPANEL_ROOT") {
         return PathBuf::from(root);
     }
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -62,7 +62,7 @@ fn read_release_json(slot_dir: &Path) -> Option<serde_json::Value> {
 pub async fn release_status() -> ReleaseStatus {
     let root = project_root();
     let release_root =
-        std::env::var("RELEASE_ROOT").unwrap_or_else(|_| "/opt/linlis-workpanel".into());
+        std::env::var("RELEASE_ROOT").unwrap_or_else(|_| "/opt/ohmyworkpanel".into());
     let prod_port: u16 = std::env::var("PROD_PORT")
         .ok()
         .and_then(|s| s.parse().ok())
@@ -157,7 +157,7 @@ async fn run_script(kind: &str, script_rel: &str) -> Result<(), String> {
         .current_dir(&root)
         .env("CARGO_BUILD_JOBS", "1")
         .env("NODE_OPTIONS", "--max-old-space-size=1024")
-        .env_remove("LINLIS_SKIP_TEST_GATE")
+        .env_remove("OHMYWORKPANEL_SKIP_TEST_GATE")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);

@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Enable release drain on a WorkPanel port and wait until running==0 (or timeout).
+# Enable release drain on a ohMyWorkPanel port and wait until running==0 (or timeout).
 # Usage: drain-wait.sh <port> [timeout_secs]
-# Env: LINLIS_DRAIN_USER LINLIS_DRAIN_PASS (default root/root)
+# Env: OHMYWORKPANEL_DRAIN_USER OHMYWORKPANEL_DRAIN_PASS (default root/root)
 # If /api/ops/drain is missing (pre-smooth-release binary), skip wait and exit 0.
 set -euo pipefail
 
 PORT="${1:?port required}"
 TIMEOUT="${2:-180}"
-USER_NAME="${LINLIS_DRAIN_USER:-root}"
-PASS="${LINLIS_DRAIN_PASS:-root}"
+USER_NAME="${OHMYWORKPANEL_DRAIN_USER:-root}"
+PASS="${OHMYWORKPANEL_DRAIN_PASS:-root}"
 BASE="http://127.0.0.1:${PORT}"
 
 echo "==> drain-wait :${PORT} timeout=${TIMEOUT}s"
@@ -26,7 +26,7 @@ if [[ -z "${TOK}" ]]; then
   exit 0
 fi
 
-CODE="$(curl -sS -o /tmp/linlis-drain-status.json -w '%{http_code}' -X PUT "${BASE}/api/ops/drain" \
+CODE="$(curl -sS -o /tmp/ohmyworkpanel-drain-status.json -w '%{http_code}' -X PUT "${BASE}/api/ops/drain" \
   -H "Authorization: Bearer ${TOK}" \
   -H 'Content-Type: application/json' \
   -d '{"enabled":true}' || true)"
@@ -37,19 +37,19 @@ fi
 
 python3 - <<'PY'
 import json
-d=json.load(open("/tmp/linlis-drain-status.json"))
+d=json.load(open("/tmp/ohmyworkpanel-drain-status.json"))
 print(f"drain enabled={d.get('enabled')} running={d.get('running')} queued={d.get('queued')}")
 PY
 
 deadline=$((SECONDS + TIMEOUT))
 while (( SECONDS < deadline )); do
-  CODE="$(curl -sS -o /tmp/linlis-drain-status.json -w '%{http_code}' "${BASE}/api/ops/drain" -H "Authorization: Bearer ${TOK}" || true)"
+  CODE="$(curl -sS -o /tmp/ohmyworkpanel-drain-status.json -w '%{http_code}' "${BASE}/api/ops/drain" -H "Authorization: Bearer ${TOK}" || true)"
   if [[ "${CODE}" != "200" ]]; then
     echo "WARN: drain-wait: GET drain HTTP ${CODE}; stopping wait" >&2
     exit 0
   fi
-  running="$(python3 -c 'import json; print(json.load(open("/tmp/linlis-drain-status.json")).get("running",0))')"
-  queued="$(python3 -c 'import json; print(json.load(open("/tmp/linlis-drain-status.json")).get("queued",0))')"
+    running="$(python3 -c 'import json; print(json.load(open("/tmp/ohmyworkpanel-drain-status.json")).get("running",0))')"
+    queued="$(python3 -c 'import json; print(json.load(open("/tmp/ohmyworkpanel-drain-status.json")).get("queued",0))')"
   echo "  running=${running} queued=${queued}"
   if [[ "${running}" == "0" ]]; then
     echo "==> drain-wait: no running agents; safe to restart"

@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 
-/// Ensure group/agent `.linlis` memory layout under the group workspace.
-pub fn ensure_linlis_layout(group_ws: &Path, agent_member_id: Option<&str>) -> Result<(), String> {
-    let root = group_ws.join(".linlis");
+/// Ensure group/agent `.ohmyworkpanel` memory layout under the group workspace.
+pub fn ensure_ohmyworkpanel_layout(group_ws: &Path, agent_member_id: Option<&str>) -> Result<(), String> {
+    let root = group_ws.join(".ohmyworkpanel");
     std::fs::create_dir_all(root.join("memory")).map_err(|e| e.to_string())?;
     if let Some(aid) = agent_member_id {
         let agent_dir = default_agent_workspace(group_ws, aid);
@@ -21,14 +21,14 @@ pub fn ensure_linlis_layout(group_ws: &Path, agent_member_id: Option<&str>) -> R
 
 pub fn default_agent_workspace(group_ws: &Path, agent_member_id: &str) -> PathBuf {
     group_ws
-        .join(".linlis")
+        .join(".ohmyworkpanel")
         .join("agents")
         .join(agent_member_id)
 }
 
 pub fn append_group_memory(group_ws: &Path, title: &str, content: &str) -> Result<(), String> {
-    ensure_linlis_layout(group_ws, None)?;
-    let path = group_ws.join(".linlis").join("memory").join("group.md");
+    ensure_ohmyworkpanel_layout(group_ws, None)?;
+    let path = group_ws.join(".ohmyworkpanel").join("memory").join("group.md");
     let snippet = format!(
         "\n## {}\n{}\n",
         title.trim(),
@@ -43,7 +43,7 @@ pub fn append_agent_memory(
     title: &str,
     content: &str,
 ) -> Result<(), String> {
-    ensure_linlis_layout(group_ws, Some(agent_member_id))?;
+    ensure_ohmyworkpanel_layout(group_ws, Some(agent_member_id))?;
     let path = default_agent_workspace(group_ws, agent_member_id).join("memory.md");
     let snippet = format!(
         "\n## {}\n{}\n",
@@ -55,7 +55,7 @@ pub fn append_agent_memory(
 
 pub fn read_memory_excerpt(group_ws: &Path, agent_member_id: Option<&str>, max_chars: usize) -> String {
     let mut out = String::new();
-    let group_path = group_ws.join(".linlis").join("memory").join("group.md");
+    let group_path = group_ws.join(".ohmyworkpanel").join("memory").join("group.md");
     if let Ok(g) = std::fs::read_to_string(&group_path) {
         let t = truncate(g.trim(), max_chars / 2);
         if !t.is_empty() {

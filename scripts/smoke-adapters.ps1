@@ -42,7 +42,7 @@ function Invoke-Timed([string]$Label, [scriptblock]$Script, [object[]]$ArgumentL
   return "TRIED"
 }
 
-Write-Host "=== LinlisWorkPanel adapter smoke ==="
+Write-Host "=== ohMyWorkPanel adapter smoke ==="
 
 $codex = Find-Cmd @("codex")
 if (-not $codex) {

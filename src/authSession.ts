@@ -4,7 +4,7 @@ export type AuthUser = {
   isAdmin: boolean;
 };
 
-const KEY = "linlis_auth_user";
+const KEY = "ohmyworkpanel_auth_user";
 
 export function loadAuthUser(): AuthUser | null {
   try {

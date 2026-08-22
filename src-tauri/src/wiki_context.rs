@@ -27,7 +27,7 @@ struct WikiHit {
 }
 
 fn wiki_enabled() -> bool {
-    match std::env::var("LINLIS_WIKI_RETRIEVE") {
+    match std::env::var("OHMYWORKPANEL_WIKI_RETRIEVE") {
         Ok(v) => {
             let t = v.trim().to_ascii_lowercase();
             !(t.is_empty() || t == "0" || t == "false" || t == "off" || t == "no")
@@ -37,7 +37,7 @@ fn wiki_enabled() -> bool {
 }
 
 pub fn wiki_root() -> Option<std::path::PathBuf> {
-    if let Ok(p) = std::env::var("LINLIS_WIKI_ROOT") {
+    if let Ok(p) = std::env::var("OHMYWORKPANEL_WIKI_ROOT") {
         let pb = std::path::PathBuf::from(p.trim());
         if pb.join("agent/cli.py").is_file() {
             return Some(pb);
@@ -52,7 +52,7 @@ pub fn wiki_root() -> Option<std::path::PathBuf> {
 }
 
 fn timeout_ms() -> u64 {
-    std::env::var("LINLIS_WIKI_RETRIEVE_TIMEOUT_MS")
+    std::env::var("OHMYWORKPANEL_WIKI_RETRIEVE_TIMEOUT_MS")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(800)
@@ -60,7 +60,7 @@ fn timeout_ms() -> u64 {
 }
 
 fn top_k() -> usize {
-    std::env::var("LINLIS_WIKI_RETRIEVE_TOP_K")
+    std::env::var("OHMYWORKPANEL_WIKI_RETRIEVE_TOP_K")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(3)
@@ -92,7 +92,7 @@ pub fn build_wiki_query(group_name: &str, root_task: &str, announcement: &str) -
     }
     let q = parts.join(" ");
     if q.trim().is_empty() {
-        "workpanel 运作规则 灰度".into()
+        "ohmyworkpanel 运作规则 灰度".into()
     } else {
         q
     }
@@ -110,7 +110,7 @@ fn run_retrieve(cli: &std::path::Path, query: &str) -> Result<WikiRetrieveResult
         .arg("--top-k")
         .arg(top_k().to_string())
         .arg("--tags")
-        .arg("workpanel,ops,collab,rules")
+        .arg("ohmyworkpanel,ops,collab,rules")
         .arg("--excerpt-chars")
         .arg("360")
         .stdin(Stdio::null())
@@ -125,7 +125,7 @@ fn run_retrieve(cli: &std::path::Path, query: &str) -> Result<WikiRetrieveResult
                 .arg("--top-k")
                 .arg(top_k().to_string())
                 .arg("--tags")
-                .arg("workpanel,ops,collab,rules")
+                .arg("ohmyworkpanel,ops,collab,rules")
                 .arg("--excerpt-chars")
                 .arg("360")
                 .stdin(Stdio::null())
@@ -194,8 +194,8 @@ mod tests {
 
     #[test]
     fn build_query_prefers_root() {
-        let q = build_wiki_query("LinlisWorkPanel", "请灰度部署并跑 test:gate", "公告很长");
-        assert!(q.contains("LinlisWorkPanel"));
+        let q = build_wiki_query("ohMyWorkPanel", "请灰度部署并跑 test:gate", "公告很长");
+        assert!(q.contains("ohMyWorkPanel"));
         assert!(q.contains("灰度") || q.contains("test:gate") || q.contains("部署"));
     }
 
@@ -205,7 +205,7 @@ mod tests {
             ok: true,
             note: None,
             hits: vec![WikiHit {
-                path: "workpanel/rules.md".into(),
+                path: "ohmyworkpanel/rules.md".into(),
                 title: "规则".into(),
                 text: "先灰度再 commit".into(),
                 score: 1.2,
@@ -213,7 +213,7 @@ mod tests {
         };
         let s = format_wiki_block(&r);
         assert!(s.contains("【全局知识·Wiki】"));
-        assert!(s.contains("workpanel/rules.md"));
+        assert!(s.contains("ohmyworkpanel/rules.md"));
         assert!(s.contains("先灰度再 commit"));
     }
 
@@ -223,10 +223,10 @@ mod tests {
             return;
         }
         // May be slow first jieba load; allow env skip in tiny CI
-        if std::env::var("LINLIS_WIKI_SKIP_LIVE_TEST").ok().as_deref() == Some("1") {
+        if std::env::var("OHMYWORKPANEL_WIKI_SKIP_LIVE_TEST").ok().as_deref() == Some("1") {
             return;
         }
-        let block = wiki_context_block("LinlisWorkPanel", "灰度 test:gate commit 前", "");
+        let block = wiki_context_block("ohMyWorkPanel", "灰度 test:gate commit 前", "");
         // Soft assert: if retrieve works we expect the ops rule; if timeout, empty is ok.
         if !block.is_empty() {
             assert!(block.contains("【全局知识·Wiki】"));

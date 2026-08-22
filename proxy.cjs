@@ -1,4 +1,4 @@
-// LinlisWorkPanel proxy — adds Authorization header for WebSocket connections
+// ohMyWorkPanel proxy — adds Authorization header for WebSocket connections
 const http = require('http');
 const httpProxy = require('http');
 
@@ -72,5 +72,5 @@ server.on('upgrade', (req, socket, head) => {
 });
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`LinlisWorkPanel proxy on :${PORT} -> ${BACKEND}`);
+  console.log(`ohMyWorkPanel proxy on :${PORT} -> ${BACKEND}`);
 });

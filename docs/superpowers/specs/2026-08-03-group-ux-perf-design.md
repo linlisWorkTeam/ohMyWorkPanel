@@ -32,7 +32,7 @@
 - 项目群：chatbot 仍限 1 个（现规则）
 
 ### 5. 性能指标与日志
-进程（WorkPanel server）目标（不含子 Agent CLI）：
+进程（ohMyWorkPanel server）目标（不含子 Agent CLI）：
 
 | 指标 | 健康 | 告警 | 危险 |
 |---|---|---|---|

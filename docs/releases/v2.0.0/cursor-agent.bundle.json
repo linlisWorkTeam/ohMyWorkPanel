@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "exportedAt": 1787280000000,
   "exportedBy": "cursor-agent-pack",
-  "source": "linlis-work-panel/v2.0.0-cursor-pack",
+  "source": "ohmyworkpanel/v2.0.0-cursor-pack",
   "codex": { "enabled": false },
   "claude": { "enabled": false },
   "opencode": { "enabled": false },

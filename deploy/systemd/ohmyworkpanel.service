@@ -1,0 +1,19 @@
+[Unit]
+Description=ohMyWorkPanel Web Server (PRODUCTION — frozen slot)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/ohmyworkpanel/prod
+ExecStart=/opt/ohmyworkpanel/prod/bin/ohmyworkpanel-server
+Environment=OHMYWORKPANEL_DATA_DIR=/AI/ohMyWorkPanel/data
+Environment=OHMYWORKPANEL_WEB_DIST=/opt/ohmyworkpanel/prod/dist
+Environment=OHMYWORKPANEL_PORT=8080
+Environment=OHMYWORKPANEL_ROOT=/AI/ohMyWorkPanel
+Environment=OHMYWORKPANEL_CODEX_PROXY_SCRIPT=/AI/ohMyWorkPanel/scripts/codex-deepseek-proxy.cjs
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

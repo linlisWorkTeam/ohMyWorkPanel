@@ -322,7 +322,7 @@ where
             }
             None => {
                 return Err(
-                    "Codex 缺少 OPENAI_API_KEY：请在成员 API Key、环境变量 LINLIS_CODEX_API_KEY/OPENAI_API_KEY，或 ~/.codex/auth.json 中配置（OpenCode Go 所用密钥）。"
+                    "Codex 缺少 OPENAI_API_KEY：请在成员 API Key、环境变量 OHMYWORKPANEL_CODEX_API_KEY/OPENAI_API_KEY，或 ~/.codex/auth.json 中配置（OpenCode Go 所用密钥）。"
                         .into(),
                 );
             }

@@ -433,7 +433,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   line-height: 1.05;
   min-width: 0;
 }
-.brand-linlis {
+.brand-ohmy {
   font-family: var(--font-body);
   font-size: 11px;
   font-weight: 600;
@@ -441,15 +441,15 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   text-transform: uppercase;
   color: var(--text-on-sidebar-soft);
 }
-.brand-workpanel {
+.brand-ohmyworkpanel {
   font-family: var(--font-display);
   font-size: 22px;
   font-weight: 800;
   letter-spacing: -.03em;
   color: var(--text-on-sidebar);
 }
-.auth-card .brand-linlis { color: var(--text-faint); }
-.auth-card .brand-workpanel { color: var(--text); font-size: 28px; }
+.auth-card .brand-ohmy { color: var(--text-faint); }
+.auth-card .brand-ohmyworkpanel { color: var(--text); font-size: 28px; }
 .auth-card .brand { min-height: auto; padding: 0; }
 
 .sidebar-heading {
@@ -775,7 +775,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .send-button:hover:not(:disabled) { background: var(--accent-strong); transform: translateY(-1px); }
 
 /* Cyberpunk interactions */
-[data-theme="cyberpunk"] .brand-workpanel {
+[data-theme="cyberpunk"] .brand-ohmyworkpanel {
   background: linear-gradient(90deg, #ff2bd6, #00f0ff);
   -webkit-background-clip: text;
   background-clip: text;
@@ -1891,8 +1891,8 @@ body::after {
 }
 .group-sidebar::before { opacity: 0; }
 .brand { min-height: 58px; height: 58px; padding: 0 15px; }
-.brand-workpanel { font-size: 14px; font-weight: 700; color: var(--lp-text); }
-.brand-linlis { color: var(--lp-text-faint); }
+.brand-ohmyworkpanel { font-size: 14px; font-weight: 700; color: var(--lp-text); }
+.brand-ohmy { color: var(--lp-text-faint); }
 .group-item {
   color: var(--lp-text-dim);
   border-radius: 8px;
@@ -2062,7 +2062,7 @@ kbd {
 .send-btn:hover:not(:disabled) { filter: brightness(1.12); transform: none; }
 .send-btn:disabled { opacity: .38; }
 
-[data-theme="cyberpunk"] .brand-workpanel {
+[data-theme="cyberpunk"] .brand-ohmyworkpanel {
   background: none;
   -webkit-background-clip: unset;
   background-clip: unset;
@@ -2350,7 +2350,6 @@ header .theme-pop { display: none; }
 @media (prefers-reduced-motion: reduce) {
   body::after { animation: none !important; opacity: 0 !important; }
 }
-
 
 
 

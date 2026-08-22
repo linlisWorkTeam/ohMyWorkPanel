@@ -1,17 +1,17 @@
 [package]
-name = "linlis-work-panel"
+name = "ohmyworkpanel"
 version = "2.1.1"
 description = "A local-first multi-agent group chat desktop app"
-authors = ["LinlisWorkPanel contributors"]
+authors = ["ohMyWorkPanel contributors"]
 edition = "2021"
-default-run = "linlis-work-panel"
+default-run = "ohmyworkpanel"
 
 [features]
 default = ["gui"]
 gui = ["tauri", "tauri-plugin-dialog", "tauri-build"]
 
 [lib]
-name = "linlis_work_panel_lib"
+name = "ohmyworkpanel_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -38,9 +38,9 @@ aes-gcm = "0.10"
 tempfile = "3"
 
 [[bin]]
-name = "linlis-work-panel-server"
+name = "ohmyworkpanel-server"
 path = "src/main_server.rs"
 
 [[bin]]
-name = "linlis-work-panel"
+name = "ohmyworkpanel"
 path = "src/main.rs"

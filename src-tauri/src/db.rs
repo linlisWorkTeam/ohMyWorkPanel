@@ -38,7 +38,7 @@ fn machine_key() -> [u8; 32] {
         let path = KEY_FILE
             .get()
             .cloned()
-            .unwrap_or_else(|| std::env::temp_dir().join("linlis-work-panel.key"));
+            .unwrap_or_else(|| std::env::temp_dir().join("ohmyworkpanel.key"));
         if let Ok(data) = std::fs::read(&path) {
             if data.len() == 32 {
                 let mut key = [0u8; 32];
@@ -260,7 +260,7 @@ pub fn init_db(path: &Path) -> AppResult<()> {
             )
             .map_err(|e| e.to_string())?;
     }
-    // Default preset roles (always refresh known-good defaults for WorkPanel)
+    // Default preset roles (always refresh known-good defaults for ohMyWorkPanel)
     let default_roles = serde_json::json!([
         {"name":"Codex","adapter":"codex","roleDescription":"项目开发主力（Codex CLI）","avatarColor":"#2b6cb0"},
         {"name":"OpenClaw","adapter":"openclaw","roleDescription":"产品设计、拉通对齐与运维","avatarColor":"#d69e2e"},
@@ -294,15 +294,15 @@ pub fn init_db(path: &Path) -> AppResult<()> {
     Ok(())
 }
 
-/// Built-in admin `root`/`root` + default LinlisWorkPanel group with Codex / OpenClaw / Cursor Agent.
+/// Built-in admin `root`/`root` + default ohMyWorkPanel group with Codex / OpenClaw / Cursor Agent.
 pub fn ensure_default_seed(connection: &Connection) -> AppResult<()> {
     const ROOT_USER_ID: &str = "seed-user-root";
-    const GROUP_ID: &str = "seed-group-workpanel";
+    const GROUP_ID: &str = "seed-group-ohmyworkpanel";
     const OWNER_MEMBER_ID: &str = "seed-member-owner-root";
     const CODEX_MEMBER_ID: &str = "seed-member-codex";
     const OPENCLAW_MEMBER_ID: &str = "seed-member-openclaw";
     const CURSOR_MEMBER_ID: &str = "seed-member-cursor";
-    const WORKSPACE: &str = "/AI/LinlisWorkPanel";
+    const WORKSPACE: &str = "/AI/ohMyWorkPanel";
 
     let created_at = now();
     let password_hash = crate::auth::hash_password("root")?;
@@ -327,14 +327,14 @@ pub fn ensure_default_seed(connection: &Connection) -> AppResult<()> {
             "UPDATE groups SET is_system=1 WHERE id=?1",
             params![GROUP_ID],
         );
-        ensure_workpanel_super_harness(connection, GROUP_ID)?;
+        ensure_ohmyworkpanel_super_harness(connection, GROUP_ID)?;
         return Ok(());
     }
 
     connection
         .execute(
             "INSERT INTO groups(id, name, workspace_path, owner_member_id, admin_member_id, created_at, is_system)
-             VALUES(?1, 'LinlisWorkPanel', ?2, ?3, ?4, ?5, 1)",
+             VALUES(?1, 'ohMyWorkPanel', ?2, ?3, ?4, ?5, 1)",
             params![GROUP_ID, WORKSPACE, OWNER_MEMBER_ID, CODEX_MEMBER_ID, created_at],
         )
         .map_err(|e| e.to_string())?;
@@ -387,23 +387,23 @@ pub fn ensure_default_seed(connection: &Connection) -> AppResult<()> {
             .map_err(|e| e.to_string())?;
     }
 
-    // WorkPanel 组(种子/系统群)唯一完整自举执行者：linlis-super-harness（不可修改）
-    ensure_workpanel_super_harness(connection, GROUP_ID)?;
+    // ohMyWorkPanel 组(种子/系统群)唯一完整自举执行者：linlis-super-harness（不可修改）
+    ensure_ohmyworkpanel_super_harness(connection, GROUP_ID)?;
 
     Ok(())
 }
 
-/// Platform-locked WorkPanel self-bootstrap agent (`linlis-super-harness`).
-/// Lives in the WorkPanel seed/system group (`is_system=1`) and is the ONLY executor
+/// Platform-locked ohMyWorkPanel self-bootstrap agent (`linlis-super-harness`).
+/// Lives in the ohMyWorkPanel seed/system group (`is_system=1`) and is the ONLY executor
 /// holding full self-bootstrap (面板自举/自改) write capability. system_locked=1 makes
 /// it read-only in UI and rejects all mutations in backend commands.
-fn ensure_workpanel_super_harness(connection: &Connection, group_id: &str) -> AppResult<()> {
+fn ensure_ohmyworkpanel_super_harness(connection: &Connection, group_id: &str) -> AppResult<()> {
     const SUPER_HARNESS_MEMBER_ID: &str = "seed-member-linlis-super-harness";
     let created_at = now();
     connection
         .execute(
             "INSERT OR IGNORE INTO members(id, group_id, kind, display_name, avatar_color, role_description, is_active, created_at)
-             VALUES(?1, ?2, 'agent', 'linlis-super-harness', '#7c3aed', 'WorkPanel 自举引导器（不可修改；唯一拥有面板自举/自改完整执行权）', 1, ?3)",
+             VALUES(?1, ?2, 'agent', 'linlis-super-harness', '#7c3aed', 'ohMyWorkPanel 自举引导器（不可修改；唯一拥有面板自举/自改完整执行权）', 1, ?3)",
             params![SUPER_HARNESS_MEMBER_ID, group_id, created_at],
         )
         .map_err(|e| e.to_string())?;
@@ -2641,9 +2641,9 @@ mod tests {
         let file = tempfile::NamedTempFile::new().unwrap();
         init_db(file.path()).unwrap();
         let conn = open_db(file.path()).unwrap();
-        let seed = get_group(&conn, "seed-group-workpanel").unwrap();
+        let seed = get_group(&conn, "seed-group-ohmyworkpanel").unwrap();
         assert!(seed.is_system);
-        let err = assert_group_deletable(&conn, "seed-group-workpanel").unwrap_err();
+        let err = assert_group_deletable(&conn, "seed-group-ohmyworkpanel").unwrap_err();
         assert!(err.contains("不可删除"));
         conn.execute(
             "INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at,is_system) VALUES('g2','g2','.','u',NULL,1,0)",

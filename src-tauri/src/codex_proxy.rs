@@ -1,6 +1,6 @@
 //! Embedded Codex Responses↔ChatCompletions shim (listens on 127.0.0.1:18888).
 //!
-//! Runs as a Node sidecar owned by the WorkPanel server process (`kill_on_drop`),
+//! Runs as a Node sidecar owned by the ohMyWorkPanel server process (`kill_on_drop`),
 //! so Codex no longer depends on a separate systemd unit that can die silently.
 //! If the port is already bound (other slot / leftover), we skip spawn and reuse it.
 
@@ -30,7 +30,7 @@ impl CodexProxyHandle {
 /// Start the shim if nothing is listening yet. Keep the returned handle alive
 /// for the lifetime of the server so the child is killed on shutdown.
 pub async fn start_embedded() -> CodexProxyHandle {
-    let port = std::env::var("LINLIS_CODEX_PROXY_PORT")
+    let port = std::env::var("OHMYWORKPANEL_CODEX_PROXY_PORT")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(DEFAULT_PORT);
@@ -49,7 +49,7 @@ pub async fn start_embedded() -> CodexProxyHandle {
         return CodexProxyHandle { child: None, port };
     }
 
-    let log_path = std::env::var("LINLIS_CODEX_PROXY_LOG")
+    let log_path = std::env::var("OHMYWORKPANEL_CODEX_PROXY_LOG")
         .unwrap_or_else(|_| "/tmp/codex-deepseek-proxy.log".into());
     let log_file = std::fs::OpenOptions::new()
         .create(true)
@@ -69,7 +69,7 @@ pub async fn start_embedded() -> CodexProxyHandle {
 
     match Command::new("node")
         .arg(&script)
-        .env("LINLIS_CODEX_PROXY_PORT", port.to_string())
+        .env("OHMYWORKPANEL_CODEX_PROXY_PORT", port.to_string())
         .stdout(stdout)
         .stderr(stderr)
         .kill_on_drop(true)
@@ -115,13 +115,13 @@ fn port_open(port: u16) -> bool {
 }
 
 fn resolve_script_path() -> PathBuf {
-    if let Ok(p) = std::env::var("LINLIS_CODEX_PROXY_SCRIPT") {
+    if let Ok(p) = std::env::var("OHMYWORKPANEL_CODEX_PROXY_SCRIPT") {
         let path = PathBuf::from(p);
         if path.is_file() {
             return path;
         }
     }
-    if let Ok(root) = std::env::var("LINLIS_ROOT") {
+    if let Ok(root) = std::env::var("OHMYWORKPANEL_ROOT") {
         let path = Path::new(&root).join("scripts/codex-deepseek-proxy.cjs");
         if path.is_file() {
             return path;
@@ -138,7 +138,7 @@ fn resolve_script_path() -> PathBuf {
     }
     // Deploy layout: workspace next to common host path
     let candidates = [
-        PathBuf::from("/AI/LinlisWorkPanel/scripts/codex-deepseek-proxy.cjs"),
+        PathBuf::from("/AI/ohMyWorkPanel/scripts/codex-deepseek-proxy.cjs"),
         PathBuf::from("scripts/codex-deepseek-proxy.cjs"),
         PathBuf::from("../scripts/codex-deepseek-proxy.cjs"),
     ];
@@ -147,7 +147,7 @@ fn resolve_script_path() -> PathBuf {
             return c;
         }
     }
-    PathBuf::from("/AI/LinlisWorkPanel/scripts/codex-deepseek-proxy.cjs")
+    PathBuf::from("/AI/ohMyWorkPanel/scripts/codex-deepseek-proxy.cjs")
 }
 
 /// Pure helpers (shared with tests) — Responses `input` → chat messages.

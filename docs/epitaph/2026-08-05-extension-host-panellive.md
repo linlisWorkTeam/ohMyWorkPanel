@@ -25,5 +25,5 @@ status: active
 ```bash
 cd /AI/WorkPanelLive && npm start &
 npm run smoke
-# WorkPanel canary: 开启 Live → 页签可进；dispatch live.transcribe.result 无 pcm
+# ohMyWorkPanel canary: 开启 Live → 页签可进；dispatch live.transcribe.result 无 pcm
 ```

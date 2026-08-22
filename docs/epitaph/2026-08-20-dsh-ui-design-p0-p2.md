@@ -5,10 +5,10 @@ branch: master
 status: active
 ---
 
-# Epitaph: DSH 设计语言落地 WorkPanel 前端 —— P0/P1/P2 + 后端四项（已全部完成并推 origin）
+# Epitaph: DSH 设计语言落地 ohMyWorkPanel 前端 —— P0/P1/P2 + 后端四项（已全部完成并推 origin）
 
 > 目标「全部按计划做完」已完成（goal 已 complete，round 10/256）。
-> 接手本文件者先读 Spec：`docs/superpowers/specs/2026-08-19-workpanel-dsh-ui-design.md`（UI 侧 SSOT）与 `...-ui-backend-gated-plan.md`（状态已标 implemented-2026-08-20）。
+> 接手本文件者先读 Spec：`docs/superpowers/specs/2026-08-19-ohmyworkpanel-dsh-ui-design.md`（UI 侧 SSOT）与 `...-ui-backend-gated-plan.md`（状态已标 implemented-2026-08-20）。
 > 交互原型：`docs/ui-demo.html`（单文件高保真，浏览器直接开）。
 
 ## 这一轮做了什么（11 个 commit，`27f84bd` → `4a54d69`，已推 origin；工作树干净）
@@ -39,11 +39,11 @@ status: active
 - 本地灰度 `:8082` 已换到最新前后端（见下），DB 完好
 
 ## 本地灰度环境（这台 Windows 机）
-- `:8082` = 本机 `src-tauri\target\release\linlis-work-panel-server.exe`（Windows release），数据 `D:\AI\LinlisWorkPanel\.local-panel\data`
+- `:8082` = 本机 `src-tauri\target\release\ohmyworkpanel-server.exe`（Windows release），数据 `D:\AI\ohMyWorkPanel\.local-panel\data`
 - 重启配方（3 个环境变量 + cwd）：
-  `$env:LINLIS_PORT=8082; $env:LINLIS_DATA_DIR=...\.local-panel\data; $env:LINLIS_WEB_DIST=...\dist;` cwd=`src-tauri`，`Start-Process` 该 exe，日志 `.local-panel\logs\gray-server.log`
+  `$env:OHMYWORKPANEL_PORT=8082; $env:OHMYWORKPANEL_DATA_DIR=...\.local-panel\data; $env:OHMYWORKPANEL_WEB_DIST=...\dist;` cwd=`src-tauri`，`Start-Process` 该 exe，日志 `.local-panel\logs\gray-server.log`
 - 旧 exe 备份：`.local-panel\bin\server-{rX}/`
-- 注意：这是**本机 Windows 灰度**；仓库发布脚本 `deploy-canary.sh/promote-canary.sh` 面向 Linux/systemd（`/AI/...`+`/opt/linlis-workpanel`），**本机无法执行**；真正的灰度 :8081/生产 :8080 在服务器上，走用户发布仪式。
+- 注意：这是**本机 Windows 灰度**；仓库发布脚本 `deploy-canary.sh/promote-canary.sh` 面向 Linux/systemd（`/AI/...`+`/opt/ohmyworkpanel`），**本机无法执行**；真正的灰度 :8081/生产 :8080 在服务器上，走用户发布仪式。
 
 ## 视觉评审指引（给有视觉能力的模型/用户）
 1. 打开 `http://127.0.0.1:8082/`，**Ctrl+Shift+R 硬刷新**（避开旧 SW/缓存）。

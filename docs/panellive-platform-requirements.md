@@ -1,17 +1,17 @@
-# WorkPanel 平台要求（来自 PanelLive）
+# ohMyWorkPanel 平台要求（来自 PanelLive）
 
-> PanelLive 是 WorkPanel 上的 **Extend** 服务。本文件列出平台侧需提供的能力；实现代码在 `/AI/WorkPanelLive`，不在平台仓内完成 PanelLive 业务。
+> PanelLive 是 ohMyWorkPanel 上的 **Extend** 服务。本文件列出平台侧需提供的能力；实现代码在 `/AI/WorkPanelLive`，不在平台仓内完成 PanelLive 业务。
 
 ## 0. 工作区 / 仓边界（强制）
 
 | 仓 | 路径 | 只改这些 |
 |---|---|---|
-| Host | `/AI/LinlisWorkPanel` | 代理、`LivePanel`、短回复注入、A2A、群配置 API |
+| Host | `/AI/ohMyWorkPanel` | 代理、`LivePanel`、短回复注入、A2A、群配置 API |
 | Extend | `/AI/WorkPanelLive`（独立 git） | `:8790`、`live.html`、STT/TTS、DashScope |
 
-- 清单路径：`LINLIS_PANELLIVE_ROOT`（默认 `/AI/WorkPanelLive`）— **耦合路径，不是混源码**。
+- 清单路径：`OHMYWORKPANEL_PANELLIVE_ROOT`（默认 `/AI/WorkPanelLive`）— **耦合路径，不是混源码**。
 - **正式 Live 协作群**：`WorkPanelLive` → workspace `/AI/WorkPanelLive`。
-- **禁止**：错名群 `WorPanelLive（废弃·错名）` 已归档；勿解档；勿把 Live 名绑到 `/AI/LinlisWorkPanel`。
+- **禁止**：错名群 `WorPanelLive（废弃·错名）` 已归档；勿解档；勿把 Live 名绑到 `/AI/ohMyWorkPanel`。
 - 拍板记录：`docs/superpowers/specs/2026-08-05-workspace-boundary-live-host.md`
 
 ## 1. Extension Host（加卸载）
@@ -54,7 +54,7 @@ PanelLive 以外部 Agent 形态参与交互。建议 skills：
 
 MVP（方案 A）用 Mock STT/TTS 验证同一控制流。
 
-## 5. 平台 API 缺口清单（需 WorkPanel 实现）
+## 5. 平台 API 缺口清单（需 ohMyWorkPanel 实现）
 
 - [x] `PUT /api/groups/{id}/extensions/panellive` — enable/disable（load 前探活 PanelLive `:8790`）  
 - [x] `GET /api/groups/{id}/extensions` — 列表与 health  
@@ -95,5 +95,5 @@ Live 开启时，平台必须给 ChatBot / 管理员 Agent 注入短回复约束
 ## 7. 非目标
 
 - Connecter 调用云 STT/TTS  
-- 在 WorkPanel 核心进程内嵌重采样/转码  
+- 在 ohMyWorkPanel 核心进程内嵌重采样/转码
  
