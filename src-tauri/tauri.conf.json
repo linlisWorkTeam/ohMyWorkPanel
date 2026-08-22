@@ -28,6 +28,9 @@
     "active": true,
     "targets": ["nsis"],
     "windows": {
+      "webviewInstallMode": {
+        "type": "offlineInstaller"
+      },
       "wix": null,
       "nsis": {
         "installMode": "currentUser"
