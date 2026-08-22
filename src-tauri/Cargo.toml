@@ -1,6 +1,6 @@
 [package]
 name = "linlis-work-panel"
-version = "2.1.0"
+version = "2.1.1"
 description = "A local-first multi-agent group chat desktop app"
 authors = ["LinlisWorkPanel contributors"]
 edition = "2021"

@@ -42,15 +42,19 @@ import {
   sliceVisibleMessages,
 } from "./messageHistory";
 import { loadAuthUser, resolveSenderMemberId, saveAuthUser, type AuthUser } from "./authSession";
-import { Divider, useAppFrame, CONCEDE_RIGHT } from "./components/ui";
+import { useAppFrame, CONCEDE_RIGHT } from "./components/ui";
 import { loadSendKeyMode, saveSendKeyMode, sendKeyHint, shouldSendOnKey, type SendKeyMode } from "./sendKey";
 import type { ChatEvent, ExtensionStatus, Group, GroupState, Member, PresetRole, RuntimeSettings, TaskRun } from "./types";
-import { MessageBubble, MemberRow, Avatar, Status, ReviewBadge, TypingIndicator, RunQueuePane, EmptyHome } from "./components/furniture";
+import { Avatar, Status, TypingIndicator, RunQueuePane, EmptyHome } from "./components/furniture";
 import { RightDockHost } from "./components/RightDockHost";
+import { Shell } from "./shell/Shell";
+import { ChatTranscript } from "./shell/ChatTranscript";
+import { Composer } from "./shell/Composer";
+import { Roster } from "./shell/Roster";
 import { useGoalBar } from "./hooks/useGoalBar";
 import { useComposerDraft } from "./hooks/useComposerDraft";
 import { Brand, ThemeSwitcher, HeaderThemePop } from "./theme";
-import { PHASE_LABEL, dayLabel, time, readError } from "./components/uiShared";
+import { PHASE_LABEL, readError } from "./components/uiShared";
 import { ExperiencePanel } from "./ExperiencePanel";
 import { LogsPanel } from "./LogsPanel";
 import { ServerPathPicker } from "./ServerPathPicker";
@@ -103,11 +107,11 @@ const emptyMember: NewMember = {
   loginUsername: "", loginPassword: "",
   userAddMode: "create", existingAuthUserId: "",
 };
-/** DeepSeek Harness Web UI 默认地址（`dsh web`，默认 :3080）。可手动改成实际端口。 */
+/** DeepSeek Harness Web UI ?????`dsh web`??? :3080???????????? */
 const DSH_WEB_URL = "http://127.0.0.1:3080";
 
 // Value-bind wrappers: some production minifiers drop JSX-only named imports
-// from this large module (`jsx(Brand)` stays a global → empty #root on :8081).
+// from this large module (`jsx(Brand)` stays a global ? empty #root on :8081).
 function BrandMark() {
   const Cmp = Brand;
   return <Cmp />;
@@ -124,7 +128,7 @@ function RuntimeHeaderThemePop(props: { open: boolean; onPick: () => void }) {
 export function App() {
   const inviteToken =
     typeof window !== "undefined" ? parseInviteTokenFromPath(window.location.pathname) : null;
-  // Web: never enter main UI until bootstrap succeeds; stale localStorage token → login.
+  // Web: never enter main UI until bootstrap succeeds; stale localStorage token ? login.
   const [session, setSession] = useState<Session>(() => (requiresAuth ? "checking" : "ready"));
   const [groups, setGroups] = useState<Group[]>([]);
   const [groupsLoaded, setGroupsLoaded] = useState(false);
@@ -169,7 +173,6 @@ export function App() {
   const [pageFocused, setPageFocused] = useState(
     () => typeof document === "undefined" || document.visibilityState === "visible",
   );
-  const [showSidebar, setShowSidebar] = useState(false);
   const [sending, setSending] = useState(false);
   const [detecting, setDetecting] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -193,10 +196,10 @@ export function App() {
   const frame = useAppFrame({ rightOpen: showMembers, onRightClose: closeMembers });
   currentGroupIdRef.current = current?.group.id;
 
-  // P1: composer 草稿按群持久化（localStorage；草稿/几何不进 DB）
+  // P1: composer ????????localStorage???/???? DB?
   useComposerDraft(current?.group.id, composer, setComposer);
 
-  // P2: goal bar——把当前版本/Wave 上移成 chat 视图常驻条（仅项目群）
+  // P2: goal bar???????/Wave ??? chat ???????????
   const goalBar = useGoalBar(current?.group);
 
   const scrollMessagesToBottom = (force = false) => {
@@ -288,10 +291,10 @@ export function App() {
     setError(message ?? null);
   };
 
-  // Any API 401 → drop session and show login (covers stale token / Missing token).
+  // Any API 401 ? drop session and show login (covers stale token / Missing token).
   useEffect(() => {
     if (!requiresAuth) return;
-    return onUnauthorized(() => goLogin("登录已失效，请重新登录"));
+    return onUnauthorized(() => goLogin("???????????"));
   }, []);
 
   useEffect(() => subscribeWsLinkState((state, elapsedMs) => setWsLink({ state, elapsedMs })), []);
@@ -322,7 +325,7 @@ export function App() {
     };
   }, [showMembers, rightPanelTab]);
 
-  // Boot: no token → login; has token → bootstrap; failure → login.
+  // Boot: no token ? login; has token ? bootstrap; failure ? login.
   useEffect(() => {
     if (!requiresAuth) return;
     if (session !== "checking") return;
@@ -373,7 +376,7 @@ export function App() {
           setSession("ready");
         }
       } catch (reason) {
-        if (!disposed) goLogin(isUnauthorizedError(reason) ? "请先登录" : readError(reason));
+        if (!disposed) goLogin(isUnauthorizedError(reason) ? "????" : readError(reason));
       }
     })();
     return () => { disposed = true; };
@@ -427,7 +430,7 @@ export function App() {
       if (payload.kind === "orchestration_status") {
         if (activeGroupId) {
           void refresh(activeGroupId ?? undefined).catch((reason) => {
-            if (isUnauthorizedError(reason)) goLogin("登录已失效，请重新登录");
+            if (isUnauthorizedError(reason)) goLogin("???????????");
             else setError(readError(reason));
           });
         }
@@ -454,7 +457,7 @@ export function App() {
               } catch { /* optional */ }
             }
           } catch (reason) {
-            if (isUnauthorizedError(reason)) goLogin("登录已失效，请重新登录");
+            if (isUnauthorizedError(reason)) goLogin("???????????");
             else setError(readError(reason));
           }
         })();
@@ -525,7 +528,7 @@ export function App() {
           const idx = previous.runs.findIndex((r) => r.id === payload.runId);
           if (idx < 0) {
             void refresh(payload.groupId || previous.group.id).catch((reason) => {
-              if (isUnauthorizedError(reason)) goLogin("登录已失效，请重新登录");
+              if (isUnauthorizedError(reason)) goLogin("???????????");
               else setError(readError(reason));
             });
             return previous;
@@ -556,7 +559,7 @@ export function App() {
         // Terminal status: resync from server so missed deltas still appear without a full reload.
         if (terminal) {
           void refresh(payload.groupId || activeGroupId).catch((reason) => {
-            if (isUnauthorizedError(reason)) goLogin("登录已失效，请重新登录");
+            if (isUnauthorizedError(reason)) goLogin("???????????");
             else setError(readError(reason));
           });
         }
@@ -564,14 +567,14 @@ export function App() {
       }
       if (payload.groupId && payload.groupId !== activeGroupId) return;
       void refresh(payload.groupId || activeGroupId).catch((reason) => {
-        if (isUnauthorizedError(reason)) goLogin("登录已失效，请重新登录");
+        if (isUnauthorizedError(reason)) goLogin("???????????");
         else setError(readError(reason));
       });
     });
     return () => { disposed = true; void unlisten.then((unsubscribe) => unsubscribe()); };
   }, [session]);
 
-  // Must stay above any conditional return — hooks order cannot change across login/ready.
+  // Must stay above any conditional return ? hooks order cannot change across login/ready.
   useEffect(() => {
     if (showCreate) {
       void api.getPresetRoles().then(setPresetRoles).catch(() => {});
@@ -583,7 +586,7 @@ export function App() {
   const mentionQuery = currentMentionQuery(composer);
   useEffect(() => { setMentionIndex(0); }, [mentionQuery, current?.group.id]);
 
-  // Scroll: enter group → last line; stick while near bottom on new content.
+  // Scroll: enter group ? last line; stick while near bottom on new content.
   const lastMessage = current?.messages[current.messages.length - 1];
   const lastKey = `${current?.group.id}:${current?.messages.length}:${lastMessage?.content.length ?? 0}:${mainView}`;
   useLayoutEffect(() => {
@@ -608,7 +611,7 @@ export function App() {
     scrollMessagesToBottom(entering || stickToBottom.current);
   }, [lastKey, mainView, current?.group.id]);
 
-  // Must stay above auth early returns — otherwise login→ready adds a hook and React #310 blanks the page.
+  // Must stay above auth early returns ? otherwise login?ready adds a hook and React #310 blanks the page.
   useEffect(() => {
     if (!showAddMember || !current || newMember.kind !== "user" || newMember.userAddMode !== "link") {
       return;
@@ -640,7 +643,7 @@ export function App() {
     void reloadExtensions(current.group.id);
   }, [current?.group.id]);
 
-  // Must stay above auth early returns — login→ready must not add hooks (React #310).
+  // Must stay above auth early returns ? login?ready must not add hooks (React #310).
   useEffect(() => {
     const chat = current?.group.groupKind === "chat";
     if (!current || chat) {
@@ -656,19 +659,15 @@ export function App() {
     return () => { cancelled = true; };
   }, [current?.group.id, current?.group.groupKind, mainView]);
 
-  // P2 键盘快捷键：⌘/Ctrl+1 左栏折叠轨、⌘/Ctrl+2 成员面板、Esc 关浮层
-  // Must stay above auth early returns — login→ready must not add hooks (React #310).
+  // P2 ???????/Ctrl+1 ???????/Ctrl+2 ?????Esc ???
+  // Must stay above auth early returns ? login?ready must not add hooks (React #310).
   useEffect(() => {
     const onKey = (event: globalThis.KeyboardEvent) => {
       const mod = event.ctrlKey || event.metaKey;
       if (mod && event.key === "1") { event.preventDefault(); frame.toggleLeft(); }
       else if (mod && event.key === "2") {
         event.preventDefault();
-        setShowMembers((open) => {
-          const next = !open;
-          if (next) setShowSidebar(false);
-          return next;
-        });
+        setShowMembers((open) => !open);
       } else if (event.key === "Escape") {
         if (showCreate || showAddMember) event.preventDefault();
         setShowCreate(false);
@@ -726,7 +725,6 @@ export function App() {
     setVisibleCount(INITIAL_VISIBLE_MESSAGES);
     setHasMoreOlder(false);
     setComposer("");
-    setShowSidebar(false);
     setMainView("chat");
     setGroups((prev) => clearUnread(prev, group.id));
     void (async () => {
@@ -754,7 +752,7 @@ export function App() {
   }
 
   if (requiresAuth && session === "checking") {
-    return <main className="auth-screen"><div className="auth-card"><BrandMark /><p className="auth-hint">正在检查登录状态…</p></div></main>;
+    return <main className="auth-screen"><div className="auth-card"><BrandMark /><p className="auth-hint">?????????</p></div></main>;
   }
 
   if (requiresAuth && session === "login") {
@@ -782,8 +780,7 @@ export function App() {
     .filter((m) => m.kind === "agent" || m.kind === "chatbot")
     .map((m) => m.displayName)
     .slice(0, 5)
-    .join(" · ");
-  const hasUnread = groups.some((g) => (g.unreadCount ?? 0) > 0);
+    .join(" ? ");
   const addMemberKind = chatbotTaken && newMember.kind === "chatbot" ? "agent" : newMember.kind;
   const activeGroups = sortGroupsForSidebar(groups.filter((g) => !g.archived));
   const archivedGroups = groups.filter((g) => g.archived);
@@ -830,7 +827,7 @@ export function App() {
     try {
       const selected = await open({
         multiple: false,
-        filters: [{ name: "图片", extensions: ["png", "jpg", "jpeg", "bmp", "gif", "tiff", "webp"] }]
+        filters: [{ name: "??", extensions: ["png", "jpg", "jpeg", "bmp", "gif", "tiff", "webp"] }]
       });
       if (typeof selected !== "string") return;
       setOcrRunning(true);
@@ -876,7 +873,7 @@ export function App() {
   const send = async () => {
     if (!current || !composer.trim() || sending) return;
     if (!senderMemberId) {
-      setError(isAdmin ? "当前群缺少群主成员，无法发送" : "未找到你在本群的成员身份，无法发言");
+      setError(isAdmin ? "??????????????" : "?????????????????");
       return;
     }
     const body = quote
@@ -892,7 +889,7 @@ export function App() {
     finally { setSending(false); composerRef.current?.focus(); }
   };
 
-  /** Doubao mode B: release → STT → append draft → send (with Live @responder when present). */
+  /** Doubao mode B: release ? STT ? append draft ? send (with Live @responder when present). */
   const sendVoiceTranscript = async (transcript: string) => {
     if (!current || !senderMemberId || voiceBusy || sending) return;
     const combined = combineComposerAndTranscript(composer, transcript);
@@ -921,7 +918,7 @@ export function App() {
     event.preventDefault();
     if (!liveReady || voiceBusy || sending || !current || holdActiveRef.current) return;
     if (!secureMicAvailable()) {
-      setError("按住说话需要 HTTPS 或 localhost（当前无法访问麦克风）");
+      setError("?????? HTTPS ? localhost???????????");
       return;
     }
     const target = event.currentTarget;
@@ -952,7 +949,7 @@ export function App() {
         if (stt.error) throw new Error(stt.error);
         const text = (stt.text ?? "").trim();
         if (!text) {
-          setError("未识别到语音内容");
+          setError("????????");
           return;
         }
         await sendVoiceTranscript(text);
@@ -974,9 +971,9 @@ export function App() {
     setPlayingMessageId(messageId);
     try {
       const tts = await ttsPlaybackViaProxy(plain);
-      if (tts.error || !tts.audioBase64) throw new Error(tts.error || "TTS 无音频");
+      if (tts.error || !tts.audioBase64) throw new Error(tts.error || "TTS ???");
       if (tts.truncated) {
-        setError(`朗读已截断至 ${tts.maxChars ?? 300} 字（purpose=playback）`);
+        setError(`?????? ${tts.maxChars ?? 300} ??purpose=playback?`);
       }
       const audio = playAudioBase64(tts.audioBase64, tts.audioContentType || "audio/mpeg");
       playingAudioRef.current = audio;
@@ -988,7 +985,7 @@ export function App() {
       };
       audio.onerror = () => {
         setPlayingMessageId(null);
-        setError("音频播放失败");
+        setError("??????");
       };
     } catch (reason) {
       setPlayingMessageId(null);
@@ -996,7 +993,7 @@ export function App() {
     }
   };
   const composerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    // Don't send while an IME (e.g. 中文输入法) is composing a selection.
+    // Don't send while an IME (e.g. ?????) is composing a selection.
     if (event.nativeEvent.isComposing) return;
     if (mentionSuggestions.length > 0) {
       if (event.key === "ArrowDown") { event.preventDefault(); setMentionIndex((i) => (i + 1) % mentionSuggestions.length); return; }
@@ -1084,10 +1081,10 @@ export function App() {
     })) {
       setError(
         newMember.userAddMode === "link"
-          ? "请选择要加入的已有登录用户"
+          ? "?????????????"
           : newMember.userAddMode === "invite"
-            ? "请填写显示名称"
-            : "请填写登录用户名和密码",
+            ? "???????"
+            : "???????????",
       );
       return;
     }
@@ -1133,15 +1130,15 @@ export function App() {
     if (!current) return;
     const action = memberRosterAction(member);
     if (action === "delete") {
-      const label = member.invitePending ? "撤销邀请并删除" : "永久删除";
-      if (!confirm(`${label} ${member.displayName}？此操作不可恢复（历史消息仍保留）。`)) return;
+      const label = member.invitePending ? "???????" : "????";
+      if (!confirm(`${label} ${member.displayName}??????????????????`)) return;
       try {
         await api.purgeMember(current.group.id, member.id);
         await refresh();
       } catch (reason) { setError(readError(reason)); }
       return;
     }
-    if (!confirm(`移除 ${member.displayName}？成员将变为灰色，可再永久删除。`)) return;
+    if (!confirm(`?? ${member.displayName}????????????????`)) return;
     try { await api.removeMember(current.group.id, member.id); await refresh(); } catch (reason) { setError(readError(reason)); }
   };
   const setAdmin = async (memberId: string | null) => {
@@ -1167,48 +1164,39 @@ export function App() {
 
   const toggleRole = (name: string) => setSelectedRoles((prev) => prev.includes(name) ? prev.filter((r) => r !== name) : [...prev, name]);
 
-  const openSidebar = () => { setShowMembers(false); setShowSidebar(true); };
   const toggleMembers = () => {
-    setShowMembers((open) => {
-      const next = !open;
-      if (next) setShowSidebar(false);
-      return next;
-    });
+    setShowMembers((open) => !open);
   };
 
-  return <main className="app-shell" ref={frame.rootRef} style={frame.rootStyle} data-left={frame.leftMode} data-right={frame.rightOpen ? "open" : "closed"}>
-    {showSidebar && <div className="sidebar-backdrop" onClick={() => setShowSidebar(false)} />}
+  return <main className="app-shell" ref={frame.rootRef} style={{ ...frame.rootStyle, display: "flex", flexDirection: "column" }} data-left={frame.leftMode} data-right={frame.rightOpen ? "open" : "closed"}>
     {showMembers && <div className="members-backdrop" onClick={() => setShowMembers(false)} />}
-    <aside className={`group-sidebar ${showSidebar ? "open" : ""}`}>
-      <div className="dsh-rail" aria-label="控制轨">
-        <span className="rail-logo">L</span>
-        <button type="button" className={`rail-btn active${hasUnread ? " badge" : ""}`} title="展开群列表" onClick={() => frame.toggleLeft()}>◉</button>
-        <button type="button" className="rail-btn" title="设置" onClick={() => { setShowMembers(true); setRightPanelTab("core.settings"); }}>◎</button>
-        {isAdmin && (
-          <button type="button" className="rail-btn" title={agentCfgImported ? "Agent 配置（已导入）" : "Agent 配置"} onClick={() => setMainView("agent-config")}>◇</button>
-        )}
-        <button type="button" className="rail-btn" title="展开左栏" onClick={() => frame.toggleLeft()}>▶</button>
-      </div>
-      <div className="left-expanded">
-      <BrandMark />
-      <div className="sidebar-heading"><span>工作区 · 群</span>{isAdmin && <button className="icon-button" onClick={() => setShowCreate(true)} aria-label="新建群聊">＋</button>}</div>
+    <div style={{ flex: 1, minHeight: 0, width: "100%" }}>
+    <Shell
+      leftOpen={frame.leftMode === "open"}
+      onToggleLeft={frame.toggleLeft}
+      onOpenSettings={() => { setShowMembers(true); setRightPanelTab("core.settings"); }}
+      showAgentConfig={isAdmin}
+      onOpenAgentConfig={() => setMainView("agent-config")}
+      brand={<BrandMark />}
+      groups={<>
+      <div className="sidebar-heading"><span>??? ? ?</span>{isAdmin && <button className="icon-button" onClick={() => setShowCreate(true)} aria-label="????">?</button>}</div>
       <nav className="group-list">
         {activeGroups.map((group) => (
           <div key={group.id} className={`group-item-row ${group.id === current?.group.id ? "selected" : ""} ${(group.unreadCount ?? 0) > 0 ? "has-unread" : ""}`}>
             <button type="button" className="group-item" onClick={() => selectGroup(group)}>
               <span className="group-avatar">{group.name.slice(0, 1)}</span>
-              <span className="group-name">{group.name}{group.groupKind === "chat" ? " · 聊" : ""}</span>
+              <span className="group-name">{group.name}{group.groupKind === "chat" ? " ? ?" : ""}</span>
               {(group.unreadCount ?? 0) > 0 && (
-                <em className="unread-badge" aria-label={`${group.unreadCount} 条未读`}>{formatUnreadBadge(group.unreadCount ?? 0)}</em>
+                <em className="unread-badge" aria-label={`${group.unreadCount} ???`}>{formatUnreadBadge(group.unreadCount ?? 0)}</em>
               )}
             </button>
-            {isAdmin && <button type="button" className="group-archive-btn" title="归档群组" aria-label="归档群组" onClick={(e) => void archiveGroup(group, true, e)}>−</button>}
+            {isAdmin && <button type="button" className="group-archive-btn" title="????" aria-label="????" onClick={(e) => void archiveGroup(group, true, e)}>?</button>}
           </div>
         ))}
         {archivedGroups.length > 0 && (
           <div className="archived-section">
             <button type="button" className="archived-toggle" onClick={() => setShowArchived((v) => !v)}>
-              {showArchived ? "▾" : "▸"} 已归档（{archivedGroups.length}）
+              {showArchived ? "?" : "?"} ????{archivedGroups.length}?
             </button>
             {showArchived && archivedGroups.map((group) => (
               <div key={group.id} className={`group-item-row archived ${group.id === current?.group.id ? "selected" : ""}`}>
@@ -1216,41 +1204,37 @@ export function App() {
                   <span className="group-avatar">{group.name.slice(0, 1)}</span>
                   <span className="group-name">{group.name}</span>
                 </button>
-                <button type="button" className="group-archive-btn" title="取消归档" aria-label="取消归档" onClick={(e) => void archiveGroup(group, false, e)}>+</button>
+                <button type="button" className="group-archive-btn" title="????" aria-label="????" onClick={(e) => void archiveGroup(group, false, e)}>+</button>
               </div>
             ))}
           </div>
         )}
       </nav>
+      </>}
+      footer={
       <div className="sidebar-footer">
         <button
           type="button"
           className="rail-toggle"
-          title={frame.leftMode === "open" ? "折叠为控制轨（56px）· Ctrl/⌘ + 1" : "展开侧栏 · Ctrl/⌘ + 1"}
-          aria-label="折叠或展开侧栏"
+          title={frame.leftMode === "open" ? "???????56px?? Ctrl/? + 1" : "???? ? Ctrl/? + 1"}
+          aria-label="???????"
           onClick={() => frame.toggleLeft()}
         >
-          {frame.leftMode === "open" ? "◀◀" : "▶▶"}
+          {frame.leftMode === "open" ? "??" : "??"}
         </button>
-        {requiresAuth && <button onClick={() => goLogin(null)}>退出登录{authUser ? `（${authUser.username}）` : ""}</button>}
+        {requiresAuth && <button onClick={() => goLogin(null)}>????{authUser ? `?${authUser.username}?` : ""}</button>}
       </div>
-      </div>
-    </aside>
-
-    <Divider {...frame.leftDivider} />
-
-    <section className="chat-panel">
-      {current ? <>
-        <header className="chat-header">
-          <button className="icon-button mobile-nav" onClick={openSidebar} aria-label="群列表">☰</button>
+      }
+      header={current ? <>
+          <button className="icon-button mobile-nav" onClick={frame.toggleLeft} aria-label="???">?</button>
           <div className="chat-title">
             <h1>
               {current.group.name}
               <span className="chip">{isChatGroup ? "chat" : "project"}</span>
             </h1>
             <p>
-              {rosterHint ? `${rosterHint} · ` : ""}
-              {activeMembers.length} 名成员
+              {rosterHint ? `${rosterHint} ? ` : ""}
+              {activeMembers.length} ???
             </p>
           </div>
           <div className="header-right">
@@ -1259,16 +1243,16 @@ export function App() {
               type="button"
               className={`icon-btn ${showMembers ? "on" : ""}`}
               onClick={toggleMembers}
-              aria-label="成员 / Agent 面板"
+              aria-label="?? / Agent ??"
               aria-pressed={showMembers}
-              title="成员 / Agent 面板（Ctrl/⌘ + 2）"
+              title="?? / Agent ???Ctrl/? + 2?"
             >
-              ☰
+              ?
             </button>
             <RuntimeHeaderThemePop open={false} onPick={() => undefined} />
           </div>
-        </header>
-        {!isChatGroup && (
+      </> : null}
+      wave={!isChatGroup && current ? (
           <div
             className="goal-bar"
             data-status={goalBar?.status ?? "idle"}
@@ -1276,15 +1260,16 @@ export function App() {
             role="button"
             tabIndex={0}
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setMainView("versions"); } }}
-            title="查看版本 / Wave"
+            title="???? / Wave"
           >
             <span className="g-flag">{goalBar?.versionName ?? "WAVE"}</span>
-            <span className="g-wave">{goalBar?.waveTitle ?? "尚未建立 Wave · 点此到版本页"}</span>
+            <span className="g-wave">{goalBar?.waveTitle ?? "???? Wave ? ??????"}</span>
             <span className="progress"><i style={{ width: `${goalBar && goalBar.total ? Math.round((goalBar.done / goalBar.total) * 100) : 0}%` }} /></span>
-            <span className="g-act">{goalBar ? `${goalBar.done}/${goalBar.total} 完成` : "0/0"}</span>
+            <span className="g-act">{goalBar ? `${goalBar.done}/${goalBar.total} ??` : "0/0"}</span>
           </div>
-        )}
-        {!isChatGroup && mainView === "versions" ? (
+      ) : null}
+      chat={current ? (
+        !isChatGroup && mainView === "versions" ? (
           <VersionView
             group={current.group}
             members={members}
@@ -1303,36 +1288,29 @@ export function App() {
         ) : <>
         <div className="message-list-shell">
         <div className="message-list" ref={messageListRef} onScroll={handleMessageScroll}>
-          {current.messages.length === 0 && <div className="empty-chat"><strong>{current.group.name}</strong><span>{isChatGroup ? "添加聊天机器人后，输入 @名称 开始对话。" : "添加 Agent 后，在消息中输入 @名称 开始协作。"}</span><span className="empty-chat-sub">{sendKeyHint(sendKeyMode)} · @ 触发成员菜单</span></div>}
+          {current.messages.length === 0 && <div className="empty-chat"><strong>{current.group.name}</strong><span>{isChatGroup ? "??????????? @?? ?????" : "?? Agent ???????? @?? ?????"}</span><span className="empty-chat-sub">{sendKeyHint(sendKeyMode)} ? @ ??????</span></div>}
           {(hasMoreOlder || visibleCount < allMessages.length || loadingOlder) && (
             <div className="day-divider history-load-hint">
               <span>
                 {loadingOlder
-                  ? "加载更早消息…"
-                  : `上滑加载更早 · 显示 ${visibleMessages.length}/${totalHint}`}
+                  ? "???????"
+                  : `?????? ? ?? ${visibleMessages.length}/${totalHint}`}
               </span>
             </div>
           )}
-          {visibleMessages.map((message, index) => {
-            const prev = index > 0 ? visibleMessages[index - 1] : null;
-            const showDay = !prev || dayLabel(prev.createdAt) !== dayLabel(message.createdAt);
-            return (
-              <div key={message.id} className="day-block" data-msg-id={message.id}>
-                {showDay && <div className="day-divider"><span>{dayLabel(message.createdAt)}</span></div>}
-                <MessageBubble
-                  message={message}
-                  members={members}
-                  runs={current.runs}
-                  viewerMemberId={senderMemberId}
-                  onRun={changeRun}
-                  voiceUxEnabled={liveReady}
-                  playingMessageId={playingMessageId}
-                  onPlayVoice={playMessageVoice}
-                  onQuote={(msg, senderName) => setQuote({ author: senderName, excerpt: extractReplyPreview(msg.content, 80) })}
-                />
-              </div>
-            );
-          })}
+          {visibleMessages.length > 0 && (
+            <ChatTranscript
+              messages={visibleMessages}
+              members={members}
+              runs={current.runs}
+              viewerMemberId={senderMemberId}
+              onRun={changeRun}
+              voiceUxEnabled={liveReady}
+              playingMessageId={playingMessageId}
+              onPlayVoice={playMessageVoice}
+              onQuote={(msg, senderName) => setQuote({ author: senderName, excerpt: extractReplyPreview(msg.content, 80) })}
+            />
+          )}
           {current.runs
             .filter((run) => (run.status === "queued" || run.status === "running") && (!run.outputMessageId || !current.messages.some((message) => message.id === run.outputMessageId)))
             .map((run) => {
@@ -1342,7 +1320,7 @@ export function App() {
                   <Avatar member={agent} responding />
                   <div className="message-content">
                     <div className="message-meta"><strong>{agent?.displayName ?? "Agent"}</strong><Status status={run.status} />{run.phase && <em className="phase-badge">{PHASE_LABEL[run.phase] ?? run.phase}</em>}</div>
-                    <div className="bubble streaming"><TypingIndicator label={run.phase ? (PHASE_LABEL[run.phase] ?? run.phase) : run.status === "queued" ? "排队中" : "…"} /></div>
+                    <div className="bubble streaming"><TypingIndicator label={run.phase ? (PHASE_LABEL[run.phase] ?? run.phase) : run.status === "queued" ? "???" : "?"} /></div>
                   </div>
                 </div>
               );
@@ -1353,13 +1331,17 @@ export function App() {
             type="button"
             className="jump-bottom-btn"
             onClick={() => scrollMessagesToBottom(true)}
-            title="回到最下方"
+            title="?????"
           >
-            ↓ 最新
+            ? ??
           </button>
         )}
         </div>
-        <footer className="composer-wrap">
+        </>
+      ) : groups.length === 0 && groupsLoaded ? (
+        <EmptyHome canCreate={isAdmin} onCreate={() => setShowCreate(true)} />
+      ) : <div className="loading">?????????</div>}
+      composer={current && mainView !== "dsh" && mainView !== "agent-config" && !(!isChatGroup && mainView === "versions") ? <div className="wp-composer-anchor">
           {slashOpen && (
             <div className="mention-menu slash-menu">
               {SLASH_COMMANDS.map((c) => (
@@ -1375,39 +1357,35 @@ export function App() {
               {mentionSuggestions.map((member, index) => (
                 <button key={member.id} className={index === mentionIndex ? "mention-active" : ""} onMouseEnter={() => setMentionIndex(index)} onClick={() => selectMention(member)}>
                   <Avatar member={member} />
-                  <span>{member.displayName}<small>{member.kind === "agent" ? member.roleDescription || member.adapter : member.kind === "chatbot" ? "聊天机器人" : "用户"}</small></span>
+                  <span>{member.displayName}<small>{member.kind === "agent" ? member.roleDescription || member.adapter : member.kind === "chatbot" ? "?????" : "??"}</small></span>
                 </button>
               ))}
             </div>
           )}
-          {quote && (
-            <div className="quote-bar">
-              <span>引用 {quote.author}：{quote.excerpt}</span>
-              <button type="button" aria-label="取消引用" onClick={() => setQuote(null)}>×</button>
-            </div>
-          )}
-          <div className="composer">
-            <div className="composer-tools">
-              <button type="button" className="tool-btn" title="提及成员（输入 @ 亦可）" onClick={insertAt}>@</button>
-              <button type="button" className="tool-btn" disabled={ocrRunning || ocrPasting} title={ocrPasting ? "正在识别粘贴的图片…" : "从图片识别文字"} onClick={() => void handleOcr()}>{ocrPasting ? "…" : "🖼"}</button>
+          <Composer
+            quote={quote}
+            onClearQuote={() => setQuote(null)}
+            tools={<>
+              <button type="button" className="tool-btn" title="??????? @ ???" onClick={insertAt}>@</button>
+              <button type="button" className="tool-btn" disabled={ocrRunning || ocrPasting} title={ocrPasting ? "??????????" : "???????"} onClick={() => void handleOcr()}>{ocrPasting ? "?" : "??"}</button>
               {liveReady && (
                 <button
                   type="button"
                   className={`tool-btn${voiceHolding ? " on" : ""}`}
                   disabled={voiceBusy || sending}
-                  title={secureMicAvailable() ? "按住说话，松手发送" : "需要 HTTPS 或 localhost 才能使用麦克风"}
+                  title={secureMicAvailable() ? "?????????" : "?? HTTPS ? localhost ???????"}
                   onPointerDown={onHoldTalkStart}
                   onPointerUp={onHoldTalkEnd}
                   onPointerCancel={onHoldTalkEnd}
                   onContextMenu={(e) => e.preventDefault()}
                 >
-                  {voiceBusy ? "…" : "🎙"}
+                  {voiceBusy ? "?" : "??"}
                 </button>
               )}
               <button
                 type="button"
                 className="tool-btn spacer"
-                title="斜杠命令 /board /approve /wave"
+                title="???? /board /approve /wave"
                 onClick={() => {
                   setComposer((v) => (v.startsWith("/") ? v : v ? v : "/"));
                   setSlashOpen(true);
@@ -1416,36 +1394,28 @@ export function App() {
               >
                 /
               </button>
-            </div>
-            <textarea ref={composerRef} rows={2} value={composer} onChange={(event) => { const value = event.target.value; setComposer(value); setSlashOpen(value.startsWith("/") && !value.includes(" ")); }} onKeyDown={composerKeyDown} onPaste={handlePaste} placeholder={`给群里的 Agent 派活…  @ 提及 · ${sendKeyHint(sendKeyMode)} · 草稿自动保存`} />
-            <div className="composer-hint">
-              <span><kbd>@</kbd> 提及</span>
-              <span><kbd>/</kbd> 命令</span>
+            </>}
+            textarea={<textarea ref={composerRef} rows={2} value={composer} onChange={(event) => { const value = event.target.value; setComposer(value); setSlashOpen(value.startsWith("/") && !value.includes(" ")); }} onKeyDown={composerKeyDown} onPaste={handlePaste} placeholder={`???? Agent ???  @ ?? ? ${sendKeyHint(sendKeyMode)} ? ??????`} />}
+            hint={<>
+              <span><kbd>@</kbd> ??</span>
+              <span><kbd>/</kbd> ??</span>
               <button
                 type="button"
                 className="quiet-button send-key-toggle"
-                title="切换发送快捷键"
+                title="???????"
                 onClick={() => {
                   const next: SendKeyMode = sendKeyMode === "enter" ? "ctrlEnter" : "enter";
                   setSendKeyMode(next);
                   saveSendKeyMode(next);
                 }}
               >
-                <kbd>{sendKeyMode === "enter" ? "Enter" : "Ctrl+Enter"}</kbd> 发送
+                <kbd>{sendKeyMode === "enter" ? "Enter" : "Ctrl+Enter"}</kbd> ??
               </button>
-              <button className="send-btn" disabled={!composer.trim() || sending} onClick={() => void send()}>{sending ? "发送中" : "发送 ⏎"}</button>
-            </div>
-          </div>
-        </footer>
-        </>}
-      </> : groups.length === 0 && groupsLoaded ? (
-        <EmptyHome canCreate={isAdmin} onCreate={() => setShowCreate(true)} />
-      ) : <div className="loading">正在打开本地群聊…</div>}
-    </section>
-
-    <Divider {...frame.rightDivider} />
-
-    {current && showMembers && <RightDockHost
+              <button className="send-btn" disabled={!composer.trim() || sending} onClick={() => void send()}>{sending ? "???" : "?? ?"}</button>
+            </>}
+          />
+      </div> : null}
+      right={current && showMembers ? <RightDockHost
       tabs={rightTabs}
       activeId={rightPanelTab}
       onSelect={(id) => {
@@ -1466,32 +1436,29 @@ export function App() {
       {rightPanelTab === "core.members" ? <>
         {(current.group.announcement ?? "").trim() && (
           <div className="announce-banner" title={current.group.announcement}>
-            公告：{(current.group.announcement ?? "").slice(0, 120)}{(current.group.announcement ?? "").length > 120 ? "…" : ""}
+            ???{(current.group.announcement ?? "").slice(0, 120)}{(current.group.announcement ?? "").length > 120 ? "?" : ""}
           </div>
         )}
-        <div className="member-list">{members.map((member) => (
-          <MemberRow
-            key={member.id}
-            member={member}
-            group={current.group}
-            askMode={adminInAsk && member.id === current.group.adminMemberId}
-            runs={current.runs}
-            online={member.kind === "user" && !!member.authUserId && onlineUserIds.has(member.authUserId)}
-            detecting={detecting === member.id}
-            onAdmin={setAdmin}
-            onRemove={removeMember}
-            onDetect={detect}
-            onModel={(m, model) => void changeMemberModel(m, model)}
-            onCancelRun={(run) => void changeRun(run, "cancel")}
-              onOpenDsh={() => setMainView("dsh")}
-          />
-        ))}</div>
+        <Roster
+          members={members}
+          group={current.group}
+          runs={current.runs}
+          detectingId={detecting}
+          onlineUserIds={onlineUserIds}
+          askMode={adminInAsk}
+          onAdmin={setAdmin}
+          onRemove={removeMember}
+          onDetect={detect}
+          onModel={(m, model) => void changeMemberModel(m, model)}
+          onCancelRun={(run) => void changeRun(run, "cancel")}
+          onOpenDsh={() => setMainView("dsh")}
+        />
         {inviteLinkFlash && (
           <div className="invite-link-flash">
-            <p>邀请链接已生成（已尝试复制到剪贴板，24 小时有效）：</p>
+            <p>??????????????????24 ??????</p>
             <code>{inviteLinkFlash}</code>
-            <button type="button" onClick={() => void navigator.clipboard.writeText(inviteLinkFlash)}>再复制</button>
-            <button type="button" onClick={() => setInviteLinkFlash(null)}>关闭</button>
+            <button type="button" onClick={() => void navigator.clipboard.writeText(inviteLinkFlash)}>???</button>
+            <button type="button" onClick={() => setInviteLinkFlash(null)}>??</button>
           </div>
         )}
         {showAddMember ? <form className="add-member-form" onSubmit={addMember}>
@@ -1504,16 +1471,16 @@ export function App() {
             }}
           >
             <option value="agent">Agent</option>
-            <option value="user">用户</option>
+            <option value="user">??</option>
             <option value="chatbot" disabled={chatbotTaken}>
-              {chatbotTaken ? "聊天机器人（项目群已有）" : "聊天机器人"}
+              {chatbotTaken ? "????????????" : "?????"}
             </option>
           </select>
           {chatbotTaken && (
-            <p className="form-hint">项目群限 1 个聊天机器人；聊天群可添加多个。</p>
+            <p className="form-hint">???? 1 ????????????????</p>
           )}
-          <input autoFocus value={newMember.displayName} onChange={(event) => setNewMember((value) => ({ ...value, displayName: event.target.value }))} placeholder="成员显示名称" required />
-          <input value={newMember.roleDescription} onChange={(event) => setNewMember((value) => ({ ...value, roleDescription: event.target.value }))} placeholder={addMemberKind === "agent" ? "职责，例如：代码审查" : addMemberKind === "chatbot" ? "机器人说明（可选）" : "成员说明（可选）"} />
+          <input autoFocus value={newMember.displayName} onChange={(event) => setNewMember((value) => ({ ...value, displayName: event.target.value }))} placeholder="??????" required />
+          <input value={newMember.roleDescription} onChange={(event) => setNewMember((value) => ({ ...value, roleDescription: event.target.value }))} placeholder={addMemberKind === "agent" ? "??????????" : addMemberKind === "chatbot" ? "?????????" : "????????"} />
           {addMemberKind === "user" && <>
             <select
               value={newMember.userAddMode}
@@ -1523,16 +1490,16 @@ export function App() {
                 existingAuthUserId: "",
               }))}
             >
-              <option value="create">创建新账号</option>
-              <option value="link">加入已有账号</option>
-              <option value="invite">邀请链接（待接受）</option>
+              <option value="create">?????</option>
+              <option value="link">??????</option>
+              <option value="invite">?????????</option>
             </select>
             {newMember.userAddMode === "create" ? <>
-              <input value={newMember.loginUsername} onChange={(event) => setNewMember((value) => ({ ...value, loginUsername: event.target.value }))} placeholder="登录用户名" required autoComplete="off" />
-              <input type="password" value={newMember.loginPassword} onChange={(event) => setNewMember((value) => ({ ...value, loginPassword: event.target.value }))} placeholder="登录密码" required autoComplete="new-password" />
-              <p className="form-hint">对方用该用户名/密码登录后，只能看到并进入本群对话。若用户名已存在，请改选「加入已有账号」。</p>
+              <input value={newMember.loginUsername} onChange={(event) => setNewMember((value) => ({ ...value, loginUsername: event.target.value }))} placeholder="?????" required autoComplete="off" />
+              <input type="password" value={newMember.loginPassword} onChange={(event) => setNewMember((value) => ({ ...value, loginPassword: event.target.value }))} placeholder="????" required autoComplete="new-password" />
+              <p className="form-hint">???????/??????????????????????????????????????</p>
             </> : newMember.userAddMode === "invite" ? (
-              <p className="form-hint">创建占位成员并生成 24 小时邀请链接；对方登录/注册后自动入群。接受前成员显示「链接中」。</p>
+              <p className="form-hint">????????? 24 ???????????/?????????????????????</p>
             ) : <>
               <select
                 value={newMember.existingAuthUserId}
@@ -1547,12 +1514,12 @@ export function App() {
                 }}
                 required
               >
-                <option value="">选择已有登录用户…</option>
+                <option value="">?????????</option>
                 {joinableUsers.map((u) => (
                   <option key={u.id} value={u.id}>{u.username}</option>
                 ))}
               </select>
-              <p className="form-hint">将已有登录用户拉入本群（无需再设密码）；列表不含已在本群的用户。</p>
+              <p className="form-hint">????????????????????????????????</p>
             </>}
           </>}
           {addMemberKind === "agent" && <>
@@ -1569,7 +1536,7 @@ export function App() {
                 {modelsForAdapter(newMember.adapter).map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
             )}
-            <input value={newMember.executablePath} onChange={(event) => setNewMember((value) => ({ ...value, executablePath: event.target.value }))} placeholder="可执行文件路径（可选）" />
+            <input value={newMember.executablePath} onChange={(event) => setNewMember((value) => ({ ...value, executablePath: event.target.value }))} placeholder="???????????" />
           </>}
           {addMemberKind === "chatbot" && <>
             <select value={newMember.chatbotProvider} onChange={(event) => {
@@ -1578,7 +1545,7 @@ export function App() {
               setNewMember((value) => ({ ...value, chatbotProvider, model: defaultModelForAdapter(adapter) }));
             }}>
               <option value="opencode-go">OpenCode Go</option>
-              <option value="deepseek">DeepSeek 官方</option>
+              <option value="deepseek">DeepSeek ??</option>
             </select>
             <select
               value={newMember.model || defaultModelForAdapter(newMember.chatbotProvider === "deepseek" ? "chatbot-deepseek" : "chatbot-opencode-go")}
@@ -1588,36 +1555,36 @@ export function App() {
                 <option key={m} value={m}>{m}</option>
               ))}
             </select>
-            <input type="password" autoComplete="off" value={newMember.apiKey} onChange={(event) => setNewMember((value) => ({ ...value, apiKey: event.target.value }))} placeholder="API Key（仅存服务器，不进 git）" required />
-            <p className="form-hint">{isChatGroup ? "聊天群可添加多个机器人。" : "项目群仅可添加一个聊天机器人。"}</p>
+            <input type="password" autoComplete="off" value={newMember.apiKey} onChange={(event) => setNewMember((value) => ({ ...value, apiKey: event.target.value }))} placeholder="API Key????????? git?" required />
+            <p className="form-hint">{isChatGroup ? "????????????" : "???????????????"}</p>
           </>}
-          <div><button type="button" className="quiet-button" onClick={() => setShowAddMember(false)}>取消</button><button type="submit">添加</button></div>
-        </form> : isAdmin ? <button className="add-member-button" onClick={() => { setNewMember(emptyMember); setShowAddMember(true); }}>＋ 邀请成员</button> : null}
+          <div><button type="button" className="quiet-button" onClick={() => setShowAddMember(false)}>??</button><button type="submit">??</button></div>
+        </form> : isAdmin ? <button className="add-member-button" onClick={() => { setNewMember(emptyMember); setShowAddMember(true); }}>? ????</button> : null}
       </> : rightPanelTab === "core.queue" ? <RunQueuePane runs={current.runs} members={members} onCancel={(run) => void changeRun(run, "cancel")} onReview={(run, decision) => void changeRunReview(run, decision)} />
       : rightPanelTab === "core.details" ? <div className="details-pane">
         {detailInner !== "home" && (
           <div className="details-links" style={{ paddingBottom: 0 }}>
-            <button type="button" onClick={() => setDetailInner("home")}>← 返回详情</button>
+            <button type="button" onClick={() => setDetailInner("home")}>? ????</button>
           </div>
         )}
         {detailInner === "home" ? (
           <div className="details-links">
-            {!isChatGroup && <button type="button" onClick={() => setMainView("versions")}>版本管理<small>Wave / 路线图</small></button>}
-            {isAdmin && <button type="button" onClick={() => setDetailInner("experiences")}>经验<small>可复用的群内笔记</small></button>}
-            {isAdmin && <button type="button" onClick={() => setDetailInner("logs")}>日志<small>运行与排障</small></button>}
+            {!isChatGroup && <button type="button" onClick={() => setMainView("versions")}>????<small>Wave / ???</small></button>}
+            {isAdmin && <button type="button" onClick={() => setDetailInner("experiences")}>??<small>????????</small></button>}
+            {isAdmin && <button type="button" onClick={() => setDetailInner("logs")}>??<small>?????</small></button>}
           </div>
         ) : detailInner === "experiences" ? <ExperiencePanel groupId={current.group.id} members={members} ownerId={current.group.ownerMemberId} onError={(msg) => setError(msg)} />
         : <LogsPanel onError={(msg) => setError(msg)} />}
       </div>
       : rightPanelTab === "core.settings" ? (
         <div className="settings-pane modal-form settings-modal">
-          <h3 className="settings-section-title">外观</h3>
+          <h3 className="settings-section-title">??</h3>
           <RuntimeThemeSwitcher />
           {isAdmin && current && (
             <div className="extension-settings">
-              <h3 className="settings-section-title">运行 · Extend</h3>
+              <h3 className="settings-section-title">?? ? Extend</h3>
               {extensions.length === 0 ? (
-                <p className="form-hint">未发现扩展（检查 LINLIS_EXTENSION_ROOTS / 清单文件）。</p>
+                <p className="form-hint">???????? LINLIS_EXTENSION_ROOTS / ??????</p>
               ) : (
                 extensions.map((ext) => (
                   <div key={ext.id} className="extension-settings-row">
@@ -1630,8 +1597,8 @@ export function App() {
                       />
                       {ext.name}
                       <span className="form-hint" style={{ marginLeft: 8 }}>
-                        {ext.version} · {ext.healthy ? "health ok" : "health down"}
-                        {ext.healthDetail ? ` · ${ext.healthDetail}` : ""}
+                        {ext.version} ? {ext.healthy ? "health ok" : "health down"}
+                        {ext.healthDetail ? ` ? ${ext.healthDetail}` : ""}
                       </span>
                     </label>
                   </div>
@@ -1640,38 +1607,38 @@ export function App() {
             </div>
           )}
           <div className="extension-settings">
-            <h3 className="settings-section-title">进程指标（主进程）</h3>
+            <h3 className="settings-section-title">?????????</h3>
             <p className="form-hint">
               {metrics
-                ? `CPU ${metrics.cpuPct.toFixed(1)}% · RSS ${metrics.rssMib.toFixed(1)} MiB · 采样 ${new Date(metrics.ts).toLocaleTimeString()}`
-                : "打开设置后每 5s 拉取 /api/metrics/latest"}
+                ? `CPU ${metrics.cpuPct.toFixed(1)}% ? RSS ${metrics.rssMib.toFixed(1)} MiB ? ?? ${new Date(metrics.ts).toLocaleTimeString()}`
+                : "?????? 5s ?? /api/metrics/latest"}
             </p>
           </div>
           {isAdmin && settings ? (
             <form className="modal-form" onSubmit={saveSettings}>
-              <NumberSetting label="每群并发任务" value={settings.maxConcurrentRuns} onChange={(value) => setSettings({ ...settings, maxConcurrentRuns: value })} min={1} max={8} />
-              <NumberSetting label="任务超时（秒）" value={settings.runTimeoutSeconds} onChange={(value) => setSettings({ ...settings, runTimeoutSeconds: value })} min={30} max={7200} />
-              <NumberSetting label="工作群上下文消息数" value={settings.contextMessageLimit} onChange={(value) => setSettings({ ...settings, contextMessageLimit: value })} min={5} max={200} />
-              <NumberSetting label="聊天群/机器人上下文" value={settings.chatContextMessageLimit ?? 12} onChange={(value) => setSettings({ ...settings, chatContextMessageLimit: value })} min={5} max={40} />
-              <NumberSetting label="管理员最大派生层级" value={settings.maxDelegationDepth} onChange={(value) => setSettings({ ...settings, maxDelegationDepth: value })} min={0} max={4} />
-              <h3 className="settings-section-title">心跳</h3>
+              <NumberSetting label="??????" value={settings.maxConcurrentRuns} onChange={(value) => setSettings({ ...settings, maxConcurrentRuns: value })} min={1} max={8} />
+              <NumberSetting label="???????" value={settings.runTimeoutSeconds} onChange={(value) => setSettings({ ...settings, runTimeoutSeconds: value })} min={30} max={7200} />
+              <NumberSetting label="?????????" value={settings.contextMessageLimit} onChange={(value) => setSettings({ ...settings, contextMessageLimit: value })} min={5} max={200} />
+              <NumberSetting label="???/??????" value={settings.chatContextMessageLimit ?? 12} onChange={(value) => setSettings({ ...settings, chatContextMessageLimit: value })} min={5} max={40} />
+              <NumberSetting label="?????????" value={settings.maxDelegationDepth} onChange={(value) => setSettings({ ...settings, maxDelegationDepth: value })} min={0} max={4} />
+              <h3 className="settings-section-title">??</h3>
               <label className="settings-check">
                 <input
                   type="checkbox"
                   checked={settings.heartbeatAuto !== false}
                   onChange={(e) => setSettings({ ...settings, heartbeatAuto: e.target.checked })}
                 />
-                Auto（聚焦/后台动态频率；不做 100ms HTTP 轮询）
+                Auto???/????????? 100ms HTTP ???
               </label>
               <NumberSetting
-                label="聚焦心跳（秒）"
+                label="???????"
                 value={settings.heartbeatFocusSeconds ?? 1}
                 onChange={(value) => setSettings({ ...settings, heartbeatFocusSeconds: value })}
                 min={1}
                 max={30}
               />
               <NumberSetting
-                label="非聚焦心跳（秒）"
+                label="????????"
                 value={settings.heartbeatBackgroundSeconds ?? 5}
                 onChange={(value) => setSettings({ ...settings, heartbeatBackgroundSeconds: value })}
                 min={1}
@@ -1692,12 +1659,12 @@ export function App() {
                   ),
                 })}
               </p>
-              <button className="primary-wide" type="submit">保存设置</button>
+              <button className="primary-wide" type="submit">????</button>
             </form>
           ) : (
-            <p className="form-hint">主题已即时生效。运行参数仅管理员可改。</p>
+            <p className="form-hint">???????????????????</p>
           )}
-          <h3 className="settings-section-title">本群</h3>
+          <h3 className="settings-section-title">??</h3>
           <GroupSettingsView
             group={current.group}
             members={members}
@@ -1718,41 +1685,43 @@ export function App() {
             onError={(msg) => setError(msg)}
           />
           <details className="help-fold">
-            <summary>键盘与斜杠</summary>
+            <summary>?????</summary>
             <table>
               <tbody>
-                <tr><td><code>Ctrl/⌘ + 1</code></td><td>左栏展开 / 折叠为控制轨</td></tr>
-                <tr><td><code>Ctrl/⌘ + 2</code></td><td>打开或关闭右栏</td></tr>
-                <tr><td><code>@</code></td><td>提及成员</td></tr>
+                <tr><td><code>Ctrl/? + 1</code></td><td>???? / ??????</td></tr>
+                <tr><td><code>Ctrl/? + 2</code></td><td>???????</td></tr>
+                <tr><td><code>@</code></td><td>????</td></tr>
                 <tr><td><code>/</code></td><td>/board /approve /wave</td></tr>
               </tbody>
             </table>
           </details>
         </div>
       ) : extPaneView ? renderExtPane(extPaneView)
-      : <p className="form-hint">选择一个页签。</p>}
+      : <p className="form-hint">???????</p>}
       </>}
-    />}
+    /> : null}
+    />
+    </div>
 
     {showCreate && (
-      <Modal title="新建群组" onClose={() => groups.length > 0 && setShowCreate(false)}>
+      <Modal title="????" onClose={() => groups.length > 0 && setShowCreate(false)}>
         <form className="modal-form" onSubmit={createGroup}>
-          <label>群类型
+          <label>???
             <select value={createGroupKind} onChange={(e) => setCreateGroupKind(e.target.value as "project" | "chat")}>
-              <option value="chat">聊天群（多机器人，无项目功能）</option>
-              <option value="project">项目群（工作区 + 路线图/编排）</option>
+              <option value="chat">???????????????</option>
+              <option value="project">??????? + ???/???</option>
             </select>
           </label>
-          <label>群名称<input name="name" required placeholder={createGroupKind === "chat" ? "例如：日常闲聊" : "例如：官网改版"} /></label>
-          <label>群主名称<input name="ownerName" required defaultValue="我" /></label>
+          <label>???<input name="name" required placeholder={createGroupKind === "chat" ? "???????" : "???????"} /></label>
+          <label>????<input name="ownerName" required defaultValue="?" /></label>
           {createGroupKind === "project" && (
-            <label>服务器工作目录
+            <label>???????
               <ServerPathPicker value={workspacePath} onChange={setWorkspacePath} onError={setError} />
             </label>
           )}
           {createGroupKind === "project" && presetRoles.length > 0 && (
             <div className="preset-roles">
-              <span className="preset-roles-label">预置 Agent 角色</span>
+              <span className="preset-roles-label">?? Agent ??</span>
               <div className="preset-roles-grid">
                 {presetRoles.map((role) => {
                   const selected = selectedRoles.includes(role.name);
@@ -1761,17 +1730,17 @@ export function App() {
                       <span className="preset-role-dot" style={{ background: role.avatarColor }} />
                       <span className="preset-role-body">
                         <strong>{role.name}</strong>
-                        <small>{role.adapter}{role.roleDescription ? ` · ${role.roleDescription}` : ""}</small>
+                        <small>{role.adapter}{role.roleDescription ? ` ? ${role.roleDescription}` : ""}</small>
                       </span>
-                      <span className="preset-role-check">{selected ? "✓" : "+"}</span>
+                      <span className="preset-role-check">{selected ? "?" : "+"}</span>
                     </button>
                   );
                 })}
               </div>
             </div>
           )}
-          <p className="form-hint">{createGroupKind === "chat" ? "聊天群无需工作区，创建后可添加多个聊天机器人。" : "必须选择服务器上已存在的绝对路径；所有 Agent 任务均在该目录执行。"}</p>
-          <button className="primary-wide" type="submit">创建{createGroupKind === "chat" ? "聊天群" : "项目群"}</button>
+          <p className="form-hint">{createGroupKind === "chat" ? "???????????????????????" : "??????????????????? Agent ??????????"}</p>
+          <button className="primary-wide" type="submit">??{createGroupKind === "chat" ? "???" : "???"}</button>
         </form>
       </Modal>
     )}
@@ -1780,7 +1749,7 @@ export function App() {
         <span>{releasingBannerText(wsLink.state, wsLink.elapsedMs)}</span>
       </div>
     )}
-    {error && <div className="error-toast"><span>{error}</span><button onClick={() => setError(null)}>×</button></div>}
+    {error && <div className="error-toast"><span>{error}</span><button onClick={() => setError(null)}>?</button></div>}
   </main>;
 }
 
@@ -1789,12 +1758,12 @@ function DSHView({ onClose }: { onClose?: () => void }) {
     <div className="live-panel dsh-view">
       <div className="dsh-view-head">
         <p className="live-panel-hint">
-          已嵌入 DeepSeek Harness Web 界面（{DSH_WEB_URL}）。
-          若未启动，请在服务器上运行 <code>dsh web</code>（默认 :3080）；面板直接嵌入本机该端口。
+          ??? DeepSeek Harness Web ???{DSH_WEB_URL}??
+          ????????????? <code>dsh web</code>??? :3080??????????????
         </p>
         {onClose && (
           <button type="button" className="pm-btn sm" onClick={onClose}>
-            返回聊天
+            ????
           </button>
         )}
       </div>
@@ -1842,15 +1811,15 @@ function AuthScreen({ error, onError, onAuthed }: { error: string | null; onErro
     <main className="auth-screen">
       <section className="auth-card">
         <BrandMark />
-        <h1>{mode === "login" ? "登录" : "注册"}</h1>
-        <p className="auth-hint">多 Agent 协作工作台。使用管理员分配的账号登录后进入所属群聊。</p>
+        <h1>{mode === "login" ? "??" : "??"}</h1>
+        <p className="auth-hint">? Agent ??????????????????????????</p>
         <form className="modal-form" onSubmit={(e) => void submit(e)}>
-          <label>用户名<input autoFocus value={username} onChange={(e) => setUsername(e.target.value)} required autoComplete="username" /></label>
-          <label>密码<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete={mode === "login" ? "current-password" : "new-password"} /></label>
-          <button className="primary-wide" type="submit" disabled={busy}>{busy ? "请稍候…" : mode === "login" ? "进入 Workpanel" : "注册并进入"}</button>
+          <label>???<input autoFocus value={username} onChange={(e) => setUsername(e.target.value)} required autoComplete="username" /></label>
+          <label>??<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete={mode === "login" ? "current-password" : "new-password"} /></label>
+          <button className="primary-wide" type="submit" disabled={busy}>{busy ? "????" : mode === "login" ? "?? Workpanel" : "?????"}</button>
         </form>
         <button type="button" className="auth-switch" onClick={() => { setMode(mode === "login" ? "register" : "login"); onError(null); }}>
-          {mode === "login" ? "没有账号？注册" : "已有账号？登录"}
+          {mode === "login" ? "???????" : "???????"}
         </button>
         {error && <div className="auth-error">{error}</div>}
       </section>
@@ -1858,7 +1827,7 @@ function AuthScreen({ error, onError, onAuthed }: { error: string | null; onErro
   );
 }
 
-function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) { return <div className="modal-backdrop"><section className="modal"><header><h2>{title}</h2><button className="icon-button" onClick={onClose}>×</button></header>{children}</section></div>; }
+function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) { return <div className="modal-backdrop"><section className="modal"><header><h2>{title}</h2><button className="icon-button" onClick={onClose}>?</button></header>{children}</section></div>; }
 function NumberSetting({ label, value, onChange, min, max }: { label: string; value: number; onChange: (value: number) => void; min: number; max: number }) { return <label>{label}<input type="number" min={min} max={max} value={value} onChange={(event) => onChange(Number(event.target.value))} /></label>; }
 function isUnauthorizedError(reason: unknown) {
   const message = readError(reason);

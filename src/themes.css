@@ -1,18 +1,35 @@
-@import url("https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Figtree:wght@400;500;600;700&family=Orbitron:wght@500;600;700;800&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Syne:wght@600;700;800&display=swap");
+html {
+  --lp-bg-app: var(--bg);
+  --lp-bg-sidebar: var(--surf);
+  --lp-bg-panel: var(--surf);
+  --lp-bg-elevated: var(--elev);
+  --lp-text: var(--ink);
+  --lp-text-muted: var(--dim);
+  --lp-accent: var(--acc);
+  --lp-border: var(--line);
+  --bg-app: var(--bg);
+  --bg-sidebar-solid: var(--surf);
+  --bg-chat: var(--bg);
+  --bg-surface: var(--elev);
+  --text: var(--ink);
+  --accent: var(--acc);
+  --s-bg0: var(--bg);
+  --bg-app-image: none;
+  --bg-app-image-opacity: 0;
+  --bg-app-glow: none;
+}
 
-/* ── Theme tokens ── */
+/* ?? Theme tokens ?? */
 :root,
 [data-theme="atlas"] {
-  --font-display: "Syne", "Segoe UI", sans-serif;
-  --font-body: "Figtree", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-display: var(--font);
+  --font-body: var(--font);
   --bg-app-image: none;
   --bg-app-image-opacity: 0;
   --fx-scanline: 0;
   --fx-glow: 0;
-  --bg-app: #d9e3ec;
-  --bg-app-glow: radial-gradient(1200px 600px at 10% -10%, #b9d7e8 0%, transparent 55%),
-    radial-gradient(900px 500px at 90% 0%, #cfe0c8 0%, transparent 50%),
-    linear-gradient(160deg, #e7eef5 0%, #d5e0ea 48%, #cfd9e4 100%);
+  --bg-app: var(--bg);
+  --bg-app-glow: none;
   --bg-sidebar: linear-gradient(180deg, #0b1f33 0%, #10283f 55%, #0d2134 100%);
   --bg-sidebar-solid: #0b1f33;
   --bg-chat: #eef3f7;
@@ -30,7 +47,7 @@
   --text-on-sidebar-soft: #8ea4bb;
   --border: #c9d5e1;
   --border-soft: #dce5ee;
-  --accent: #1f9bb8;
+  --accent: var(--acc);
   --accent-strong: #147a93;
   --accent-contrast: #ffffff;
   --danger: #c4544c;
@@ -40,15 +57,15 @@
   --hover-sidebar: #16324d;
   --ring: #1f9bb866;
   color-scheme: light;
-  /* 语义状态色（P0.1 新增） */
+  /* ??????P0.1 ??? */
   --success: #1f8f5c;
   --warn: #b7791f;
   --error: var(--danger);
-  /* ── LP 语义别名层（P0.1 新增，均由既有 token 组合 → 零视觉回归）── */
-  --lp-bg-app: var(--bg-app);
-  --lp-bg-sidebar: var(--bg-sidebar-solid);
-  --lp-bg-panel: var(--bg-chat);
-  --lp-bg-elevated: var(--bg-surface);
+  /* ?? LP ??????P0.1 ??????? token ?? ? ???????? */
+  --lp-bg-app: var(--bg);
+  --lp-bg-sidebar: var(--surf);
+  --lp-bg-panel: var(--surf);
+  --lp-bg-elevated: var(--elev);
   --lp-bg-overlay: rgba(0, 0, 0, .5);
   --lp-bg-hover: color-mix(in srgb, var(--text) 8%, transparent);
   --lp-bg-active: color-mix(in srgb, var(--accent) 16%, transparent);
@@ -58,7 +75,7 @@
   --lp-text-secondary: var(--text-soft);
   --lp-text-tertiary: var(--text-faint);
   --lp-text-on-sidebar: var(--text-on-sidebar);
-  --lp-accent: var(--accent);
+  --lp-accent: var(--acc);
   --lp-accent-strong: var(--accent-strong);
   --lp-ring: var(--ring);
   --lp-success: var(--success);
@@ -67,10 +84,8 @@
 }
 
 [data-theme="forge"] {
-  --bg-app: #120f0e;
-  --bg-app-glow: radial-gradient(900px 500px at 0% 0%, #5a2a12 0%, transparent 55%),
-    radial-gradient(700px 400px at 100% 20%, #2a1a12 0%, transparent 50%),
-    linear-gradient(165deg, #1a1412 0%, #120f0e 55%, #0e0c0b 100%);
+  --bg-app: var(--bg);
+  --bg-app-glow: none;
   --bg-sidebar: linear-gradient(180deg, #1a1412 0%, #14100e 100%);
   --bg-sidebar-solid: #1a1412;
   --bg-chat: #171311;
@@ -88,7 +103,7 @@
   --text-on-sidebar-soft: #a89484;
   --border: #3a2d26;
   --border-soft: #2c221d;
-  --accent: #e08a3c;
+  --accent: var(--acc);
   --accent-strong: #c67128;
   --accent-contrast: #1a100a;
   --danger: #e07068;
@@ -104,10 +119,8 @@
 }
 
 [data-theme="moss"] {
-  --bg-app: #dce6d8;
-  --bg-app-glow: radial-gradient(1000px 520px at 15% -5%, #c5d9b8 0%, transparent 55%),
-    radial-gradient(800px 420px at 90% 10%, #b7cfc8 0%, transparent 50%),
-    linear-gradient(155deg, #e8efe6 0%, #d5e0d2 50%, #c9d6c6 100%);
+  --bg-app: var(--bg);
+  --bg-app-glow: none;
   --bg-sidebar: linear-gradient(180deg, #1f3a2e 0%, #173026 100%);
   --bg-sidebar-solid: #1f3a2e;
   --bg-chat: #eef4ea;
@@ -125,7 +138,7 @@
   --text-on-sidebar-soft: #9db5a6;
   --border: #c3d2c0;
   --border-soft: #d7e3d3;
-  --accent: #6a8f4e;
+  --accent: var(--acc);
   --accent-strong: #507538;
   --accent-contrast: #ffffff;
   --danger: #b85a4a;
@@ -141,10 +154,8 @@
 }
 
 [data-theme="noir"] {
-  --bg-app: #0c0d10;
-  --bg-app-glow: radial-gradient(900px 480px at 20% 0%, #2a2030 0%, transparent 50%),
-    radial-gradient(700px 400px at 100% 0%, #1a2228 0%, transparent 45%),
-    linear-gradient(170deg, #12141a 0%, #0c0d10 60%, #090a0d 100%);
+  --bg-app: var(--bg);
+  --bg-app-glow: none;
   --bg-sidebar: linear-gradient(180deg, #101218 0%, #0c0d10 100%);
   --bg-sidebar-solid: #101218;
   --bg-chat: #12141a;
@@ -162,7 +173,7 @@
   --text-on-sidebar-soft: #9a9186;
   --border: #2a2d38;
   --border-soft: #22252f;
-  --accent: #d94b3d;
+  --accent: var(--acc);
   --accent-strong: #b83a2f;
   --accent-contrast: #fff8f2;
   --danger: #e07068;
@@ -178,16 +189,14 @@
 }
 
 [data-theme="cyberpunk"] {
-  --font-display: "Orbitron", "Segoe UI", sans-serif;
-  --font-body: "Rajdhani", "PingFang SC", "Microsoft YaHei", sans-serif;
-  --bg-app-image: url("/themes/cyberpunk.svg");
+  --font-display: var(--font);
+  --font-body: var(--font);
+  --bg-app-image: none;
   --bg-app-image-opacity: .42;
   --fx-scanline: 1;
   --fx-glow: 1;
-  --bg-app: #070012;
-  --bg-app-glow: radial-gradient(900px 520px at 80% 10%, #ff2bd633 0%, transparent 55%),
-    radial-gradient(700px 420px at 10% 80%, #00f0ff28 0%, transparent 50%),
-    linear-gradient(165deg, #12001e 0%, #070012 55%, #04000a 100%);
+  --bg-app: var(--bg);
+  --bg-app-glow: none;
   --bg-sidebar: linear-gradient(180deg, #140022ee 0%, #0a0018f2 100%);
   --bg-sidebar-solid: #0e001a;
   --bg-chat: #0a0016cc;
@@ -205,7 +214,7 @@
   --text-on-sidebar-soft: #b48ad4;
   --border: #ff2bd644;
   --border-soft: #00f0ff33;
-  --accent: #ff2bd6;
+  --accent: var(--acc);
   --accent-strong: #00f0ff;
   --accent-contrast: #120018;
   --danger: #ff4d6d;
@@ -221,15 +230,14 @@
 }
 
 [data-theme="industrial"] {
-  --font-display: "Chakra Petch", "Segoe UI", sans-serif;
-  --font-body: "Share Tech Mono", "IBM Plex Mono", "PingFang SC", monospace;
-  --bg-app-image: url("/themes/industrial.svg");
+  --font-display: var(--font);
+  --font-body: var(--font);
+  --bg-app-image: none;
   --bg-app-image-opacity: .38;
   --fx-scanline: 0;
   --fx-glow: 0;
-  --bg-app: #121418;
-  --bg-app-glow: radial-gradient(800px 480px at 15% 0%, #f5a62322 0%, transparent 50%),
-    linear-gradient(170deg, #1c1f24 0%, #121418 55%, #0c0e11 100%);
+  --bg-app: var(--bg);
+  --bg-app-glow: none;
   --bg-sidebar: linear-gradient(180deg, #1e2228ee 0%, #14171cf2 100%);
   --bg-sidebar-solid: #1a1d22;
   --bg-chat: #16191ecc;
@@ -247,7 +255,7 @@
   --text-on-sidebar-soft: #9aa3b0;
   --border: #f5a62344;
   --border-soft: #3a414c;
-  --accent: #f5a623;
+  --accent: var(--acc);
   --accent-strong: #ff6a00;
   --accent-contrast: #121418;
   --danger: #ff5a4a;
@@ -262,32 +270,18 @@
   --error: var(--danger);
 }
 
-/* ── Global chrome rewrite (overrides legacy hardcodes) ── */
-html, body, #root { min-height: 100%; }
+/* ?? Global chrome rewrite (overrides legacy hardcodes) ?? */
+html, body, #root { min-height: 100%; background: var(--bg); }
 body {
   margin: 0;
   min-width: 0;
   color: var(--text);
-  background-color: var(--bg-app);
-  background-image: var(--bg-app-glow);
+  background: var(--bg);
   background-attachment: fixed;
   font-family: var(--font-body);
   font-synthesis: none;
   transition: color .3s ease, background-color .4s ease;
   position: relative;
-}
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -2;
-  pointer-events: none;
-  background-image: var(--bg-app-image);
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  opacity: var(--bg-app-image-opacity, 0);
-  transition: opacity .45s ease;
 }
 body::after {
   content: "";
@@ -324,7 +318,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   backdrop-filter: saturate(1.05);
 }
 
-/* ── 三栏分界条（DSH ui-layout 借鉴，P0.3） ── */
+/* ?? ??????DSH ui-layout ???P0.3? ?? */
 .app-shell .divider {
   width: 100%;
   height: 100%;
@@ -352,12 +346,12 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   box-shadow: 0 0 10px var(--ring);
 }
 
-/* 右栏关闭：右列与右分界归零，中栏占满 */
+/* ?????????????????? */
 .app-shell[data-right="closed"] {
   grid-template-columns: var(--left-w) 8px minmax(500px, 1fr) 0 0;
 }
 
-/* ── 左栏控制轨（56px，仅宽屏；移动端仍是 Drawer） ── */
+/* ?? ??????56px?????????? Drawer? ?? */
 .rail-toggle {
   color: var(--text-on-sidebar-soft);
   font-size: 12px;
@@ -877,9 +871,9 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 
 .modal-backdrop { background: color-mix(in srgb, #0b1220 55%, transparent); }
 .modal {
-  background: var(--bg-modal);
-  color: var(--text);
-  border: 1px solid var(--border-soft);
+  background: var(--elev);
+  color: var(--ink);
+  border: 1px solid var(--line);
   box-shadow: var(--shadow);
   width: min(520px, calc(100vw - 32px));
 }
@@ -907,12 +901,14 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   display: grid;
   place-items: center;
   padding: 24px;
-  background: transparent;
+  background: var(--bg);
+  color: var(--ink);
 }
 .auth-card {
   width: min(400px, 100%);
-  background: var(--bg-auth-card);
-  border: 1px solid var(--border-soft);
+  background: var(--surf);
+  border: 1px solid var(--line);
+  color: var(--ink);
   border-radius: 18px;
   padding: 30px 26px 24px;
   box-shadow: var(--shadow);
@@ -934,12 +930,12 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 }
 .auth-hint { margin: 0; color: var(--text-soft); font-size: 13px; line-height: 1.5; }
 .auth-switch { border: 0; background: transparent; color: var(--accent-strong); font-size: 12px; font-weight: 700; cursor: pointer; padding: 0; text-align: left; }
-.auth-error { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); border-radius: 8px; padding: 8px 10px; font-size: 12px; }
+.auth-error { background: var(--elev); border: 1px solid var(--line); color: var(--ink); border-radius: 8px; padding: 8px 10px; font-size: 12px; }
 
-/* Theme picker lives in 运行设置 only */
+/* Theme picker lives in ???? only */
 
 .loading { color: var(--text-faint); }
-.error-toast { background: #2a1d1c; }
+.error-toast { background: var(--elev); border: 1px solid var(--line); color: var(--ink); }
 
 .bubble.streaming {
   border-color: color-mix(in srgb, var(--accent) 35%, var(--border-soft));
@@ -962,7 +958,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .responding-badge { background: color-mix(in srgb, var(--accent) 16%, transparent) !important; color: var(--accent-strong) !important; }
 .status.running, .status.queued { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent-strong); }
 
-/* ── Day divider & mention menu ── */
+/* ?? Day divider & mention menu ?? */
 .day-block { display: contents; }
 .day-divider {
   display: flex; align-items: center; gap: 12px; margin: 18px 0 6px;
@@ -980,7 +976,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 }
 .empty-chat-sub { color: var(--text-faint); font-size: 11px; }
 
-/* ── Preset roles picker (create group) ── */
+/* ?? Preset roles picker (create group) ?? */
 .preset-roles { display: grid; gap: 8px; }
 .preset-roles-label { font-size: 12px; font-weight: 600; color: var(--text-soft); }
 .preset-roles-grid { display: grid; gap: 6px; max-height: 200px; overflow-y: auto; }
@@ -997,10 +993,10 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .preset-role-body small { color: var(--text-faint); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .preset-role-check { font-size: 13px; font-weight: 800; color: var(--accent); width: 16px; text-align: center; }
 
-/* ── PM refreshing indicator ── */
+/* ?? PM refreshing indicator ?? */
 .pm-refreshing { margin-left: auto; font-size: 10px; color: var(--text-faint); font-weight: 600; padding: 6px 4px; }
 
-/* ── P0.4 残留硬编码 → 语义 token（第一片：状态/日志/操作按钮，叠加于 themes.css 不回流 styles.css） ── */
+/* ?? P0.4 ????? ? ?? token???????/??/???????? themes.css ??? styles.css? ?? */
 .status.running, .status.queued, .review-badge.pending, .log-info {
   background: color-mix(in srgb, var(--accent) 16%, transparent);
   color: var(--accent-strong);
@@ -1053,18 +1049,30 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .own .bubble-play-btn { background: color-mix(in srgb, var(--accent) 18%, transparent); }
 
 
-/* ── Focus visibility (a11y) ── */
+/* ?? Focus visibility (a11y) ?? */
 button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, a:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
 
-/* ── Mobile / narrow layouts ── */
+/* ?? Mobile / narrow layouts ?? */
 @media (max-width: 1080px) {
   .app-shell { grid-template-columns: 1fr; }
   .app-shell[data-left="rail"],
   .app-shell[data-right="closed"] { grid-template-columns: 1fr; }
   .app-shell .divider { display: none; }
+  .wp-shell { --left: 0; --right: 0; }
+  .wp-left {
+    position: fixed; left: 0; top: 0; bottom: 0; width: min(290px, 86vw); z-index: 30;
+    transform: translateX(-100%); transition: transform .22s ease;
+    box-shadow: 20px 0 60px #00000055;
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+  }
+  .wp-shell.is-left-open .wp-left { transform: translateX(0); overflow: auto; padding: 14px; }
+  .wp-right {
+    position: fixed; right: 0; top: 0; bottom: 0; width: min(320px, 90vw); z-index: 20;
+    box-shadow: -10px 0 35px #1f2c3b20; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  }
   .group-sidebar {
     position: fixed; left: 0; top: 0; bottom: 0; width: min(290px, 86vw); z-index: 30;
     transform: translateX(-100%); transition: transform .22s ease;
@@ -1108,9 +1116,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .auth-card, .theme-swatch, .send-button, .avatar.responding, .typing-dots i, .stream-caret { animation: none !important; transition: none !important; }
 }
 
-/* ══════════════════════════════════════════════════════════════
-   P1 家具视觉升级（DSH 设计语言；全部消费 --lp-* 语义 token）
-   ══════════════════════════════════════════════════════════════ */
+/* ??????????????????????????????????????????????????????????????
+   P1 ???????DSH ????????? --lp-* ?? token?
+   ?????????????????????????????????????????????????????????????? */
 .message-row { gap: 12px; }
 .message-content { min-width: 0; }
 .message-meta { height: auto; margin-bottom: 5px; gap: 8px; }
@@ -1121,7 +1129,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .own .bubble { border-color: color-mix(in srgb, var(--lp-accent) 28%, var(--lp-border-l1)); }
 .bubble.streaming { border-color: color-mix(in srgb, var(--lp-accent) 42%, var(--lp-border-l1)); }
 
-/* 操作条常驻（复制/赞踩/停止/重试）；悬停显示会撑开气泡导致列表抖动 */
+/* ????????/??/??/??????????????????? */
 .m-actions { display: flex; align-items: center; gap: 4px; margin-top: 5px; padding-left: 2px; }
 .mini-btn {
   border: 0; background: transparent; color: var(--lp-text-tertiary);
@@ -1132,7 +1140,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .mini-btn.vote.on { color: var(--lp-accent); background: var(--lp-bg-active); }
 .mini-sep { width: 1px; height: 12px; background: var(--lp-border-l1); margin: 0 2px; }
 
-/* Agent 思考/产物卡片化 */
+/* Agent ??/????? */
 .part-thinking, .part-artifact {
   border: 1px solid var(--lp-border-l1);
   border-radius: 10px;
@@ -1146,13 +1154,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   cursor: pointer; user-select: none; list-style: none;
 }
 .part-thinking > summary::-webkit-details-marker, .part-artifact > summary::-webkit-details-marker { display: none; }
-.part-thinking > summary::before { content: "≡ "; color: var(--lp-accent); }
-.part-artifact > summary::before { content: "◈ "; color: var(--lp-accent); }
+.part-thinking > summary::before { content: "? "; color: var(--lp-accent); }
+.part-artifact > summary::before { content: "? "; color: var(--lp-accent); }
 .part-artifact { border-left: 3px solid var(--lp-accent); }
 .part-thinking pre, .part-artifact pre { margin: 6px 0 0; color: var(--lp-text-secondary); }
 .message-parts { gap: 8px; }
 
-/* 成员行 + 队列卡片 */
+/* ??? + ???? */
 .member-row { border: 1px solid transparent; border-radius: 10px; padding: 8px 9px; transition: border-color .15s ease, background .15s ease; }
 .member-row:hover { border-color: var(--lp-border-l1); }
 .member-row.is-responding { border-color: color-mix(in srgb, var(--lp-accent) 30%, transparent); background: var(--lp-bg-active); }
@@ -1177,17 +1185,17 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   outline-color: var(--lp-ring);
 }
 
-/* composer 升级 */
+/* composer ?? */
 .composer-wrap { border-radius: 16px 16px 0 0; padding: 14px 20px 12px; }
 .composer-wrap textarea { height: auto; min-height: 58px; }
 .composer-actions { padding-top: 6px; gap: 8px; }
 
-/* 状态/复审徽标统一胶囊 */
+/* ??/???????? */
 .status, .review-badge { border-radius: 999px; padding: 2px 9px; font-size: 10px; }
 
-/* ══════════════════════════════════════════════════════════════
-   P2 goal bar（Wave 常驻条）+ 右栏队列/待审批卡片
-   ══════════════════════════════════════════════════════════════ */
+/* ??????????????????????????????????????????????????????????????
+   P2 goal bar?Wave ????+ ????/?????
+   ?????????????????????????????????????????????????????????????? */
 .goal-bar {
   flex: none;
   display: flex;
@@ -1233,7 +1241,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   color: var(--lp-text-tertiary);
 }
 
-/* 右栏队列页签 */
+/* ?????? */
 .sec-title {
   display: flex;
   align-items: center;
@@ -1333,7 +1341,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .qc-approve:hover { filter: brightness(1.1); }
 .qc-reject:hover { filter: brightness(1.1); }
 
-/* run 阶段轨迹（P2） */
+/* run ?????P2? */
 .qc-trail { margin-top: 6px; }
 .qc-trail-toggle { padding: 2px 8px; }
 .phase-trail {
@@ -1365,7 +1373,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .phase-empty { color: var(--lp-text-tertiary); border-left: 2px solid transparent; }
 
 
-/* composer 工具行 + goal bar 交互 */
+/* composer ??? + goal bar ?? */
 .composer-tools { display: flex; align-items: center; gap: 10px; padding: 0 2px 7px; }
 .composer-tools .tool-btn {
   width: 28px; height: 28px; border-radius: 8px;
@@ -1388,7 +1396,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .goal-bar:hover { background: color-mix(in srgb, var(--lp-accent) 12%, var(--lp-bg-active)); }
 .goal-bar:focus-visible { outline: 2px solid var(--lp-ring); outline-offset: -2px; }
 
-/* 成员/Agent 面板开关（桌面与移动端均可见；修复桌面右栏关后无法重开） */
+/* ??/Agent ???????????????????????????? */
 .chat-header .members-toggle {
   border: 0;
   background: transparent;
@@ -1405,7 +1413,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .chat-header .members-toggle:hover { background: var(--lp-bg-hover); color: var(--lp-text-primary); }
 .chat-header .members-toggle[aria-pressed="true"] { color: var(--lp-accent); background: var(--lp-bg-active); }
 
-/* 无群欢迎页 */
+/* ????? */
 .empty-home {
   height: 100%;
   display: grid;
@@ -1435,52 +1443,52 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .empty-home .eh-primary:hover { filter: brightness(1.12); }
 .empty-home .eh-hints { display: flex; gap: 10px; align-items: center; color: var(--lp-text-tertiary); font-size: 11px; margin: 8px 0 0; }
 
-/* ══════════════════════════════════════════════════════════════
-   ui-demo.html 壳层对齐：--s-* 色板覆盖旧 --bg-*，去掉城市底图，
-   组件只用语义色。本段必须在文件末尾以压过前面的硬编码。
-   ══════════════════════════════════════════════════════════════ */
+/* ??????????????????????????????????????????????????????????????
+   ui-demo.html ?????--s-* ????? --bg-*????????
+   ???????????????????????????
+   ?????????????????????????????????????????????????????????????? */
 
 :root,
 [data-theme="atlas"] {
-  --s-bg0: #e7eef5; --s-bg1: #f2f7fb; --s-bg2: #ffffff; --s-bg3: #dbe7f1;
+  --s-bg0: var(--bg); --s-bg1: #f2f7fb; --s-bg2: #ffffff; --s-bg3: #dbe7f1;
   --s-ink: #0b1f33; --s-paper: #0b1f33; --s-muted: #5b7a94; --s-faint: #8aa3b8;
-  --bg-app: var(--s-bg0);
+  --bg-app: var(--bg);
   --bg-app-glow: none;
   --bg-app-image: none;
   --bg-app-image-opacity: 0;
   --bg-sidebar: var(--s-bg1);
-  --bg-sidebar-solid: var(--s-bg1);
-  --bg-chat: var(--s-bg0);
-  --bg-surface: var(--s-bg2);
+  --bg-sidebar-solid: var(--surf);
+  --bg-chat: var(--bg);
+  --bg-surface: var(--elev);
   --bg-composer: rgba(255, 255, 255, .88);
   --bg-member: var(--s-bg1);
   --bg-bubble: var(--s-bg2);
   --bg-bubble-own: rgba(31, 155, 184, .14);
-  --text: var(--s-paper);
+  --text: var(--ink);
   --text-soft: var(--s-muted);
   --text-faint: var(--s-faint);
   --text-on-sidebar: var(--s-paper);
   --text-on-sidebar-soft: var(--s-muted);
   --border: rgba(11, 31, 51, .26);
   --border-soft: rgba(11, 31, 51, .11);
-  --accent: #1f9bb8;
+  --accent: var(--acc);
   --accent-strong: #0f7f98;
   --accent-contrast: #fff;
   --selected: rgba(31, 155, 184, .16);
   --hover-sidebar: rgba(31, 155, 184, .08);
-  --lp-bg-app: var(--s-bg0);
+  --lp-bg-app: var(--bg);
   --lp-bg-surface: var(--s-bg1);
-  --lp-bg-sidebar: var(--s-bg1);
-  --lp-bg-panel: var(--s-bg0);
+  --lp-bg-sidebar: var(--surf);
+  --lp-bg-panel: var(--surf);
   --lp-bg-elev: var(--s-bg2);
-  --lp-bg-elevated: var(--s-bg2);
+  --lp-bg-elevated: var(--elev);
   --lp-bg-hover: rgba(31, 155, 184, .08);
   --lp-bg-active: rgba(31, 155, 184, .16);
-  --lp-border: rgba(11, 31, 51, .11);
+  --lp-border: var(--line);
   --lp-border-strong: rgba(11, 31, 51, .26);
   --lp-border-l1: var(--lp-border);
   --lp-border-l2: var(--lp-border-strong);
-  --lp-text: var(--s-paper);
+  --lp-text: var(--ink);
   --lp-text-dim: var(--s-muted);
   --lp-text-faint: var(--s-faint);
   --lp-text-invert: #fff;
@@ -1488,7 +1496,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   --lp-text-secondary: var(--lp-text-dim);
   --lp-text-tertiary: var(--lp-text-faint);
   --lp-text-on-sidebar: var(--s-paper);
-  --lp-accent: #1f9bb8;
+  --lp-accent: var(--acc);
   --lp-accent-strong: #0f7f98;
   --lp-accent-soft: rgba(31, 155, 184, .12);
   --lp-composer: rgba(255, 255, 255, .88);
@@ -1502,45 +1510,45 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 
 [data-theme="cyberpunk"] {
-  --s-bg0: #0a0014; --s-bg1: #130a22; --s-bg2: #1c1132; --s-bg3: #271845;
+  --s-bg0: var(--bg); --s-bg1: #130a22; --s-bg2: #1c1132; --s-bg3: #271845;
   --s-ink: #0a0014; --s-paper: #f2ecff; --s-muted: #a791c8; --s-faint: #7c6a9e;
-  --bg-app: var(--s-bg0);
+  --bg-app: var(--bg);
   --bg-app-glow: none;
   --bg-app-image: none;
   --bg-app-image-opacity: 0;
   --bg-sidebar: var(--s-bg1);
-  --bg-sidebar-solid: var(--s-bg1);
-  --bg-chat: var(--s-bg0);
-  --bg-surface: var(--s-bg2);
+  --bg-sidebar-solid: var(--surf);
+  --bg-chat: var(--bg);
+  --bg-surface: var(--elev);
   --bg-composer: rgba(28, 17, 50, .74);
   --bg-member: var(--s-bg1);
   --bg-bubble: var(--s-bg2);
   --bg-bubble-own: rgba(0, 240, 255, .16);
-  --text: var(--s-paper);
+  --text: var(--ink);
   --text-soft: var(--s-muted);
   --text-faint: var(--s-faint);
   --text-on-sidebar: var(--s-paper);
   --text-on-sidebar-soft: var(--s-muted);
   --border: rgba(0, 240, 255, .4);
   --border-soft: rgba(0, 240, 255, .15);
-  --accent: #00f0ff;
+  --accent: var(--acc);
   --accent-strong: #7deeff;
   --accent-contrast: var(--s-ink);
   --selected: rgba(0, 240, 255, .15);
   --hover-sidebar: rgba(0, 240, 255, .07);
-  --lp-bg-app: var(--s-bg0);
+  --lp-bg-app: var(--bg);
   --lp-bg-surface: var(--s-bg1);
-  --lp-bg-sidebar: var(--s-bg1);
-  --lp-bg-panel: var(--s-bg0);
+  --lp-bg-sidebar: var(--surf);
+  --lp-bg-panel: var(--surf);
   --lp-bg-elev: var(--s-bg2);
-  --lp-bg-elevated: var(--s-bg2);
+  --lp-bg-elevated: var(--elev);
   --lp-bg-hover: rgba(0, 240, 255, .07);
   --lp-bg-active: rgba(0, 240, 255, .15);
-  --lp-border: rgba(0, 240, 255, .15);
+  --lp-border: var(--line);
   --lp-border-strong: rgba(0, 240, 255, .4);
   --lp-border-l1: var(--lp-border);
   --lp-border-l2: var(--lp-border-strong);
-  --lp-text: var(--s-paper);
+  --lp-text: var(--ink);
   --lp-text-dim: var(--s-muted);
   --lp-text-faint: var(--s-faint);
   --lp-text-invert: var(--s-ink);
@@ -1548,7 +1556,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   --lp-text-secondary: var(--lp-text-dim);
   --lp-text-tertiary: var(--lp-text-faint);
   --lp-text-on-sidebar: var(--s-paper);
-  --lp-accent: #00f0ff;
+  --lp-accent: var(--acc);
   --lp-accent-strong: #7deeff;
   --lp-accent-soft: rgba(0, 240, 255, .12);
   --lp-composer: rgba(28, 17, 50, .74);
@@ -1562,45 +1570,45 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 
 [data-theme="industrial"] {
-  --s-bg0: #1a1c20; --s-bg1: #22252b; --s-bg2: #2a2e36; --s-bg3: #343943;
+  --s-bg0: var(--bg); --s-bg1: #22252b; --s-bg2: #2a2e36; --s-bg3: #343943;
   --s-ink: #15171a; --s-paper: #eef3f7; --s-muted: #9fb2c1; --s-faint: #7c8e9c;
-  --bg-app: var(--s-bg0);
+  --bg-app: var(--bg);
   --bg-app-glow: none;
   --bg-app-image: none;
   --bg-app-image-opacity: 0;
   --bg-sidebar: var(--s-bg1);
-  --bg-sidebar-solid: var(--s-bg1);
-  --bg-chat: var(--s-bg0);
-  --bg-surface: var(--s-bg2);
+  --bg-sidebar-solid: var(--surf);
+  --bg-chat: var(--bg);
+  --bg-surface: var(--elev);
   --bg-composer: rgba(34, 37, 43, .84);
   --bg-member: var(--s-bg1);
   --bg-bubble: var(--s-bg2);
   --bg-bubble-own: rgba(255, 106, 0, .19);
-  --text: var(--s-paper);
+  --text: var(--ink);
   --text-soft: var(--s-muted);
   --text-faint: var(--s-faint);
   --text-on-sidebar: var(--s-paper);
   --text-on-sidebar-soft: var(--s-muted);
   --border: rgba(245, 166, 35, .5);
   --border-soft: rgba(255, 255, 255, .1);
-  --accent: #f5a623;
+  --accent: var(--acc);
   --accent-strong: #ffc15e;
   --accent-contrast: var(--s-ink);
   --selected: rgba(245, 166, 35, .16);
   --hover-sidebar: rgba(245, 166, 35, .08);
-  --lp-bg-app: var(--s-bg0);
+  --lp-bg-app: var(--bg);
   --lp-bg-surface: var(--s-bg1);
-  --lp-bg-sidebar: var(--s-bg1);
-  --lp-bg-panel: var(--s-bg0);
+  --lp-bg-sidebar: var(--surf);
+  --lp-bg-panel: var(--surf);
   --lp-bg-elev: var(--s-bg2);
-  --lp-bg-elevated: var(--s-bg2);
+  --lp-bg-elevated: var(--elev);
   --lp-bg-hover: rgba(245, 166, 35, .08);
   --lp-bg-active: rgba(245, 166, 35, .16);
-  --lp-border: rgba(255, 255, 255, .1);
+  --lp-border: var(--line);
   --lp-border-strong: rgba(245, 166, 35, .5);
   --lp-border-l1: var(--lp-border);
   --lp-border-l2: var(--lp-border-strong);
-  --lp-text: var(--s-paper);
+  --lp-text: var(--ink);
   --lp-text-dim: var(--s-muted);
   --lp-text-faint: var(--s-faint);
   --lp-text-invert: var(--s-ink);
@@ -1608,7 +1616,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   --lp-text-secondary: var(--lp-text-dim);
   --lp-text-tertiary: var(--lp-text-faint);
   --lp-text-on-sidebar: var(--s-paper);
-  --lp-accent: #f5a623;
+  --lp-accent: var(--acc);
   --lp-accent-strong: #ffc15e;
   --lp-accent-soft: rgba(245, 166, 35, .13);
   --lp-composer: rgba(34, 37, 43, .84);
@@ -1622,45 +1630,45 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 
 [data-theme="forge"] {
-  --s-bg0: #141114; --s-bg1: #1c1818; --s-bg2: #282019; --s-bg3: #352a22;
+  --s-bg0: var(--bg); --s-bg1: #1c1818; --s-bg2: #282019; --s-bg3: #352a22;
   --s-ink: #17120f; --s-paper: #f5ead9; --s-muted: #b49c82; --s-faint: #8d7a66;
-  --bg-app: var(--s-bg0);
+  --bg-app: var(--bg);
   --bg-app-glow: none;
   --bg-app-image: none;
   --bg-app-image-opacity: 0;
   --bg-sidebar: var(--s-bg1);
-  --bg-sidebar-solid: var(--s-bg1);
-  --bg-chat: var(--s-bg0);
-  --bg-surface: var(--s-bg2);
+  --bg-sidebar-solid: var(--surf);
+  --bg-chat: var(--bg);
+  --bg-surface: var(--elev);
   --bg-composer: rgba(28, 24, 24, .84);
   --bg-member: var(--s-bg1);
   --bg-bubble: var(--s-bg2);
   --bg-bubble-own: rgba(224, 138, 60, .17);
-  --text: var(--s-paper);
+  --text: var(--ink);
   --text-soft: var(--s-muted);
   --text-faint: var(--s-faint);
   --text-on-sidebar: var(--s-paper);
   --text-on-sidebar-soft: var(--s-muted);
   --border: rgba(224, 138, 60, .45);
   --border-soft: rgba(245, 234, 217, .1);
-  --accent: #e08a3c;
+  --accent: var(--acc);
   --accent-strong: #f0a861;
   --accent-contrast: var(--s-ink);
   --selected: rgba(224, 138, 60, .17);
   --hover-sidebar: rgba(224, 138, 60, .08);
-  --lp-bg-app: var(--s-bg0);
+  --lp-bg-app: var(--bg);
   --lp-bg-surface: var(--s-bg1);
-  --lp-bg-sidebar: var(--s-bg1);
-  --lp-bg-panel: var(--s-bg0);
+  --lp-bg-sidebar: var(--surf);
+  --lp-bg-panel: var(--surf);
   --lp-bg-elev: var(--s-bg2);
-  --lp-bg-elevated: var(--s-bg2);
+  --lp-bg-elevated: var(--elev);
   --lp-bg-hover: rgba(224, 138, 60, .08);
   --lp-bg-active: rgba(224, 138, 60, .17);
-  --lp-border: rgba(245, 234, 217, .1);
+  --lp-border: var(--line);
   --lp-border-strong: rgba(224, 138, 60, .45);
   --lp-border-l1: var(--lp-border);
   --lp-border-l2: var(--lp-border-strong);
-  --lp-text: var(--s-paper);
+  --lp-text: var(--ink);
   --lp-text-dim: var(--s-muted);
   --lp-text-faint: var(--s-faint);
   --lp-text-invert: var(--s-ink);
@@ -1668,7 +1676,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   --lp-text-secondary: var(--lp-text-dim);
   --lp-text-tertiary: var(--lp-text-faint);
   --lp-text-on-sidebar: var(--s-paper);
-  --lp-accent: #e08a3c;
+  --lp-accent: var(--acc);
   --lp-accent-strong: #f0a861;
   --lp-accent-soft: rgba(224, 138, 60, .14);
   --lp-composer: rgba(28, 24, 24, .84);
@@ -1682,45 +1690,45 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 
 [data-theme="moss"] {
-  --s-bg0: #e8efe6; --s-bg1: #f2f7ef; --s-bg2: #ffffff; --s-bg3: #dbe6d6;
+  --s-bg0: var(--bg); --s-bg1: #f2f7ef; --s-bg2: #ffffff; --s-bg3: #dbe6d6;
   --s-ink: #1f3a2e; --s-paper: #1f3a2e; --s-muted: #56705f; --s-faint: #7d9a86;
-  --bg-app: var(--s-bg0);
+  --bg-app: var(--bg);
   --bg-app-glow: none;
   --bg-app-image: none;
   --bg-app-image-opacity: 0;
   --bg-sidebar: var(--s-bg1);
-  --bg-sidebar-solid: var(--s-bg1);
-  --bg-chat: var(--s-bg0);
-  --bg-surface: var(--s-bg2);
+  --bg-sidebar-solid: var(--surf);
+  --bg-chat: var(--bg);
+  --bg-surface: var(--elev);
   --bg-composer: rgba(255, 255, 255, .88);
   --bg-member: var(--s-bg1);
   --bg-bubble: var(--s-bg2);
   --bg-bubble-own: rgba(106, 143, 78, .16);
-  --text: var(--s-paper);
+  --text: var(--ink);
   --text-soft: var(--s-muted);
   --text-faint: var(--s-faint);
   --text-on-sidebar: var(--s-paper);
   --text-on-sidebar-soft: var(--s-muted);
   --border: rgba(31, 58, 46, .26);
   --border-soft: rgba(31, 58, 46, .11);
-  --accent: #6a8f4e;
+  --accent: var(--acc);
   --accent-strong: #557a3c;
   --accent-contrast: #fff;
   --selected: rgba(106, 143, 78, .18);
   --hover-sidebar: rgba(106, 143, 78, .09);
-  --lp-bg-app: var(--s-bg0);
+  --lp-bg-app: var(--bg);
   --lp-bg-surface: var(--s-bg1);
-  --lp-bg-sidebar: var(--s-bg1);
-  --lp-bg-panel: var(--s-bg0);
+  --lp-bg-sidebar: var(--surf);
+  --lp-bg-panel: var(--surf);
   --lp-bg-elev: var(--s-bg2);
-  --lp-bg-elevated: var(--s-bg2);
+  --lp-bg-elevated: var(--elev);
   --lp-bg-hover: rgba(106, 143, 78, .09);
   --lp-bg-active: rgba(106, 143, 78, .18);
-  --lp-border: rgba(31, 58, 46, .11);
+  --lp-border: var(--line);
   --lp-border-strong: rgba(31, 58, 46, .26);
   --lp-border-l1: var(--lp-border);
   --lp-border-l2: var(--lp-border-strong);
-  --lp-text: var(--s-paper);
+  --lp-text: var(--ink);
   --lp-text-dim: var(--s-muted);
   --lp-text-faint: var(--s-faint);
   --lp-text-invert: #fff;
@@ -1728,7 +1736,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   --lp-text-secondary: var(--lp-text-dim);
   --lp-text-tertiary: var(--lp-text-faint);
   --lp-text-on-sidebar: var(--s-paper);
-  --lp-accent: #6a8f4e;
+  --lp-accent: var(--acc);
   --lp-accent-strong: #557a3c;
   --lp-accent-soft: rgba(106, 143, 78, .13);
   --lp-composer: rgba(255, 255, 255, .88);
@@ -1742,45 +1750,45 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 
 [data-theme="noir"] {
-  --s-bg0: #0c0d10; --s-bg1: #131417; --s-bg2: #1a1b1f; --s-bg3: #222327;
+  --s-bg0: var(--bg); --s-bg1: #131417; --s-bg2: #1a1b1f; --s-bg3: #222327;
   --s-ink: #0c0d10; --s-paper: #f2ebe0; --s-muted: #9a9aa2; --s-faint: #6c6c74;
-  --bg-app: var(--s-bg0);
+  --bg-app: var(--bg);
   --bg-app-glow: none;
   --bg-app-image: none;
   --bg-app-image-opacity: 0;
   --bg-sidebar: var(--s-bg1);
-  --bg-sidebar-solid: var(--s-bg1);
-  --bg-chat: var(--s-bg0);
-  --bg-surface: var(--s-bg2);
+  --bg-sidebar-solid: var(--surf);
+  --bg-chat: var(--bg);
+  --bg-surface: var(--elev);
   --bg-composer: rgba(19, 20, 23, .86);
   --bg-member: var(--s-bg1);
   --bg-bubble: var(--s-bg2);
   --bg-bubble-own: rgba(242, 235, 224, .15);
-  --text: var(--s-paper);
+  --text: var(--ink);
   --text-soft: var(--s-muted);
   --text-faint: var(--s-faint);
   --text-on-sidebar: var(--s-paper);
   --text-on-sidebar-soft: var(--s-muted);
   --border: rgba(217, 75, 61, .48);
   --border-soft: rgba(242, 235, 224, .1);
-  --accent: #d94b3d;
+  --accent: var(--acc);
   --accent-strong: #ff6a5c;
   --accent-contrast: var(--s-ink);
   --selected: rgba(242, 235, 224, .13);
   --hover-sidebar: rgba(242, 235, 224, .06);
-  --lp-bg-app: var(--s-bg0);
+  --lp-bg-app: var(--bg);
   --lp-bg-surface: var(--s-bg1);
-  --lp-bg-sidebar: var(--s-bg1);
-  --lp-bg-panel: var(--s-bg0);
+  --lp-bg-sidebar: var(--surf);
+  --lp-bg-panel: var(--surf);
   --lp-bg-elev: var(--s-bg2);
-  --lp-bg-elevated: var(--s-bg2);
+  --lp-bg-elevated: var(--elev);
   --lp-bg-hover: rgba(242, 235, 224, .06);
   --lp-bg-active: rgba(242, 235, 224, .13);
-  --lp-border: rgba(242, 235, 224, .1);
+  --lp-border: var(--line);
   --lp-border-strong: rgba(217, 75, 61, .48);
   --lp-border-l1: var(--lp-border);
   --lp-border-l2: var(--lp-border-strong);
-  --lp-text: var(--s-paper);
+  --lp-text: var(--ink);
   --lp-text-dim: var(--s-muted);
   --lp-text-faint: var(--s-faint);
   --lp-text-invert: var(--s-ink);
@@ -1788,7 +1796,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   --lp-text-secondary: var(--lp-text-dim);
   --lp-text-tertiary: var(--lp-text-faint);
   --lp-text-on-sidebar: var(--s-paper);
-  --lp-accent: #d94b3d;
+  --lp-accent: var(--acc);
   --lp-accent-strong: #ff6a5c;
   --lp-accent-soft: rgba(217, 75, 61, .13);
   --lp-composer: rgba(19, 20, 23, .86);
@@ -1802,45 +1810,45 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 
 [data-theme="minimal"] {
-  --s-bg0: #f4f5f7; --s-bg1: #ffffff; --s-bg2: #ffffff; --s-bg3: #e8eaee;
+  --s-bg0: var(--bg); --s-bg1: #ffffff; --s-bg2: #ffffff; --s-bg3: #e8eaee;
   --s-ink: #17181a; --s-paper: #17181a; --s-muted: #5c5f66; --s-faint: #8a8d94;
-  --bg-app: var(--s-bg0);
+  --bg-app: var(--bg);
   --bg-app-glow: none;
   --bg-app-image: none;
   --bg-app-image-opacity: 0;
   --bg-sidebar: var(--s-bg1);
-  --bg-sidebar-solid: var(--s-bg1);
-  --bg-chat: var(--s-bg0);
-  --bg-surface: var(--s-bg2);
+  --bg-sidebar-solid: var(--surf);
+  --bg-chat: var(--bg);
+  --bg-surface: var(--elev);
   --bg-composer: #ffffff;
   --bg-member: var(--s-bg1);
   --bg-bubble: var(--s-bg2);
   --bg-bubble-own: rgba(23, 24, 26, .06);
-  --text: var(--s-paper);
+  --text: var(--ink);
   --text-soft: var(--s-muted);
   --text-faint: var(--s-faint);
   --text-on-sidebar: var(--s-paper);
   --text-on-sidebar-soft: var(--s-muted);
   --border: rgba(23, 24, 26, .14);
   --border-soft: rgba(23, 24, 26, .08);
-  --accent: #17181a;
+  --accent: var(--acc);
   --accent-strong: #17181a;
   --accent-contrast: #fff;
   --selected: rgba(23, 24, 26, .08);
   --hover-sidebar: rgba(23, 24, 26, .05);
-  --lp-bg-app: var(--s-bg0);
+  --lp-bg-app: var(--bg);
   --lp-bg-surface: var(--s-bg1);
-  --lp-bg-sidebar: var(--s-bg1);
-  --lp-bg-panel: var(--s-bg0);
+  --lp-bg-sidebar: var(--surf);
+  --lp-bg-panel: var(--surf);
   --lp-bg-elev: var(--s-bg2);
-  --lp-bg-elevated: var(--s-bg2);
+  --lp-bg-elevated: var(--elev);
   --lp-bg-hover: rgba(23, 24, 26, .05);
   --lp-bg-active: rgba(23, 24, 26, .08);
-  --lp-border: rgba(23, 24, 26, .08);
+  --lp-border: var(--line);
   --lp-border-strong: rgba(23, 24, 26, .14);
   --lp-border-l1: var(--lp-border);
   --lp-border-l2: var(--lp-border-strong);
-  --lp-text: var(--s-paper);
+  --lp-text: var(--ink);
   --lp-text-dim: var(--s-muted);
   --lp-text-faint: var(--s-faint);
   --lp-text-invert: #fff;
@@ -1848,7 +1856,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   --lp-text-secondary: var(--lp-text-dim);
   --lp-text-tertiary: var(--lp-text-faint);
   --lp-text-on-sidebar: var(--s-paper);
-  --lp-accent: #17181a;
+  --lp-accent: var(--acc);
   --lp-accent-strong: #17181a;
   --lp-accent-soft: rgba(23, 24, 26, .08);
   --lp-composer: #ffffff;
@@ -1863,9 +1871,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 
 body {
   color: var(--lp-text);
-  background: radial-gradient(1100px 640px at 80% -10%, color-mix(in srgb, var(--lp-accent) 16%, transparent), transparent 60%), var(--lp-bg-app);
+  background: var(--bg);
 }
-body::before { opacity: 0 !important; }
 body::after {
   opacity: 1;
   mix-blend-mode: normal;
