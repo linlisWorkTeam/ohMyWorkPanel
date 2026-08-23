@@ -105,6 +105,7 @@ pub fn run() {
             commands::play_version,
             commands::pause_version,
             commands::release_version,
+            commands::set_member_api_url,
             commands::detect_agent,
             commands::ocr_image,
             commands::ocr_image_base64,

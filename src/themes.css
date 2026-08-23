@@ -2273,6 +2273,18 @@ kbd {
 }
 .ctx-menu button:hover { background: rgba(255, 255, 255, .1); }
 .ctx-menu button.danger { color: #ff8a8a; }
+.ctx-menu .ctx-group { display: flex; flex-direction: column; }
+.ctx-menu .ctx-group > button { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.ctx-menu .ctx-group > button .ctx-arrow { font-style: normal; opacity: .75; font-size: 11px; }
+.ctx-menu .ctx-group > button.open { background: rgba(255, 255, 255, .12); }
+.ctx-menu .ctx-sub {
+  display: flex;
+  flex-direction: column;
+  margin: 0 4px 4px 10px;
+  padding-left: 8px;
+  border-left: 2px solid rgba(255, 255, 255, .16);
+}
+.ctx-menu .ctx-sub button { padding: 7px 10px; font-size: 13px; }
 .bubble-stop {
   position: absolute;
   right: 8px;

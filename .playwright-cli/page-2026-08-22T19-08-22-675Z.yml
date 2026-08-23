@@ -1,0 +1,50 @@
+- main [ref=e21]:
+  - generic [ref=e23]:
+    - navigation "控制轨" [ref=e24]:
+      - generic [ref=e25]: L
+      - button "◉" [ref=e26] [cursor=pointer]
+      - button "◎" [ref=e27] [cursor=pointer]
+      - button "◇" [ref=e28] [cursor=pointer]
+    - complementary [ref=e29]:
+      - generic [ref=e33]:
+        - generic [ref=e34]: ohMy
+        - generic [ref=e35]: ohMyWorkPanel
+      - generic [ref=e36]:
+        - generic [ref=e37]: 工作区 · 群
+        - button "新建群聊" [ref=e38] [cursor=pointer]: ＋
+      - navigation [ref=e39]:
+        - generic [ref=e40]:
+          - button "o ohMyWorkPanel" [ref=e41] [cursor=pointer]:
+            - generic [ref=e42]: o
+            - generic [ref=e43]: ohMyWorkPanel
+          - button "归档群组" [ref=e44] [cursor=pointer]: −
+      - generic [ref=e45]:
+        - button "折叠或展开侧栏" [ref=e46] [cursor=pointer]: ▶▶
+        - button "退出登录（root）" [ref=e47] [cursor=pointer]
+    - generic [ref=e48]:
+      - generic [ref=e49]:
+        - button "群列表" [ref=e50] [cursor=pointer]: ☰
+        - generic [ref=e51]:
+          - heading "ohMyWorkPanelproject" [level=1] [ref=e52]
+          - paragraph [ref=e53]: Codex · OpenClaw · Cursor Agent · linlis-super-harness · 5 名成员
+        - button "成员 / Agent 面板" [ref=e55] [cursor=pointer]: ☰
+      - button "WAVE 尚未建立 Wave · 点此到版本页 0/0" [ref=e57] [cursor=pointer]:
+        - generic [ref=e58]: WAVE
+        - generic [ref=e59]: 尚未建立 Wave · 点此到版本页
+        - generic [ref=e61]: 0/0
+      - generic [ref=e64]:
+        - strong [ref=e65]: ohMyWorkPanel
+        - generic [ref=e66]: 添加 Agent 后，在消息中输入 @名称 开始协作。
+        - generic [ref=e67]: Enter 发送 · Shift+Enter 换行 · @ 触发成员菜单
+      - generic [ref=e70]:
+        - generic [ref=e71]:
+          - button "@" [ref=e72] [cursor=pointer]
+          - button "🖼" [ref=e73] [cursor=pointer]
+          - button / [ref=e74] [cursor=pointer]
+        - textbox "给群里的 Agent 派活… @ 提及 · Enter 发送 · Shift+Enter 换行 · 草稿自动保存" [ref=e75]:
+          - /placeholder: 给群里的 Agent 派活…  @ 提及 · Enter 发送 · Shift+Enter 换行 · 草稿自动保存
+        - generic [ref=e76]:
+          - generic [ref=e77]: "@ 提及"
+          - generic [ref=e78]: / 命令
+          - button "Enter 发送" [ref=e79] [cursor=pointer]
+          - button "发送 ⏎" [disabled] [ref=e80]

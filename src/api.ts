@@ -40,7 +40,7 @@ export const api = {
   addMember: (input: {
     groupId: string; kind: "user" | "agent" | "chatbot"; displayName: string; roleDescription: string;
     avatarColor?: string; adapter?: string; executablePath?: string;
-    chatbotProvider?: "opencode-go" | "deepseek"; apiKey?: string; model?: string;
+    chatbotProvider?: "opencode-go" | "deepseek" | "custom"; apiKey?: string; apiUrl?: string; model?: string;
     loginUsername?: string; loginPassword?: string; existingAuthUserId?: string;
     invite?: boolean;
   }) => invoke<AddMemberResult>("add_member", { input }),

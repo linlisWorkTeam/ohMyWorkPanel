@@ -1,0 +1,249 @@
+- main [ref=f1e21]:
+  - generic [ref=f1e23]:
+    - navigation "控制轨" [ref=f1e24]:
+      - generic [ref=f1e25]: L
+      - button "◉" [ref=f1e26] [cursor=pointer]
+      - button "◎" [ref=f1e27] [cursor=pointer]
+      - button "◇" [ref=f1e28] [cursor=pointer]
+    - complementary [ref=f1e29]:
+      - generic [ref=f1e33]:
+        - generic [ref=f1e34]: Linli's
+        - generic [ref=f1e35]: Workpanel
+      - generic [ref=f1e36]:
+        - generic [ref=f1e37]: 工作区 · 群
+        - button "新建群聊" [ref=f1e38] [cursor=pointer]: ＋
+      - navigation [ref=f1e39]:
+        - generic [ref=f1e40]:
+          - button "L LinlisWorkPanel" [ref=f1e41] [cursor=pointer]:
+            - generic [ref=f1e42]: L
+            - generic [ref=f1e43]: LinlisWorkPanel
+          - button "归档群组" [ref=f1e44] [cursor=pointer]: −
+        - button "▸ 已归档（1）" [ref=f1e46] [cursor=pointer]
+      - generic [ref=f1e47]:
+        - button "折叠或展开侧栏" [ref=f1e48] [cursor=pointer]: ◀◀
+        - button "退出登录（root）" [ref=f1e49] [cursor=pointer]
+    - generic [ref=f1e50]:
+      - generic [ref=f1e51]:
+        - generic [ref=f1e52]:
+          - heading "LinlisWorkPanelproject" [level=1] [ref=f1e53]
+          - paragraph [ref=f1e54]: Codex · OpenClaw · Cursor Agent · linlis-super-harness · 5 名成员
+        - button "成员 / Agent 面板" [pressed] [ref=f1e56] [cursor=pointer]: ☰
+      - button "WAVE 尚未建立 Wave · 点此到版本页 0/0" [ref=f1e58] [cursor=pointer]:
+        - generic [ref=f1e59]: WAVE
+        - generic [ref=f1e60]: 尚未建立 Wave · 点此到版本页
+        - generic [ref=f1e62]: 0/0
+      - generic [ref=f1e64]:
+        - generic [ref=f1e65]: 上滑加载更早 · 显示 10/16
+        - generic [ref=f1e67]:
+          - generic [ref=f1e68]: 8月19日周三
+          - generic [ref=f1e70]:
+            - generic [ref=f1e71]: r
+            - generic [ref=f1e72]:
+              - generic [ref=f1e73]: root
+              - paragraph [ref=f1e249]: "@Cursor Agent 在线吗"
+              - generic [ref=f1e78]: 21:11
+          - generic [ref=f1e79]:
+            - generic [ref=f1e80]: C
+            - generic [ref=f1e81]:
+              - generic [ref=f1e82]: Cursor Agent · 失败
+              - generic [ref=f1e83]:
+                - status [ref=f1e84]:
+                  - generic [ref=f1e85]: 失败
+                - paragraph [ref=f1e90]: 无法启动 cursor：program not found
+              - generic [ref=f1e91]: 21:11
+          - generic [ref=f1e92]: 8月20日周四
+          - generic [ref=f1e94]:
+            - generic [ref=f1e95]: r
+            - generic [ref=f1e96]:
+              - generic [ref=f1e97]: root
+              - paragraph [ref=f1e250]: "@Codex 你好"
+              - generic [ref=f1e102]: 00:44
+          - generic [ref=f1e103]:
+            - generic [ref=f1e104]: C
+            - generic [ref=f1e105]:
+              - generic [ref=f1e106]: Codex · 失败
+              - generic [ref=f1e107]:
+                - status [ref=f1e108]:
+                  - generic [ref=f1e109]: 失败
+                - paragraph [ref=f1e114]: Codex 缺少 OPENAI_API_KEY：请在成员 API Key、环境变量 LINLIS_CODEX_API_KEY/OPENAI_API_KEY，或 ~/.codex/auth.json 中配置（OpenCode Go 所用密钥）。
+              - generic [ref=f1e115]: 00:44
+          - generic [ref=f1e116]:
+            - generic [ref=f1e117]: r
+            - generic [ref=f1e118]:
+              - generic [ref=f1e119]: root
+              - paragraph [ref=f1e251]: "@linlis-super-harness 你好"
+              - generic [ref=f1e124]: 00:44
+          - generic [ref=f1e125]:
+            - generic [ref=f1e126]: l
+            - generic [ref=f1e127]:
+              - generic [ref=f1e128]: linlis-super-harness
+              - paragraph [ref=f1e252]:
+                - text: 收到，我已在群聊中就位。
+                - strong [ref=f1e253]: Agent：linlis-super-harness
+                - text: 定位：WorkPanel 自举引导器（bootstrap/self-modify 完整执行权，不可修改自身角色定义）。当前工作区状态：- 记忆文件为空（
+                - code [ref=f1e254]: memory.md
+                - text: 无历史内容）- 无进行中的目标（当前无 active goal）能力边界（供群内引用）：-
+                - strong [ref=f1e255]: 唯一拥有面板自举/自改完整执行权
+                - text: ：涉及 WorkPanel 自身的启动引导、结构自修改、源自举逻辑的工作，由我兜底执行。- 其他职责按 AGENTS.md 约定走正常流程（IPC 兼容、测试门禁、灰度→生产需 root 批准等）。- 我不会伪造批准令牌、擅自 restart 生产、绕过测试门禁。请下达具体任务即可。如果是长周期自举/自改目标，我会用 goal 工具持续推进并在完成后汇报。
+              - generic [ref=f1e136]: 00:44
+          - generic [ref=f1e137]: 今天
+          - generic [ref=f1e139]:
+            - generic [ref=f1e140]: r
+            - generic [ref=f1e141]:
+              - generic [ref=f1e142]: root
+              - paragraph [ref=f1e256]: "@Cursor Agent【WorkPet:WorkPet】E2 无@验收 2026-08-21T17:29:42.838Z — 请仅确认收到，勿深层委派。"
+              - generic [ref=f1e147]: 01:29
+          - generic [ref=f1e148]:
+            - generic [ref=f1e149]: C
+            - generic [ref=f1e150]:
+              - generic [ref=f1e151]: Cursor Agent · 失败
+              - generic [ref=f1e152]:
+                - status [ref=f1e153]:
+                  - generic [ref=f1e154]: 失败
+                - paragraph [ref=f1e159]: "cursor 异常退出：Error: Authentication required. Please run 'agent login' first, or set CURSOR_API_KEY environment variable."
+              - generic [ref=f1e160]: 01:29
+          - generic [ref=f1e161]:
+            - generic [ref=f1e162]: r
+            - generic [ref=f1e163]:
+              - generic [ref=f1e164]: root
+              - paragraph [ref=f1e257]: "@Codex【WorkPet:WorkPet】E2 @验收 2026-08-21T17:29:42.874Z — 请仅确认收到，勿深层委派。"
+              - generic [ref=f1e169]: 01:29
+          - generic [ref=f1e170]:
+            - generic [ref=f1e171]: C
+            - generic [ref=f1e172]:
+              - generic [ref=f1e173]: Codex · 失败
+              - generic [ref=f1e174]:
+                - status [ref=f1e175]:
+                  - generic [ref=f1e176]: 失败
+                - paragraph [ref=f1e181]: Codex 缺少 OPENAI_API_KEY：请在成员 API Key、环境变量 LINLIS_CODEX_API_KEY/OPENAI_API_KEY，或 ~/.codex/auth.json 中配置（OpenCode Go 所用密钥）。
+              - generic [ref=f1e182]: 01:29
+      - generic [ref=f1e185]:
+        - generic [ref=f1e186]:
+          - button "@" [ref=f1e187] [cursor=pointer]
+          - button "🖼" [ref=f1e188] [cursor=pointer]
+          - button / [ref=f1e189] [cursor=pointer]
+        - textbox "给群里的 Agent 派活… @ 提及 · Enter 发送 · Shift+Enter 换行 · 草稿自动保存" [ref=f1e190]:
+          - /placeholder: 给群里的 Agent 派活…  @ 提及 · Enter 发送 · Shift+Enter 换行 · 草稿自动保存
+        - generic [ref=f1e191]:
+          - generic [ref=f1e192]: "@ 提及"
+          - generic [ref=f1e193]: / 命令
+          - button "Enter 发送" [ref=f1e194] [cursor=pointer]
+          - button "发送 ⏎" [disabled] [ref=f1e195]
+    - complementary [ref=f1e196]:
+      - complementary [ref=f1e197]:
+        - generic [ref=f1e198]:
+          - tablist "右栏" [ref=f1e199]:
+            - tab "成员" [ref=f1e200] [cursor=pointer]
+            - tab "队列" [ref=f1e201] [cursor=pointer]
+            - tab "详情" [ref=f1e202] [cursor=pointer]
+            - tab "设置" [active] [selected] [ref=f1e203] [cursor=pointer]
+          - button "关闭右栏" [ref=f1e204] [cursor=pointer]: ×
+        - generic [ref=f1e258]:
+          - heading "外观" [level=3] [ref=f1e259]
+          - group "切换界面主题" [ref=f1e260]:
+            - button "Cyberpunk" [pressed] [ref=f1e261] [cursor=pointer]
+            - button "Industrial" [ref=f1e263] [cursor=pointer]
+            - button "Atlas" [ref=f1e265] [cursor=pointer]
+            - button "Forge" [ref=f1e267] [cursor=pointer]
+            - button "Moss" [ref=f1e269] [cursor=pointer]
+            - button "Noir" [ref=f1e271] [cursor=pointer]
+            - button "极简" [ref=f1e273] [cursor=pointer]
+          - generic [ref=f1e275]:
+            - heading "运行 · Extend" [level=3] [ref=f1e276]
+            - paragraph [ref=f1e277]: 未发现扩展（检查 LINLIS_EXTENSION_ROOTS / 清单文件）。
+          - generic [ref=f1e278]:
+            - heading "进程指标（主进程）" [level=3] [ref=f1e279]
+            - paragraph [ref=f1e280]: CPU 0.0% · RSS 0.0 MiB · 采样 03:13:20
+          - generic [ref=f1e281]:
+            - generic [ref=f1e282]:
+              - text: 每群并发任务
+              - spinbutton "每群并发任务" [ref=f1e283]: "3"
+            - generic [ref=f1e284]:
+              - text: 任务超时（秒）
+              - spinbutton "任务超时（秒）" [ref=f1e285]: "900"
+            - generic [ref=f1e286]:
+              - text: 工作群上下文消息数
+              - spinbutton "工作群上下文消息数" [ref=f1e287]: "40"
+            - generic [ref=f1e288]:
+              - text: 聊天群/机器人上下文
+              - spinbutton "聊天群/机器人上下文" [ref=f1e289]: "12"
+            - generic [ref=f1e290]:
+              - text: 管理员最大派生层级
+              - spinbutton "管理员最大派生层级" [ref=f1e291]: "2"
+            - heading "心跳" [level=3] [ref=f1e292]
+            - generic [ref=f1e293]:
+              - checkbox "Auto（聚焦/后台动态频率；不做 100ms HTTP 轮询）" [checked] [ref=f1e294]
+              - text: Auto（聚焦/后台动态频率；不做 100ms HTTP 轮询）
+            - generic [ref=f1e295]:
+              - text: 聚焦心跳（秒）
+              - spinbutton "聚焦心跳（秒）" [ref=f1e296]: "1"
+            - generic [ref=f1e297]:
+              - text: 非聚焦心跳（秒）
+              - spinbutton "非聚焦心跳（秒）" [ref=f1e298]: "5"
+            - paragraph [ref=f1e299]: 心跳：聚焦 1s · 后台 5s（Auto）· 当前 1s
+            - button "保存设置" [ref=f1e300] [cursor=pointer]
+          - heading "本群" [level=3] [ref=f1e301]
+          - generic [ref=f1e302]:
+            - generic [ref=f1e303]:
+              - heading "群公告（项目级规则）" [level=2] [ref=f1e304]
+              - paragraph [ref=f1e305]: "保存后注入所有 Agent 的 prompt，并同步到工作区 `.cursor/rules/group-announcement.mdc`。"
+              - textbox "例如：commit 前必须跑 pnpm run test:gate；只部署灰度…" [ref=f1e306]
+              - button "保存公告" [ref=f1e307] [cursor=pointer]
+            - generic [ref=f1e308]:
+              - heading "群工作目录" [level=2] [ref=f1e309]
+              - paragraph [ref=f1e310]: Agent 默认在此服务器绝对路径下执行；须为已存在目录。
+              - generic [ref=f1e311]:
+                - paragraph [ref=f1e312]:
+                  - text: 当前：
+                  - code [ref=f1e313]: /AI/LinlisWorkPanel
+                - generic [ref=f1e314]:
+                  - generic [ref=f1e315]:
+                    - generic [ref=f1e316]:
+                      - textbox "服务器绝对路径，例如 /AI/LinlisWorkPanel" [ref=f1e317]: /AI/LinlisWorkPanel
+                      - button "打开" [ref=f1e318] [cursor=pointer]
+                    - button / [ref=f1e320] [cursor=pointer]
+                    - generic [ref=f1e322]:
+                      - textbox "新建文件夹名称" [disabled] [ref=f1e323]
+                      - button "新建文件夹" [disabled] [ref=f1e324]
+                    - generic [ref=f1e325]:
+                      - code [ref=f1e326]: /AI/LinlisWorkPanel
+                      - button "使用此目录" [ref=f1e327] [cursor=pointer]
+                    - paragraph [ref=f1e328]: 可浏览服务器目录，或在当前目录下新建文件夹后选用（Agent 在该机器上执行）。
+                  - button "更新群工作区" [disabled] [ref=f1e329]
+            - generic [ref=f1e330]:
+              - heading "Agent 工作区" [level=2] [ref=f1e331]
+              - paragraph [ref=f1e332]: 可覆盖单个 Agent 的沙箱路径（须落在群工作区下）。
+              - generic [ref=f1e333]:
+                - generic [ref=f1e334]:
+                  - generic [ref=f1e335]:
+                    - strong [ref=f1e337]: Codex
+                    - generic [ref=f1e338]: codex
+                  - generic [ref=f1e339]:
+                    - code [ref=f1e340]: （默认沙箱）
+                    - button "改工作区" [ref=f1e341] [cursor=pointer]
+                - generic [ref=f1e342]:
+                  - generic [ref=f1e343]:
+                    - strong [ref=f1e345]: OpenClaw
+                    - generic [ref=f1e346]: openclaw
+                  - generic [ref=f1e347]:
+                    - code [ref=f1e348]: （默认沙箱）
+                    - button "改工作区" [ref=f1e349] [cursor=pointer]
+                - generic [ref=f1e350]:
+                  - generic [ref=f1e351]:
+                    - strong [ref=f1e353]: Cursor Agent
+                    - generic [ref=f1e354]: cursor
+                  - generic [ref=f1e355]:
+                    - code [ref=f1e356]: （默认沙箱）
+                    - button "改工作区" [ref=f1e357] [cursor=pointer]
+                - generic [ref=f1e358]:
+                  - generic [ref=f1e359]:
+                    - strong [ref=f1e361]: linlis-super-harness
+                    - generic [ref=f1e362]: dsh
+                  - generic [ref=f1e363]:
+                    - code [ref=f1e364]: （默认沙箱）
+                    - button "改工作区" [ref=f1e365] [cursor=pointer]
+          - group [ref=f1e366]:
+            - generic "键盘与斜杠" [ref=f1e367]
+  - generic [ref=f1e368]:
+    - generic [ref=f1e369]: 请求无效（工作目录必须是服务器上的绝对路径。）
+    - button "×" [ref=f1e370] [cursor=pointer]

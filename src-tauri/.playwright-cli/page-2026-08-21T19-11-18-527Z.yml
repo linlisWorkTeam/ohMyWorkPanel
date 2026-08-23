@@ -1,0 +1,17 @@
+- main [ref=f1e3]:
+  - generic [ref=f1e4]:
+    - generic [ref=f1e8]:
+      - generic [ref=f1e9]: Linli's
+      - generic [ref=f1e10]: Workpanel
+    - heading "登录" [level=1] [ref=f1e11]
+    - paragraph [ref=f1e12]: 多 Agent 协作工作台。使用管理员分配的账号登录后进入所属群聊。
+    - generic [ref=f1e13]:
+      - generic [ref=f1e14]:
+        - text: 用户名
+        - textbox "用户名" [active] [ref=f1e15]
+      - generic [ref=f1e16]:
+        - text: 密码
+        - textbox "密码" [ref=f1e17]
+      - button "进入 Workpanel" [ref=f1e18] [cursor=pointer]
+    - button "没有账号？注册" [ref=f1e19] [cursor=pointer]
+    - generic [ref=f1e20]: 登录已失效，请重新登录

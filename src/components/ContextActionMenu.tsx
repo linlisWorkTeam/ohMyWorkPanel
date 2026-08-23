@@ -1,11 +1,13 @@
-import { useEffect, useLayoutEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 export type ActionItem = {
   id: string;
   label: string;
   danger?: boolean;
   disabled?: boolean;
-  onSelect: () => void;
+  onSelect?: () => void;
+  /** 二级菜单：子项在同一菜单内展开（手风琴式，兼容触摸/右键）。 */
+  children?: ActionItem[];
 };
 
 /** Absolutely positioned action sheet. Must not change layout height of the list. */
@@ -21,6 +23,7 @@ export function ContextActionMenu({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
+  const [openSub, setOpenSub] = useState<string | null>(null);
 
   useLayoutEffect(() => {
     const node = ref.current;
@@ -49,24 +52,67 @@ export function ContextActionMenu({
 
   if (items.length === 0) return null;
 
+  const renderItem = (item: ActionItem) => {
+    if (item.children && item.children.length > 0) {
+      const expanded = openSub === item.id;
+      return (
+        <div key={item.id} className="ctx-group">
+          <button
+            type="button"
+            role="menuitem"
+            className={expanded ? "open" : undefined}
+            onClick={(event) => {
+              event.stopPropagation();
+              setOpenSub(expanded ? null : item.id);
+            }}
+          >
+            <span>{item.label}</span>
+            <i className="ctx-arrow" aria-hidden>{expanded ? "▾" : "▸"}</i>
+          </button>
+          {expanded && (
+            <div className="ctx-sub" role="menu">
+              {item.children.map((child) => (
+                <button
+                  key={child.id}
+                  type="button"
+                  role="menuitem"
+                  className={child.danger ? "danger" : undefined}
+                  disabled={child.disabled}
+                  onClick={() => {
+                    if (child.disabled) return;
+                    child.onSelect?.();
+                    onClose();
+                  }}
+                >
+                  {child.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+    return (
+      <button
+        key={item.id}
+        type="button"
+        role="menuitem"
+        className={item.danger ? "danger" : undefined}
+        disabled={item.disabled}
+        onClick={() => {
+          if (item.disabled) return;
+          item.onSelect?.();
+          onClose();
+        }}
+      >
+        {item.label}
+      </button>
+    );
+  };
+
   return (
     <div ref={ref} className="ctx-menu" role="menu" style={{ left: x, top: y }}>
-      {items.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          role="menuitem"
-          className={item.danger ? "danger" : undefined}
-          disabled={item.disabled}
-          onClick={() => {
-            if (item.disabled) return;
-            item.onSelect();
-            onClose();
-          }}
-        >
-          {item.label}
-        </button>
-      ))}
+      {items.map(renderItem)}
     </div>
   );
 }

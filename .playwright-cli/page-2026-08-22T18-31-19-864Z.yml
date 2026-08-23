@@ -1,0 +1,91 @@
+- main [ref=f1e57]:
+  - generic [ref=f1e59]:
+    - navigation "控制轨" [ref=f1e60]:
+      - generic [ref=f1e61]: L
+      - button "◉" [ref=f1e62] [cursor=pointer]
+      - button "◎" [ref=f1e63] [cursor=pointer]
+      - button "◇" [ref=f1e64] [cursor=pointer]
+    - complementary [ref=f1e65]:
+      - generic [ref=f1e69]:
+        - generic [ref=f1e70]: ohMy
+        - generic [ref=f1e71]: ohMyWorkPanel
+      - generic [ref=f1e72]:
+        - generic [ref=f1e73]: 工作区 · 群
+        - button "新建群聊" [ref=f1e74] [cursor=pointer]: ＋
+      - navigation [ref=f1e75]:
+        - generic [ref=f1e171]:
+          - button "G Goal Mock · 聊" [ref=f1e172] [cursor=pointer]:
+            - generic [ref=f1e173]: G
+            - generic [ref=f1e174]: Goal Mock · 聊
+          - button "归档群组" [ref=f1e175] [cursor=pointer]: −
+        - generic [ref=f1e76]:
+          - button "o ohMyWorkPanel" [ref=f1e77] [cursor=pointer]:
+            - generic [ref=f1e78]: o
+            - generic [ref=f1e79]: ohMyWorkPanel
+          - button "归档群组" [ref=f1e80] [cursor=pointer]: −
+      - generic [ref=f1e81]:
+        - button "折叠或展开侧栏" [ref=f1e82] [cursor=pointer]: ◀◀
+        - button "退出登录（root）" [ref=f1e83] [cursor=pointer]
+    - generic [ref=f1e84]:
+      - generic [ref=f1e85]:
+        - button "群列表" [ref=f1e86] [cursor=pointer]: ☰
+        - generic [ref=f1e87]:
+          - heading "Goal Mockchat" [level=1] [ref=f1e176]
+          - paragraph [ref=f1e89]: 1 名成员
+        - button "成员 / Agent 面板" [pressed] [ref=f1e91] [cursor=pointer]: ☰
+      - generic [ref=f1e100]:
+        - strong [ref=f1e101]: Goal Mock
+        - generic [ref=f1e102]: 添加聊天机器人后，输入 @名称 开始对话。
+        - generic [ref=f1e103]: Enter 发送 · Shift+Enter 换行 · @ 触发成员菜单
+      - generic [ref=f1e106]:
+        - generic [ref=f1e107]:
+          - button "@" [ref=f1e108] [cursor=pointer]
+          - button "🖼" [ref=f1e109] [cursor=pointer]
+          - button / [ref=f1e110] [cursor=pointer]
+        - textbox "给群里的 Agent 派活… @ 提及 · Enter 发送 · Shift+Enter 换行 · 草稿自动保存" [ref=f1e111]:
+          - /placeholder: 给群里的 Agent 派活…  @ 提及 · Enter 发送 · Shift+Enter 换行 · 草稿自动保存
+        - generic [ref=f1e112]:
+          - generic [ref=f1e113]: "@ 提及"
+          - generic [ref=f1e114]: / 命令
+          - button "Enter 发送" [ref=f1e115] [cursor=pointer]
+          - button "发送 ⏎" [disabled] [ref=f1e116]
+    - complementary [ref=f1e178]:
+      - complementary [ref=f1e179]:
+        - generic [ref=f1e180]:
+          - tablist "右栏" [ref=f1e181]:
+            - tab "成员" [selected] [ref=f1e182] [cursor=pointer]
+            - tab "队列" [ref=f1e183] [cursor=pointer]
+            - tab "详情" [ref=f1e184] [cursor=pointer]
+            - tab "设置" [ref=f1e185] [cursor=pointer]
+          - button "关闭右栏" [ref=f1e186] [cursor=pointer]: ×
+        - generic [ref=f1e188]:
+          - generic [ref=f1e189]:
+            - paragraph [ref=f1e190]: 右键或长按成员：检测 / 设管理 / 移除（行上不摊按钮）
+            - generic [ref=f1e191]:
+              - generic [ref=f1e192]: 我
+              - generic [ref=f1e194]:
+                - generic [ref=f1e195]:
+                  - text: 我
+                  - emphasis [ref=f1e196]: 群主
+                  - emphasis [ref=f1e197]: 链接中
+                - generic [ref=f1e198]: 邀请未接受
+              - generic [ref=f1e199]: 等待
+          - generic [ref=f1e201]:
+            - combobox [ref=f1e202]:
+              - option "Agent" [selected]
+              - option "用户"
+              - option "聊天机器人"
+            - textbox "成员显示名称" [active] [ref=f1e203]
+            - textbox "职责，例如：代码审查" [ref=f1e204]
+            - combobox [ref=f1e205]:
+              - option "模拟 Agent（推荐体验）" [selected]
+              - option "Codex CLI"
+              - option "OpenClaw"
+              - option "Cursor CLI（agent/cursor-agent）"
+              - option "Claude Code"
+              - option "OpenCode"
+              - option "DeepSeek Harness（dsh）"
+            - textbox "可执行文件路径（可选）" [ref=f1e206]
+            - generic [ref=f1e207]:
+              - button "取消" [ref=f1e208] [cursor=pointer]
+              - button "添加" [ref=f1e209] [cursor=pointer]

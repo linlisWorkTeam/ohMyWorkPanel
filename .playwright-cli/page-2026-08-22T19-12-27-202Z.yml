@@ -1,0 +1,80 @@
+- main [ref=e21]:
+  - generic [ref=e23]:
+    - navigation "控制轨" [ref=e24]:
+      - generic [ref=e25]: L
+      - button "◉" [ref=e26] [cursor=pointer]
+      - button "◎" [ref=e27] [cursor=pointer]
+      - button "◇" [ref=e28] [cursor=pointer]
+    - complementary [ref=e29]:
+      - generic [ref=e33]:
+        - generic [ref=e34]: ohMy
+        - generic [ref=e35]: ohMyWorkPanel
+      - generic [ref=e36]:
+        - generic [ref=e37]: 工作区 · 群
+        - button "新建群聊" [ref=e38] [cursor=pointer]: ＋
+      - navigation [ref=e39]:
+        - generic [ref=e40]:
+          - button "o ohMyWorkPanel" [ref=e41] [cursor=pointer]:
+            - generic [ref=e42]: o
+            - generic [ref=e43]: ohMyWorkPanel
+          - button "归档群组" [ref=e44] [cursor=pointer]: −
+      - generic [ref=e45]:
+        - button "折叠或展开侧栏" [ref=e46] [cursor=pointer]: ▶▶
+        - button "退出登录（root）" [ref=e47] [cursor=pointer]
+    - generic [ref=e48]:
+      - generic [ref=e49]:
+        - button "群列表" [ref=e50] [cursor=pointer]: ☰
+        - generic [ref=e51]:
+          - heading "ohMyWorkPanelproject" [level=1] [ref=e52]
+          - paragraph [ref=e53]: Codex · OpenClaw · Cursor Agent · linlis-super-harness · Mock ECS · 6 名成员
+        - button "成员 / Agent 面板" [ref=e55] [cursor=pointer]: ☰
+      - button "WAVE 尚未建立 Wave · 点此到版本页 0/0" [ref=e57] [cursor=pointer]:
+        - generic [ref=e58]: WAVE
+        - generic [ref=e59]: 尚未建立 Wave · 点此到版本页
+        - generic [ref=e61]: 0/0
+      - generic [ref=e141]:
+        - generic [ref=e142]: 今天
+        - generic [ref=e144]:
+          - generic [ref=e145]: r
+          - generic [ref=e146]:
+            - generic [ref=e147]: root
+            - paragraph [ref=e259]: "@Codex Reply with exactly ECS_REAL_AGENT_OK and do not modify files."
+            - generic [ref=e152]: 03:10
+        - generic [ref=e153]:
+          - generic [ref=e154]: C
+          - generic [ref=e155]:
+            - generic [ref=e156]: Codex
+            - generic [ref=e157]:
+              - generic [ref=e167] [cursor=pointer]: 思考过程
+              - generic [ref=e168]:
+                - group [ref=e169]:
+                  - generic "≡ 思考过程 · 点击加载" [ref=e175] [cursor=pointer]
+                - paragraph [ref=e260]: ECS_REAL_AGENT_OK
+            - generic [ref=e165]: 03:10
+        - generic [ref=e261]:
+          - generic [ref=e262]: r
+          - generic [ref=e263]:
+            - generic [ref=e264]: root
+            - paragraph [ref=e268]: "@Mock ECS Reply with exactly ECS_MOCK_OK."
+            - generic [ref=e269]: 03:12
+        - generic [ref=e270]:
+          - generic [ref=e271]: M
+          - generic [ref=e272]:
+            - generic [ref=e273]: Mock ECS · 流式
+            - generic [ref=e274]:
+              - status [ref=e275]:
+                - generic [ref=e276]: 启动
+              - button "停止" [ref=e281] [cursor=pointer]
+            - generic [ref=e282]: 03:12
+      - generic [ref=e70]:
+        - generic [ref=e71]:
+          - button "@" [ref=e72] [cursor=pointer]
+          - button "🖼" [ref=e73] [cursor=pointer]
+          - button / [ref=e74] [cursor=pointer]
+        - textbox "给群里的 Agent 派活… @ 提及 · Enter 发送 · Shift+Enter 换行 · 草稿自动保存" [active] [ref=e139]:
+          - /placeholder: 给群里的 Agent 派活…  @ 提及 · Enter 发送 · Shift+Enter 换行 · 草稿自动保存
+        - generic [ref=e76]:
+          - generic [ref=e77]: "@ 提及"
+          - generic [ref=e78]: / 命令
+          - button "Enter 发送" [ref=e140] [cursor=pointer]
+          - button "发送 ⏎" [disabled] [ref=e80]

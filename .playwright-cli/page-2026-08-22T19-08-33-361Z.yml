@@ -1,0 +1,102 @@
+- main [ref=e21]:
+  - generic [ref=e23]:
+    - navigation "控制轨" [ref=e24]:
+      - generic [ref=e25]: L
+      - button "◉" [ref=e26] [cursor=pointer]
+      - button "◎" [ref=e27] [cursor=pointer]
+      - button "◇" [ref=e28] [cursor=pointer]
+    - complementary [ref=e29]:
+      - generic [ref=e33]:
+        - generic [ref=e34]: ohMy
+        - generic [ref=e35]: ohMyWorkPanel
+      - generic [ref=e36]:
+        - generic [ref=e37]: 工作区 · 群
+        - button "新建群聊" [ref=e38] [cursor=pointer]: ＋
+      - navigation [ref=e39]:
+        - generic [ref=e40]:
+          - button "o ohMyWorkPanel" [ref=e41] [cursor=pointer]:
+            - generic [ref=e42]: o
+            - generic [ref=e43]: ohMyWorkPanel
+          - button "归档群组" [ref=e44] [cursor=pointer]: −
+      - generic [ref=e45]:
+        - button "折叠或展开侧栏" [ref=e46] [cursor=pointer]: ▶▶
+        - button "退出登录（root）" [ref=e47] [cursor=pointer]
+    - generic [ref=e48]:
+      - generic [ref=e49]:
+        - button "群列表" [ref=e50] [cursor=pointer]: ☰
+        - generic [ref=e51]:
+          - heading "ohMyWorkPanelproject" [level=1] [ref=e52]
+          - paragraph [ref=e53]: Codex · OpenClaw · Cursor Agent · linlis-super-harness · 5 名成员
+        - button "成员 / Agent 面板" [active] [pressed] [ref=e55] [cursor=pointer]: ☰
+      - button "WAVE 尚未建立 Wave · 点此到版本页 0/0" [ref=e57] [cursor=pointer]:
+        - generic [ref=e58]: WAVE
+        - generic [ref=e59]: 尚未建立 Wave · 点此到版本页
+        - generic [ref=e61]: 0/0
+      - generic [ref=e64]:
+        - strong [ref=e65]: ohMyWorkPanel
+        - generic [ref=e66]: 添加 Agent 后，在消息中输入 @名称 开始协作。
+        - generic [ref=e67]: Enter 发送 · Shift+Enter 换行 · @ 触发成员菜单
+      - generic [ref=e70]:
+        - generic [ref=e71]:
+          - button "@" [ref=e72] [cursor=pointer]
+          - button "🖼" [ref=e73] [cursor=pointer]
+          - button / [ref=e74] [cursor=pointer]
+        - textbox "给群里的 Agent 派活… @ 提及 · Enter 发送 · Shift+Enter 换行 · 草稿自动保存" [ref=e75]:
+          - /placeholder: 给群里的 Agent 派活…  @ 提及 · Enter 发送 · Shift+Enter 换行 · 草稿自动保存
+        - generic [ref=e76]:
+          - generic [ref=e77]: "@ 提及"
+          - generic [ref=e78]: / 命令
+          - button "Enter 发送" [ref=e79] [cursor=pointer]
+          - button "发送 ⏎" [disabled] [ref=e80]
+    - complementary [ref=e82]:
+      - complementary [ref=e83]:
+        - generic [ref=e84]:
+          - tablist "右栏" [ref=e85]:
+            - tab "成员" [selected] [ref=e86] [cursor=pointer]
+            - tab "队列" [ref=e87] [cursor=pointer]
+            - tab "详情" [ref=e88] [cursor=pointer]
+            - tab "设置" [ref=e89] [cursor=pointer]
+            - tab "酒馆" [ref=e90] [cursor=pointer]
+            - tab "Live" [ref=e91] [cursor=pointer]
+          - button "关闭右栏" [ref=e92] [cursor=pointer]: ×
+        - generic [ref=e94]:
+          - generic [ref=e95]:
+            - paragraph [ref=e96]: 右键或长按成员：检测 / 设管理 / 移除（行上不摊按钮）
+            - generic [ref=e97]:
+              - generic [ref=e98]: r
+              - generic [ref=e100]:
+                - generic [ref=e101]:
+                  - text: root
+                  - emphasis [ref=e102]: 群主
+                  - emphasis [ref=e103]: 链接中
+                - generic [ref=e104]: 邀请未接受
+              - generic [ref=e105]: 等待
+            - generic [ref=e106]:
+              - generic [ref=e107]: C
+              - generic [ref=e109]:
+                - generic [ref=e110]:
+                  - text: Codex
+                  - emphasis [ref=e111]: 管理员
+                - generic [ref=e112]: codex
+              - generic [ref=e113]: 待检测
+            - generic [ref=e114]:
+              - generic [ref=e115]: O
+              - generic [ref=e117]:
+                - generic [ref=e118]: OpenClaw
+                - generic [ref=e119]: openclaw
+              - generic [ref=e120]: 待检测
+            - generic [ref=e121]:
+              - generic [ref=e122]: C
+              - generic [ref=e124]:
+                - generic [ref=e125]: Cursor Agent
+                - generic [ref=e126]: cursor
+              - generic [ref=e127]: 待检测
+            - generic [ref=e128]:
+              - generic [ref=e129]: l
+              - generic [ref=e131]:
+                - generic [ref=e132]:
+                  - text: linlis-super-harness
+                  - emphasis [ref=e133]: 系统
+                - generic [ref=e134]: dsh
+              - generic [ref=e135]: 待检测
+          - button "＋ 邀请成员" [ref=e136] [cursor=pointer]

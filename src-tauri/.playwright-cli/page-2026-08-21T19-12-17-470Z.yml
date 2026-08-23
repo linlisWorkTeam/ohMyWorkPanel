@@ -1,0 +1,181 @@
+- main [ref=f1e21]:
+  - generic [ref=f1e23]:
+    - navigation "控制轨" [ref=f1e24]:
+      - generic [ref=f1e25]: L
+      - button "◉" [ref=f1e26] [cursor=pointer]
+      - button "◎" [ref=f1e27] [cursor=pointer]
+      - button "◇" [ref=f1e28] [cursor=pointer]
+    - complementary [ref=f1e29]:
+      - generic [ref=f1e33]:
+        - generic [ref=f1e34]: Linli's
+        - generic [ref=f1e35]: Workpanel
+      - generic [ref=f1e36]:
+        - generic [ref=f1e37]: 工作区 · 群
+        - button "新建群聊" [ref=f1e38] [cursor=pointer]: ＋
+      - navigation [ref=f1e39]:
+        - generic [ref=f1e40]:
+          - button "L LinlisWorkPanel" [ref=f1e41] [cursor=pointer]:
+            - generic [ref=f1e42]: L
+            - generic [ref=f1e43]: LinlisWorkPanel
+          - button "归档群组" [ref=f1e44] [cursor=pointer]: −
+        - button "▸ 已归档（1）" [ref=f1e46] [cursor=pointer]
+      - generic [ref=f1e47]:
+        - button "折叠或展开侧栏" [ref=f1e48] [cursor=pointer]: ◀◀
+        - button "退出登录（root）" [ref=f1e49] [cursor=pointer]
+    - generic [ref=f1e50]:
+      - generic [ref=f1e51]:
+        - generic [ref=f1e52]:
+          - heading "LinlisWorkPanelproject" [level=1] [ref=f1e53]
+          - paragraph [ref=f1e54]: Codex · OpenClaw · Cursor Agent · linlis-super-harness · 5 名成员
+        - button "成员 / Agent 面板" [pressed] [ref=f1e56] [cursor=pointer]: ☰
+      - button "WAVE 尚未建立 Wave · 点此到版本页 0/0" [ref=f1e58] [cursor=pointer]:
+        - generic [ref=f1e59]: WAVE
+        - generic [ref=f1e60]: 尚未建立 Wave · 点此到版本页
+        - generic [ref=f1e62]: 0/0
+      - generic [ref=f1e64]:
+        - generic [ref=f1e65]: 上滑加载更早 · 显示 10/16
+        - generic [ref=f1e67]:
+          - generic [ref=f1e68]: 8月19日周三
+          - generic [ref=f1e70]:
+            - generic [ref=f1e71]: r
+            - generic [ref=f1e72]:
+              - generic [ref=f1e73]: root
+              - paragraph [ref=f1e77]: "@Cursor Agent 在线吗"
+              - generic [ref=f1e78]: 21:11
+          - generic [ref=f1e79]:
+            - generic [ref=f1e80]: C
+            - generic [ref=f1e81]:
+              - generic [ref=f1e82]: Cursor Agent · 失败
+              - generic [ref=f1e83]:
+                - status [ref=f1e84]:
+                  - generic [ref=f1e85]: 失败
+                - paragraph [ref=f1e90]: 无法启动 cursor：program not found
+              - generic [ref=f1e91]: 21:11
+          - generic [ref=f1e92]: 8月20日周四
+          - generic [ref=f1e94]:
+            - generic [ref=f1e95]: r
+            - generic [ref=f1e96]:
+              - generic [ref=f1e97]: root
+              - paragraph [ref=f1e101]: "@Codex 你好"
+              - generic [ref=f1e102]: 00:44
+          - generic [ref=f1e103]:
+            - generic [ref=f1e104]: C
+            - generic [ref=f1e105]:
+              - generic [ref=f1e106]: Codex · 失败
+              - generic [ref=f1e107]:
+                - status [ref=f1e108]:
+                  - generic [ref=f1e109]: 失败
+                - paragraph [ref=f1e114]: Codex 缺少 OPENAI_API_KEY：请在成员 API Key、环境变量 LINLIS_CODEX_API_KEY/OPENAI_API_KEY，或 ~/.codex/auth.json 中配置（OpenCode Go 所用密钥）。
+              - generic [ref=f1e115]: 00:44
+          - generic [ref=f1e116]:
+            - generic [ref=f1e117]: r
+            - generic [ref=f1e118]:
+              - generic [ref=f1e119]: root
+              - paragraph [ref=f1e123]: "@linlis-super-harness 你好"
+              - generic [ref=f1e124]: 00:44
+          - generic [ref=f1e125]:
+            - generic [ref=f1e126]: l
+            - generic [ref=f1e127]:
+              - generic [ref=f1e128]: linlis-super-harness
+              - paragraph [ref=f1e132]:
+                - text: 收到，我已在群聊中就位。
+                - strong [ref=f1e133]: Agent：linlis-super-harness
+                - text: 定位：WorkPanel 自举引导器（bootstrap/self-modify 完整执行权，不可修改自身角色定义）。当前工作区状态：- 记忆文件为空（
+                - code [ref=f1e134]: memory.md
+                - text: 无历史内容）- 无进行中的目标（当前无 active goal）能力边界（供群内引用）：-
+                - strong [ref=f1e135]: 唯一拥有面板自举/自改完整执行权
+                - text: ：涉及 WorkPanel 自身的启动引导、结构自修改、源自举逻辑的工作，由我兜底执行。- 其他职责按 AGENTS.md 约定走正常流程（IPC 兼容、测试门禁、灰度→生产需 root 批准等）。- 我不会伪造批准令牌、擅自 restart 生产、绕过测试门禁。请下达具体任务即可。如果是长周期自举/自改目标，我会用 goal 工具持续推进并在完成后汇报。
+              - generic [ref=f1e136]: 00:44
+          - generic [ref=f1e137]: 今天
+          - generic [ref=f1e139]:
+            - generic [ref=f1e140]: r
+            - generic [ref=f1e141]:
+              - generic [ref=f1e142]: root
+              - paragraph [ref=f1e146]: "@Cursor Agent【WorkPet:WorkPet】E2 无@验收 2026-08-21T17:29:42.838Z — 请仅确认收到，勿深层委派。"
+              - generic [ref=f1e147]: 01:29
+          - generic [ref=f1e148]:
+            - generic [ref=f1e149]: C
+            - generic [ref=f1e150]:
+              - generic [ref=f1e151]: Cursor Agent · 失败
+              - generic [ref=f1e152]:
+                - status [ref=f1e153]:
+                  - generic [ref=f1e154]: 失败
+                - paragraph [ref=f1e159]: "cursor 异常退出：Error: Authentication required. Please run 'agent login' first, or set CURSOR_API_KEY environment variable."
+              - generic [ref=f1e160]: 01:29
+          - generic [ref=f1e161]:
+            - generic [ref=f1e162]: r
+            - generic [ref=f1e163]:
+              - generic [ref=f1e164]: root
+              - paragraph [ref=f1e168]: "@Codex【WorkPet:WorkPet】E2 @验收 2026-08-21T17:29:42.874Z — 请仅确认收到，勿深层委派。"
+              - generic [ref=f1e169]: 01:29
+          - generic [ref=f1e170]:
+            - generic [ref=f1e171]: C
+            - generic [ref=f1e172]:
+              - generic [ref=f1e173]: Codex · 失败
+              - generic [ref=f1e174]:
+                - status [ref=f1e175]:
+                  - generic [ref=f1e176]: 失败
+                - paragraph [ref=f1e181]: Codex 缺少 OPENAI_API_KEY：请在成员 API Key、环境变量 LINLIS_CODEX_API_KEY/OPENAI_API_KEY，或 ~/.codex/auth.json 中配置（OpenCode Go 所用密钥）。
+              - generic [ref=f1e182]: 01:29
+      - generic [ref=f1e185]:
+        - generic [ref=f1e186]:
+          - button "@" [ref=f1e187] [cursor=pointer]
+          - button "🖼" [ref=f1e188] [cursor=pointer]
+          - button / [ref=f1e189] [cursor=pointer]
+        - textbox "给群里的 Agent 派活… @ 提及 · Enter 发送 · Shift+Enter 换行 · 草稿自动保存" [ref=f1e190]:
+          - /placeholder: 给群里的 Agent 派活…  @ 提及 · Enter 发送 · Shift+Enter 换行 · 草稿自动保存
+        - generic [ref=f1e191]:
+          - generic [ref=f1e192]: "@ 提及"
+          - generic [ref=f1e193]: / 命令
+          - button "Enter 发送" [ref=f1e194] [cursor=pointer]
+          - button "发送 ⏎" [disabled] [ref=f1e195]
+    - complementary [ref=f1e196]:
+      - complementary [ref=f1e197]:
+        - generic [ref=f1e198]:
+          - tablist "右栏" [ref=f1e199]:
+            - tab "成员" [selected] [ref=f1e200] [cursor=pointer]
+            - tab "队列" [ref=f1e201] [cursor=pointer]
+            - tab "详情" [ref=f1e202] [cursor=pointer]
+            - tab "设置" [ref=f1e203] [cursor=pointer]
+          - button "关闭右栏" [ref=f1e204] [cursor=pointer]: ×
+        - generic [ref=f1e206]:
+          - generic [ref=f1e207]:
+            - paragraph [ref=f1e208]: 右键或长按成员：检测 / 设管理 / 移除（行上不摊按钮）
+            - generic [ref=f1e209]:
+              - generic [ref=f1e210]: r
+              - generic [ref=f1e212]:
+                - generic [ref=f1e213]:
+                  - text: root
+                  - emphasis [ref=f1e214]: 群主
+                  - emphasis [ref=f1e215]: 链接中
+                - generic [ref=f1e216]: 邀请未接受
+              - generic [ref=f1e217]: 等待
+            - generic [ref=f1e218]:
+              - generic [ref=f1e219]: C
+              - generic [ref=f1e221]:
+                - generic [ref=f1e222]: Codex
+                - generic [ref=f1e223]: codex
+              - generic [ref=f1e224]: 待检测
+            - generic [ref=f1e225]:
+              - generic [ref=f1e226]: O
+              - generic [ref=f1e228]:
+                - generic [ref=f1e229]: OpenClaw
+                - generic [ref=f1e230]: openclaw
+              - generic [ref=f1e231]: 待检测
+            - generic [ref=f1e232]:
+              - generic [ref=f1e233]: C
+              - generic [ref=f1e235]:
+                - generic [ref=f1e236]:
+                  - text: Cursor Agent
+                  - emphasis [ref=f1e237]: 管理员
+                - generic [ref=f1e238]: cursor · cursor-grok-4.6-high-fast
+              - generic [ref=f1e239]: 待检测
+            - generic [ref=f1e240]:
+              - generic [ref=f1e241]: l
+              - generic [ref=f1e243]:
+                - generic [ref=f1e244]:
+                  - text: linlis-super-harness
+                  - emphasis [ref=f1e245]: 系统
+                - generic [ref=f1e246]: dsh
+              - generic [ref=f1e247]: 待检测
+          - button "＋ 邀请成员" [ref=f1e248] [cursor=pointer]

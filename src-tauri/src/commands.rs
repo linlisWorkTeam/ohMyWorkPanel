@@ -309,10 +309,16 @@ pub fn add_member(input: AddMemberInput, state: State<'_, AppState>) -> AppResul
             .as_deref()
             .map(str::trim)
             .filter(|s| !s.is_empty())
-            .unwrap_or("deepseek-v4-flash");
+            .unwrap_or("deepseek-chat");
+        let api_url = input
+            .api_url
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
         conn.execute(
-            "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at,api_key,warm_status,model) VALUES(?1,?2,NULL,'ready',?3,?4,'cold',?5)",
-            params![member_id, adapter, created_at, crate::db::encrypt_secret(api_key)?, model],
+            "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at,api_key,warm_status,model,api_url) VALUES(?1,?2,NULL,'ready',?3,?4,'cold',?5,?6)",
+            params![member_id, adapter, created_at, crate::db::encrypt_secret(api_key)?, model, api_url],
         )
         .map_err(|e| e.to_string())?;
     }
@@ -1372,4 +1378,16 @@ pub async fn release_version(
         .unwrap_or_else(|| group.owner_member_id.clone().unwrap_or_default());
     require_desktop_version_manager(&conn, &group, &sender)?;
     crate::workflow::mark_released(&conn, &version_id, git_tag)
+}
+
+#[tauri::command]
+pub async fn set_member_api_url(
+    member_id: String,
+    api_url: Option<String>,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
+    let state = state.inner().clone();
+    let conn = open_db(&state.db_path)?;
+    crate::db::assert_member_mutable(&conn, &member_id)?;
+    crate::db::set_member_api_url(&conn, &member_id, api_url.as_deref())
 }

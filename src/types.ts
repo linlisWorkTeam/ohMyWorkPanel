@@ -73,7 +73,7 @@ export interface Member {
   avatarColor: string;
   roleDescription: string;
   isActive: boolean;
-  adapter: "mock" | "codex" | "claude-code" | "opencode" | "openclaw" | "cursor" | "dsh" | "chatbot-opencode-go" | "chatbot-deepseek" | string | null;
+  adapter: "mock" | "codex" | "claude-code" | "opencode" | "openclaw" | "cursor" | "dsh" | "chatbot-opencode-go" | "chatbot-deepseek" | "chatbot-custom" | "custom" | string | null;
   executablePath: string | null;
   runtimeStatus: "unknown" | "ready" | "unavailable" | null;
   tags: string;
@@ -84,6 +84,8 @@ export interface Member {
   warmStatus?: string | null;
   /** Preferred model; empty/null = provider default */
   model?: string | null;
+  /** Custom OpenAI-compatible base URL (chatbot provider "custom") */
+  apiUrl?: string | null;
   /** Linked login users.id for kind=user */
   authUserId?: string | null;
   /** Pending invite (user with no authUserId yet) */

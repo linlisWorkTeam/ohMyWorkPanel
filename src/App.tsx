@@ -92,8 +92,9 @@ type NewMember = {
   roleDescription: string;
   adapter: string;
   executablePath: string;
-  chatbotProvider: "opencode-go" | "deepseek";
+  chatbotProvider: "opencode-go" | "deepseek" | "custom";
   apiKey: string;
+  apiUrl: string;
   model: string;
   loginUsername: string;
   loginPassword: string;
@@ -103,10 +104,16 @@ type NewMember = {
 type Session = "checking" | "login" | "ready";
 const emptyMember: NewMember = {
   kind: "agent", displayName: "", roleDescription: "", adapter: "mock", executablePath: "",
-  chatbotProvider: "opencode-go", apiKey: "", model: "",
+  chatbotProvider: "opencode-go", apiKey: "", apiUrl: "", model: "",
   loginUsername: "", loginPassword: "",
   userAddMode: "create", existingAuthUserId: "",
 };
+/** chatbot provider → adapter 键（DeepSeek 官方 / OpenCode Go / 自定义）。 */
+function chatbotAdapterFor(provider: "opencode-go" | "deepseek" | "custom"): string {
+  if (provider === "deepseek") return "chatbot-deepseek";
+  if (provider === "custom") return "chatbot-custom";
+  return "chatbot-opencode-go";
+}
 /** DeepSeek Harness Web UI 默认地址（`dsh web`，默认 :3080）。可手动改成实际端口。 */
 const DSH_WEB_URL = "http://127.0.0.1:3080";
 
@@ -1098,10 +1105,11 @@ export function App() {
         executablePath: newMember.kind === "agent" ? newMember.executablePath : undefined,
         chatbotProvider: newMember.kind === "chatbot" ? newMember.chatbotProvider : undefined,
         apiKey: newMember.kind === "chatbot" ? newMember.apiKey : undefined,
+        apiUrl: newMember.kind === "chatbot" ? (newMember.apiUrl.trim() || undefined) : undefined,
         model: newMember.kind === "agent" || newMember.kind === "chatbot"
           ? (newMember.model || defaultModelForAdapter(
               newMember.kind === "chatbot"
-                ? (newMember.chatbotProvider === "deepseek" ? "chatbot-deepseek" : "chatbot-opencode-go")
+                ? chatbotAdapterFor(newMember.chatbotProvider)
                 : newMember.adapter,
             ) || undefined)
           : undefined,
@@ -1541,17 +1549,23 @@ export function App() {
           {addMemberKind === "chatbot" && <>
             <select value={newMember.chatbotProvider} onChange={(event) => {
               const chatbotProvider = event.target.value as NewMember["chatbotProvider"];
-              const adapter = chatbotProvider === "deepseek" ? "chatbot-deepseek" : "chatbot-opencode-go";
-              setNewMember((value) => ({ ...value, chatbotProvider, model: defaultModelForAdapter(adapter) }));
+              setNewMember((value) => ({ ...value, chatbotProvider, model: defaultModelForAdapter(chatbotAdapterFor(chatbotProvider)) }));
             }}>
               <option value="opencode-go">OpenCode Go</option>
               <option value="deepseek">DeepSeek 官方</option>
+              <option value="custom">自定义（OpenAI 兼容）</option>
             </select>
+            <input
+              value={newMember.apiUrl}
+              onChange={(event) => setNewMember((value) => ({ ...value, apiUrl: event.target.value }))}
+              placeholder="自定义 API 地址，如 https://api.xxx.com/v1（自定义提供方必填）"
+              required={newMember.chatbotProvider === "custom"}
+            />
             <select
-              value={newMember.model || defaultModelForAdapter(newMember.chatbotProvider === "deepseek" ? "chatbot-deepseek" : "chatbot-opencode-go")}
+              value={newMember.model || defaultModelForAdapter(chatbotAdapterFor(newMember.chatbotProvider))}
               onChange={(event) => setNewMember((value) => ({ ...value, model: event.target.value }))}
             >
-              {modelsForAdapter(newMember.chatbotProvider === "deepseek" ? "chatbot-deepseek" : "chatbot-opencode-go").map((m) => (
+              {modelsForAdapter(chatbotAdapterFor(newMember.chatbotProvider)).map((m) => (
                 <option key={m} value={m}>{m}</option>
               ))}
             </select>

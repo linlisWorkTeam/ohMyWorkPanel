@@ -1,0 +1,145 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: v2.1 示意图（不是运行时）· 切主题 · 右键或长按气泡出菜单 · 按住「说话」
+    - generic [ref=e4]:
+      - button "Cyberpunk" [ref=e5] [cursor=pointer]
+      - button "Industrial" [ref=e6] [cursor=pointer]
+      - button "Atlas" [ref=e7] [cursor=pointer]
+      - button "Forge" [ref=e8] [cursor=pointer]
+      - button "Moss" [ref=e9] [cursor=pointer]
+      - button "Noir" [ref=e10] [cursor=pointer]
+      - button "极简" [ref=e11] [cursor=pointer]
+    - generic [ref=e12]:
+      - checkbox "拆出 Live（right-dock）" [ref=e13]
+      - text: 拆出 Live（right-dock）
+  - generic [ref=e14]:
+    - navigation "控制轨" [ref=e15]:
+      - generic [ref=e16]: L
+      - generic [ref=e17]: ◉
+      - generic [ref=e18]: ◎
+      - generic [ref=e19]: ◇
+    - complementary [ref=e20]:
+      - generic [ref=e21]:
+        - text: LINLI'S
+        - emphasis [ref=e22]: Workpanel
+      - generic [ref=e23]: Base · 群导航
+      - generic [ref=e24]: 灰度测试
+      - generic [ref=e25]: FlowAnalysis
+      - generic [ref=e26]: AI 酒馆 · 聊
+    - main [ref=e27]:
+      - generic [ref=e29]:
+        - heading "灰度测试 project" [level=1] [ref=e30]
+        - text: 状态簇已迁走 · 中栏只留群身份
+      - generic [ref=e31]: WAVE · 尚未建立 Wave · 点此到版本页
+      - generic [ref=e32]:
+        - generic [ref=e33]: 今天 00:48
+        - generic [ref=e35]:
+          - generic [ref=e36]: C
+          - generic [ref=e37]:
+            - generic [ref=e38]: Cursor Agent
+            - generic [ref=e39]: 右栏四页签，Extend 可拆第二列。气泡上不再常驻「复制 / 重试」——长按或右键出菜单。
+            - generic [ref=e40]: 00:48
+        - generic [ref=e41]:
+          - generic [ref=e42]: 我
+          - generic [ref=e43]:
+            - generic [ref=e44]: root
+            - generic [ref=e45]: 把设置和主题都放进右栏，头上不要一排图标。
+            - generic [ref=e46]: 00:49
+        - generic [ref=e47]:
+          - generic [ref=e48]: C
+          - generic [ref=e49]:
+            - generic [ref=e50]: Cursor Agent
+            - generic [ref=e51]:
+              - generic [ref=e52]: root：把设置和主题都放进右栏…
+              - text: 收到。@root 设置进右栏第 4 页签。对话手感按微信：引用灰条、语音时长条、流式只露停止。
+            - generic [ref=e53]: 00:49
+        - generic [ref=e54]:
+          - generic [ref=e55]: 我
+          - generic [ref=e56]:
+            - generic [ref=e57]: 语音
+            - generic "点击播放" [ref=e58] [cursor=pointer]: 3″
+            - generic [ref=e67]: 00:50
+        - generic [ref=e68]:
+          - generic [ref=e69]: C
+          - generic [ref=e70]:
+            - generic [ref=e71]: Cursor Agent · 流式
+            - generic [ref=e72]:
+              - generic [ref=e73] [cursor=pointer]: 思考过程（已折叠）
+              - text: 正在把壳层和对话规则写进同一发…
+              - button "停止" [ref=e75] [cursor=pointer]
+            - generic [ref=e76]: 现在
+        - generic [ref=e77]:
+          - generic [ref=e78]: C
+          - generic [ref=e79]:
+            - generic [ref=e80]: Cursor Agent · 失败
+            - generic [ref=e81]: CLI 超时。长按本条可「重试」——气泡上没有按钮，避免把列表撑抖。
+            - generic [ref=e82]: 00:51
+        - button "↓ 有 1 条未读" [ref=e83] [cursor=pointer]
+      - generic [ref=e84]:
+        - generic [ref=e85]:
+          - generic [ref=e86]: 引用 Cursor Agent：右栏四页签，Extend 可拆第二列…
+          - button "取消引用" [ref=e87] [cursor=pointer]: ×
+        - generic [ref=e88]:
+          - generic [ref=e89]:
+            - button "@" [ref=e90] [cursor=pointer]
+            - button / [ref=e91] [cursor=pointer]
+            - button "🖼" [ref=e92] [cursor=pointer]
+          - textbox "给群里的 Agent 派活… @ 提及 · Enter 发送" [ref=e93]:
+            - /placeholder: 给群里的 Agent 派活…  @ 提及 · Enter 发送
+          - generic [ref=e94]:
+            - generic [ref=e95]:
+              - button "按住 说话" [ref=e96] [cursor=pointer]
+              - generic [ref=e97]: Enter 发送 · 长按气泡出菜单
+            - button "发送" [ref=e98] [cursor=pointer]
+    - complementary [ref=e99]:
+      - generic [ref=e100]:
+        - button "成员" [ref=e101] [cursor=pointer]
+        - button "队列" [ref=e102] [cursor=pointer]
+        - button "详情" [ref=e103] [cursor=pointer]
+        - button "设置" [ref=e104] [cursor=pointer]
+        - button "Live" [ref=e105] [cursor=pointer]
+      - generic [ref=e106]:
+        - paragraph [ref=e107]: 右键或长按成员：检测 / 设管理 / 移除（行上不摊按钮）
+        - generic [ref=e108]:
+          - generic [ref=e109]:
+            - generic [ref=e110]: 我
+            - generic [ref=e112]:
+              - generic [ref=e113]:
+                - text: root
+                - emphasis [ref=e114]: 群主
+              - generic [ref=e115]: 本地成员
+            - generic [ref=e116]: 在线
+          - generic [ref=e117]:
+            - generic [ref=e118]: C
+            - generic [ref=e120]:
+              - generic [ref=e121]:
+                - text: Cursor Agent
+                - emphasis [ref=e122]: 管理员
+              - generic [ref=e123]: cursor · grok-4.6
+            - generic [ref=e124]: 执行中
+          - generic [ref=e125]:
+            - generic [ref=e126]: X
+            - generic [ref=e128]:
+              - generic [ref=e129]:
+                - text: Codex
+                - emphasis [ref=e130]: 系统
+              - generic [ref=e131]: codex · gpt-5.2
+            - generic [ref=e132]: 已就绪
+          - generic [ref=e133]:
+            - generic [ref=e134]: D
+            - generic [ref=e136]:
+              - generic [ref=e137]:
+                - text: DeepSeek
+                - emphasis [ref=e138]: 机器人
+              - generic [ref=e139]: chatbot · 缺 Key
+            - generic [ref=e140]: 不可用
+          - generic [ref=e141]:
+            - generic [ref=e142]: "?"
+            - generic [ref=e144]:
+              - generic [ref=e145]:
+                - text: 待加入
+                - emphasis [ref=e146]: 链接中
+              - generic [ref=e147]: 邀请未接受
+            - generic [ref=e148]: 等待
+        - button "＋ 邀请成员" [ref=e149] [cursor=pointer]
+  - contentinfo [ref=e150]: 七主题平级 · 极简 = 无扫描无呼吸 · 打开本文件即可预览 · spec：docs/superpowers/specs/2026-08-22-workpanel-v2.1-chrome-extend-design.md

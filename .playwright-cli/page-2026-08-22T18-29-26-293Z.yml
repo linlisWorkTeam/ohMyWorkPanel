@@ -1,0 +1,24 @@
+- main [ref=f1e3]:
+  - generic [ref=f1e13]:
+    - navigation "控制轨" [ref=f1e14]:
+      - generic [ref=f1e15]: L
+      - button "◉" [active] [ref=f1e16] [cursor=pointer]
+      - button "◎" [ref=f1e17] [cursor=pointer]
+    - complementary [ref=f1e18]:
+      - generic [ref=f1e22]:
+        - generic [ref=f1e23]: ohMy
+        - generic [ref=f1e24]: ohMyWorkPanel
+      - generic [ref=f1e25]: 工作区 · 群
+      - navigation [ref=f1e27]
+      - generic [ref=f1e28]:
+        - button "折叠或展开侧栏" [ref=f1e29] [cursor=pointer]: ◀◀
+        - button "退出登录（goaluser）" [ref=f1e30] [cursor=pointer]
+    - generic [ref=f1e33]:
+      - generic [ref=f1e34]: L
+      - strong [ref=f1e35]: 欢迎来到 ohMyWorkPanel
+      - paragraph [ref=f1e36]: 这里还没有群聊。项目群绑定服务器工作区、用 @Agent 协作；聊天群则是一组机器人的轻对话。
+      - paragraph [ref=f1e37]:
+        - generic [ref=f1e38]: Ctrl/⌘+1
+        - text: 左栏控制轨 ·
+        - generic [ref=f1e39]: Ctrl/⌘+2
+        - text: 成员面板

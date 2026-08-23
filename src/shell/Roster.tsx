@@ -94,13 +94,15 @@ function RosterRow({
     });
   }
   if (modelOptions.length > 0 && (member.kind === "agent" || member.kind === "chatbot") && !member.systemLocked) {
-    for (const model of modelOptions) {
-      items.push({
+    items.push({
+      id: "models",
+      label: member.model ? `切换模型 · ${member.model}` : "切换模型",
+      children: modelOptions.map((model) => ({
         id: `model:${model}`,
-        label: member.model === model ? `模型 · ${model} ✓` : `切换为 ${model}`,
+        label: member.model === model ? `${model} ✓` : model,
         onSelect: () => onModel(member, model),
-      });
-    }
+      })),
+    });
   }
   if (member.kind === "agent" && member.adapter === "dsh") {
     items.push({ id: "dsh", label: "跳转 DSH Web", onSelect: () => onOpenDsh?.(member) });

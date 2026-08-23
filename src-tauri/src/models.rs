@@ -67,6 +67,9 @@ pub struct Member {
     /// Preferred model id for this agent/chatbot (empty = provider default).
     #[serde(default)]
     pub model: Option<String>,
+    /// Custom OpenAI-compatible base URL (chatbot provider "custom"); empty = provider default.
+    #[serde(default)]
+    pub api_url: Option<String>,
     /// Linked login account (`users.id`) for kind=user members.
     #[serde(default)]
     pub auth_user_id: Option<String>,
@@ -178,9 +181,11 @@ pub struct AddMemberInput {
     pub avatar_color: Option<String>,
     pub adapter: Option<String>,
     pub executable_path: Option<String>,
-    /// chatbot provider: opencode-go | deepseek
+    /// chatbot provider: opencode-go | deepseek | custom
     pub chatbot_provider: Option<String>,
     pub api_key: Option<String>,
+    /// Custom OpenAI-compatible base URL（provider=custom 时必填，其余忽略）
+    pub api_url: Option<String>,
     /// Optional model override at create time
     pub model: Option<String>,
     /// Login username for kind=user (creates `users` row)
@@ -547,10 +552,10 @@ mod contract_tests {
             adapter: Some("mock".into()), executable_path: None, runtime_status: Some("ready".into()),
             tags: String::new(), created_at: 1, workspace_path: None, api_key_set: true,
             keep_alive: false, warm_status: None, model: None, auth_user_id: None,
-            invite_pending: false, system_locked: false,
+            invite_pending: false, system_locked: false, api_url: Some("https://api.example.com/v1".into()),
         };
         let mv = to_json(&member);
-        for key in ["displayName", "avatarColor", "roleDescription", "isActive", "runtimeStatus", "apiKeySet", "keepAlive", "authUserId", "invitePending", "systemLocked"] {
+        for key in ["displayName", "avatarColor", "roleDescription", "isActive", "runtimeStatus", "apiKeySet", "keepAlive", "authUserId", "invitePending", "systemLocked", "apiUrl"] {
             assert!(mv.get(key).is_some(), "缺少 {}", key);
         }
         assert!(mv.get("api_key").is_none(), "原始 API key 永不外泄（只暴露 apiKeySet）");
