@@ -3,8 +3,10 @@ use std::path::{Path, PathBuf};
 
 /// Resolve and validate a workspace / browse path on the server machine.
 /// Requires an absolute path that exists and is a directory.
+/// 注意：canonicalize 仅用于校验（Windows 会产生 `\\?\` 前缀，不适合入库/展示），
+/// 返回值是去掉尾分隔符的原始绝对路径，跨平台一致。
 pub fn resolve_server_dir(raw: &str) -> Result<PathBuf, String> {
-    let trimmed = raw.trim();
+    let trimmed = raw.trim().trim_end_matches(['/', '\\']);
     if trimmed.is_empty() {
         return Err("路径不能为空。".into());
     }
@@ -12,14 +14,13 @@ pub fn resolve_server_dir(raw: &str) -> Result<PathBuf, String> {
     if !path.is_absolute() {
         return Err("工作目录必须是服务器上的绝对路径。".into());
     }
-    if !path.exists() {
-        return Err("工作目录不存在或不可访问。".into());
-    }
-    if !path.is_dir() {
+    let canon = path
+        .canonicalize()
+        .map_err(|e| format!("工作目录不存在或不可访问：{e}"))?;
+    if !canon.is_dir() {
         return Err("路径不是目录。".into());
     }
-    path.canonicalize()
-        .map_err(|e| format!("无法解析路径：{e}"))
+    Ok(PathBuf::from(trimmed))
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -67,8 +68,7 @@ pub fn create_server_dir(parent_raw: &str, name: &str) -> Result<PathBuf, String
         return Err(format!("已存在同名路径：{}", dest.display()));
     }
     std::fs::create_dir(&dest).map_err(|e| format!("创建文件夹失败：{e}"))?;
-    dest.canonicalize()
-        .map_err(|e| format!("创建成功但无法解析路径：{e}"))
+    Ok(dest)
 }
 
 /// List one level of a server directory. Empty/`/` starts at filesystem root.

@@ -114,7 +114,7 @@ pub fn resolve_agent_workspace(
 ) -> Result<PathBuf, String> {
     let group_canon = group_ws
         .canonicalize()
-        .map_err(|e| format!("群工作区无效：{e}"))?;
+        .map_err(|e| format!("群工作区无效：{e}。请在群设置中重新选择本机上的目录（跨系统迁移的群需要更新工作区路径）"))?;
     let target = if let Some(raw) = configured.map(str::trim).filter(|s| !s.is_empty()) {
         let p = Path::new(raw);
         if !p.is_absolute() {
