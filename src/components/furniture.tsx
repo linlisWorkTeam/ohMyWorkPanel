@@ -535,7 +535,7 @@ export function MemberRow({ member, group, runs, detecting, online, askMode, onA
 }
 export function Avatar({ member, responding, online }: { member?: Member; responding?: boolean; online?: boolean }) {
   return (
-    <span className={`avatar ${responding ? "responding" : ""} ${online ? "is-online" : ""}`} style={{ background: member?.avatarColor ?? "#8792a5" }}>
+    <span className={`avatar ${responding ? "responding" : ""} ${online ? "is-online" : ""}`} style={{ background: member?.avatarColor ?? "var(--lp-text-tertiary)" }}>
       {member?.displayName.slice(0, 1) ?? "?"}
     </span>
   );

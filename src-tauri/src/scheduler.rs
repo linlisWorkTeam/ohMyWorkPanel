@@ -564,6 +564,7 @@ async fn run_agent(
             live_block
         );
         let model = context.agent.model.as_deref();
+        let api_url = crate::db::get_agent_api_url(&conn, &context.agent.id)?;
         let keep = context
             .settings
             .chat_context_message_limit
@@ -573,26 +574,48 @@ async fn run_agent(
             &context.group.id,
             keep,
             adapter_name,
+            api_url.as_deref(),
             &api_key,
             model,
             token,
         )
         .await
         .unwrap_or_else(|_| context.recent_chat.clone());
-        let user = chatbot::build_chatbot_user_message(&window, &root);
+        let messages = chatbot::build_chat_messages(
+            &system,
+            &window,
+            &context.agent.display_name,
+            &root,
+        );
         // Live short replies: tighter completion budget (TTS < 50 汉字).
         // Non-live: allow longer narrative (e.g. TRPG scene openers).
         let max_tokens = if live_block.is_empty() { 1024 } else { 128 };
         let text = chatbot::run_chatbot_completion(
             adapter_name,
+            api_url.as_deref(),
             &api_key,
-            &system,
-            &user,
+            &messages,
             max_tokens,
             token,
             model,
         )
-        .await?;
+        .await
+        .map_err(|e| {
+            // 诊断事件：失败时把 provider/model/apiUrl 落进 run_events，便于桌面端日志排障
+            let _ = insert_run_event(
+                &conn,
+                &context.run.id,
+                "debug_chatbot",
+                &serde_json::json!({
+                    "provider": adapter_name,
+                    "model": model,
+                    "apiUrl": api_url,
+                    "error": e,
+                })
+                .to_string(),
+            );
+            e
+        })?;
         emit_phase(state, &context.group.id, &context.run.id, "streaming");
         append_delta(state, &context.run, "final", &text, false)?;
         return Ok(());
@@ -847,6 +870,7 @@ async fn build_chatbot_rolling_window(
     group_id: &str,
     keep_limit: usize,
     provider: &str,
+    api_url: Option<&str>,
     api_key: &str,
     model: Option<&str>,
     token: &Arc<AtomicBool>,
@@ -891,11 +915,15 @@ async fn build_chatbot_rolling_window(
     if !to_fold.is_empty() {
         let folded = to_fold.iter().map(line_of).collect::<Vec<_>>().join("\n");
         let prompt = build_fold_summary_prompt(&summary_text, &folded);
+        let summary_messages: Vec<serde_json::Value> = vec![
+            serde_json::json!({"role":"system","content":"你是会话摘要助手，只输出压缩后的中文摘要正文。"}),
+            serde_json::json!({"role":"user","content":prompt}),
+        ];
         let new_summary = match chatbot::run_chatbot_completion(
             provider,
+            api_url,
             api_key,
-            "你是会话摘要助手，只输出压缩后的中文摘要正文。",
-            &prompt,
+            &summary_messages,
             256,
             token,
             model,

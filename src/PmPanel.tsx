@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
 import { boundWorkForItem, pickDefaultAssigneeId, seedChecklistTitles } from "./roadmapUi";
+import { Badge, PageShell, type BadgeTone } from "./components/ui";
 import type {
   Member, Feature, FeatureTask, RoadmapItem, RoadmapState,
   CreateRoadmapItemInput, UpdateRoadmapItemInput,
@@ -15,9 +16,11 @@ const STATUS_LABEL: Record<string, string> = {
 const PRIORITY_LABEL: Record<string, string> = {
   low: "低", medium: "中", high: "高", critical: "紧急",
 };
-const PRIORITY_COLOR: Record<string, string> = {
-  low: "#6c819c", medium: "#cf8a2c", high: "#c65a3b", critical: "#c13838",
-};
+function priorityTone(priority: string): BadgeTone {
+  if (priority === "medium") return "warning";
+  if (priority === "high" || priority === "critical") return "danger";
+  return "neutral";
+}
 
 function timeAgo(ts: number) {
   // Backend timestamps are milliseconds since epoch (db.now()).
@@ -69,7 +72,7 @@ export function PmPanel({ groupId, members, adminMemberId, onError }: PmPanelPro
   if (!state) return <div className="pm-loading">无法加载项目管理数据</div>;
 
   return (
-    <div className="pm-panel">
+    <PageShell className="pm-panel" density="compact">
       <nav className="pm-tabs">
         <button className={`pm-tab ${tab === "roadmap" ? "active" : ""}`} onClick={() => setTab("roadmap")}>路线图</button>
         <button className={`pm-tab ${tab === "features" ? "active" : ""}`} onClick={() => setTab("features")}>功能看板</button>
@@ -82,7 +85,7 @@ export function PmPanel({ groupId, members, adminMemberId, onError }: PmPanelPro
           <FeatureKanban groupId={groupId} features={state.features} tasks={state.tasks} members={members} roadmapItems={state.items} onUpdate={refreshSoft} onError={onError} />
         )}
       </div>
-    </div>
+    </PageShell>
   );
 }
 
@@ -177,9 +180,9 @@ function RoadmapView({ groupId, items, features, tasks, members, adminMemberId, 
               <div key={item.id} className="roadmap-card">
                 <div className="roadmap-card-header">
                   <strong>{item.title}</strong>
-                  <span className="pm-badge" style={{ color: PRIORITY_COLOR[item.priority] || "#6c819c", borderColor: PRIORITY_COLOR[item.priority] || "#6c819c" }}>
+                  <Badge className="pm-badge" tone={priorityTone(item.priority)}>
                     {PRIORITY_LABEL[item.priority] || item.priority}
-                  </span>
+                  </Badge>
                 </div>
                 {item.description && <p className="roadmap-card-desc">{item.description}</p>}
                 <div className="roadmap-card-meta">
@@ -350,9 +353,9 @@ function FeatureCard({ feature, featureTasks, members, roadmapItems, onUpdate, o
       <div className="feature-card-header" onClick={() => setExpanded(!expanded)}>
         <div className="feature-card-title">
           <strong>{feature.title}</strong>
-          <span className="pm-badge" style={{ color: PRIORITY_COLOR[feature.priority] || "#6c819c", borderColor: PRIORITY_COLOR[feature.priority] || "#6c819c" }}>
+          <Badge className="pm-badge" tone={priorityTone(feature.priority)}>
             {PRIORITY_LABEL[feature.priority] || feature.priority}
-          </span>
+          </Badge>
         </div>
         <div className="feature-card-meta">
           <span className={roadmap ? "pm-bind ok" : "pm-bind warn"}>{roadmap ? `↪ ${roadmap.title}` : "未绑定路线图"}</span>

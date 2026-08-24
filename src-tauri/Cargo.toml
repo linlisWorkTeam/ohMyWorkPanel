@@ -1,6 +1,6 @@
 [package]
 name = "ohmyworkpanel"
-version = "2.1.1"
+version = "2.1.2"
 description = "A local-first multi-agent group chat desktop app"
 authors = ["ohMyWorkPanel contributors"]
 edition = "2021"

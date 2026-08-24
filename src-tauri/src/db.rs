@@ -263,6 +263,7 @@ pub fn init_db(path: &Path) -> AppResult<()> {
     // Default preset roles (always refresh known-good defaults for ohMyWorkPanel)
     let default_roles = serde_json::json!([
         {"name":"Codex","adapter":"codex","roleDescription":"项目开发主力（Codex CLI）","avatarColor":"#2b6cb0"},
+        {"name":"linlis-super-harness","adapter":"dsh","roleDescription":"ohMyWorkPanel 自举引导器（系统预制，DSH 无头执行）","avatarColor":"#7c3aed"},
         {"name":"OpenClaw","adapter":"openclaw","roleDescription":"产品设计、拉通对齐与运维","avatarColor":"#d69e2e"},
         {"name":"Cursor Agent","adapter":"cursor","roleDescription":"Cursor CLI（agent / cursor-agent）","avatarColor":"#38a169"}
     ]);
@@ -529,10 +530,11 @@ pub fn member_from_row(row: &Row<'_>) -> rusqlite::Result<Member> {
         auth_user_id,
         invite_pending,
           system_locked: row.get::<_, i64>(18).ok().unwrap_or(0) != 0,
+        api_url: row.get(19).ok().flatten(),
     })
 }
 
-pub const MEMBER_SELECT: &str = "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model,m.auth_user_id,COALESCE(p.system_locked,0)
+pub const MEMBER_SELECT: &str = "SELECT m.id,m.group_id,m.kind,m.display_name,m.avatar_color,m.role_description,m.is_active,p.adapter,p.executable_path,p.runtime_status,COALESCE(m.tags,''),m.created_at,p.workspace_path,p.api_key,COALESCE(p.keep_alive,0),p.warm_status,p.model,m.auth_user_id,COALESCE(p.system_locked,0),p.api_url
          FROM members m LEFT JOIN agent_profiles p ON p.member_id=m.id";
 
 pub fn message_from_row(row: &Row<'_>) -> rusqlite::Result<Message> {
@@ -1076,6 +1078,37 @@ pub fn set_run_phase(connection: &Connection, run_id: &str, phase: &str) -> AppR
     let payload = serde_json::json!({"phase": phase, "elapsedMs": elapsed, "totalMs": total});
     insert_run_event(connection, run_id, "phase", &payload.to_string())?;
     Ok((elapsed, total))
+}
+
+/// 自定义 OpenAI-compatible base URL（chatbot provider=custom 时使用）。
+pub fn set_member_api_url(
+    connection: &Connection,
+    member_id: &str,
+    api_url: Option<&str>,
+) -> AppResult<()> {
+    let trimmed = api_url.map(str::trim).filter(|s| !s.is_empty());
+    let n = connection
+        .execute(
+            "UPDATE agent_profiles SET api_url=?1, updated_at=?2 WHERE member_id=?3",
+            params![trimmed, now(), member_id],
+        )
+        .map_err(|e| e.to_string())?;
+    if n == 0 {
+        return Err("找不到 Agent 配置。".into());
+    }
+    Ok(())
+}
+
+pub fn get_agent_api_url(connection: &Connection, member_id: &str) -> AppResult<Option<String>> {
+    connection
+        .query_row(
+            "SELECT api_url FROM agent_profiles WHERE member_id=?1",
+            params![member_id],
+            |r| r.get::<_, Option<String>>(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())
+        .map(|v| v.flatten())
 }
 
 pub fn get_agent_api_key(connection: &Connection, member_id: &str) -> AppResult<Option<String>> {

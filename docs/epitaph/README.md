@@ -8,6 +8,7 @@ Active handoff notes for future agents.
 
 | Date | Topic | Status |
 |------|-------|--------|
+| 2026-08-24 | [v2.1.2 发布验收](./2026-08-24-v2.1.2-release-verify.md) | canary-verified |
 | 2026-08-22 | [v2.1.0 壳层扩展 + 七主题 + 微信对话](./2026-08-22-v2.1-chrome-extend.md) | active |
 | 2026-08-21 | [CLI 适配器 Manifest（内部多 CLI）](./2026-08-21-cli-adapter-manifest.md) | active |
 | 2026-08-21 | [v2.0.0 Cursor 环境包 + tag](./2026-08-21-v2.0.0-cursor-pack.md) | active |

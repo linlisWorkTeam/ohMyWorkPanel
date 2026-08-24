@@ -40,7 +40,7 @@ export const api = {
   addMember: (input: {
     groupId: string; kind: "user" | "agent" | "chatbot"; displayName: string; roleDescription: string;
     avatarColor?: string; adapter?: string; executablePath?: string;
-    chatbotProvider?: "opencode-go" | "deepseek"; apiKey?: string; model?: string;
+    chatbotProvider?: "opencode-go" | "deepseek" | "custom"; apiKey?: string; apiUrl?: string; model?: string;
     loginUsername?: string; loginPassword?: string; existingAuthUserId?: string;
     invite?: boolean;
   }) => invoke<AddMemberResult>("add_member", { input }),
@@ -55,6 +55,16 @@ export const api = {
     invoke<Group>("set_group_archived_cmd", { groupId, archived }),
   updateMemberModel: (memberId: string, model: string | null) =>
     invoke<Member>("update_member_model_cmd", { memberId, model }),
+  setMemberApiKey: (memberId: string, apiKey: string | null) =>
+    invoke<Member>("set_member_api_key", { memberId, apiKey }),
+  setMemberApiUrl: (memberId: string, apiUrl: string | null) =>
+    invoke<Member>("set_member_api_url", { memberId, apiUrl }),
+  checkForUpdate: (manifestUrl?: string) =>
+    invoke<import("./types").UpdateCheckResult>("check_for_update", { manifestUrl }),
+  downloadUpdate: (url: string, expectedSha256?: string | null) =>
+    invoke<string>("download_update", { url, expectedSha256 }),
+  exitAndInstall: (installerPath: string) =>
+    invoke<void>("exit_and_install", { installerPath }),
   removeMember: (groupId: string, memberId: string) => invoke<void>("remove_member", { groupId, memberId }),
   purgeMember: (groupId: string, memberId: string) => invoke<void>("remove_member", { groupId, memberId }),
   setAdmin: (groupId: string, memberId: string | null) => invoke<GroupState>("set_admin", { groupId, memberId }),
@@ -147,42 +157,29 @@ export const api = {
   dispatchA2a: async () => {
     throw new Error("Desktop mode: A2A dispatch 仅 Web 服务可用");
   },
-  getVersionBoard: async (_groupId: string): Promise<import("./types").VersionBoard> => {
-    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
-  },
-  createProjectVersion: async (_input: { groupId: string; name?: string; mode?: string; what?: string; who?: string; how?: string; oneLiner?: string; requesterMemberId?: string }): Promise<import("./types").ProjectVersion> => {
-    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
-  },
-  updateVersionRoadmap: async (_versionId: string, _input: { what?: string; who?: string; how?: string; oneLiner?: string; name?: string; requesterMemberId?: string }): Promise<import("./types").ProjectVersion> => {
-    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
-  },
-  startVersionAsk: async (_versionId: string, _senderMemberId: string): Promise<{ version: import("./types").ProjectVersion; runId: string }> => {
-    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
-  },
-  cancelVersionAsk: async (_versionId: string): Promise<import("./types").ProjectVersion> => {
-    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
-  },
-  approveVersionWaves: async (_versionId: string, _waves?: { title: string }[]): Promise<{ version: import("./types").ProjectVersion; waves: import("./types").Wave[] }> => {
-    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
-  },
-  playWave: async (_waveId: string, _senderMemberId: string): Promise<{ wave: import("./types").Wave; runId: string }> => {
-    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
-  },
-  pauseWave: async (_waveId: string): Promise<import("./types").Wave> => {
-    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
-  },
-  advanceWave: async (_waveId: string): Promise<import("./types").Wave> => {
-    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
-  },
-  playVersion: async (_versionId: string, _senderMemberId: string): Promise<{ wave: import("./types").Wave | null; runId?: string; status?: string }> => {
-    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
-  },
-  pauseVersion: async (_versionId: string): Promise<{ ok: boolean }> => {
-    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
-  },
-  releaseVersion: async (_versionId: string, _gitTag?: string): Promise<import("./types").ProjectVersion> => {
-    throw new Error("Desktop mode: 版本页仅 Web 服务可用");
-  },
+  getVersionBoard: (groupId: string) => invoke<import("./types").VersionBoard>("get_version_board", { groupId }),
+  createProjectVersion: (input: { groupId: string; name?: string; mode?: string; what?: string; who?: string; how?: string; oneLiner?: string; requesterMemberId?: string }): Promise<import("./types").ProjectVersion> =>
+    invoke<import("./types").ProjectVersion>("create_project_version", { input }),
+  updateVersionRoadmap: (versionId: string, input: { what?: string; who?: string; how?: string; oneLiner?: string; name?: string; requesterMemberId?: string }): Promise<import("./types").ProjectVersion> =>
+    invoke<import("./types").ProjectVersion>("update_version_roadmap", { versionId, input }),
+  startVersionAsk: (versionId: string, senderMemberId: string): Promise<{ version: import("./types").ProjectVersion; runId: string }> =>
+    invoke<{ version: import("./types").ProjectVersion; runId: string }>("start_version_ask", { versionId, senderMemberId }),
+  cancelVersionAsk: (versionId: string): Promise<import("./types").ProjectVersion> =>
+    invoke<import("./types").ProjectVersion>("cancel_version_ask", { versionId }),
+  approveVersionWaves: (versionId: string, waves?: { title: string }[]): Promise<{ version: import("./types").ProjectVersion; waves: import("./types").Wave[] }> =>
+    invoke<{ version: import("./types").ProjectVersion; waves: import("./types").Wave[] }>("approve_version_waves", { versionId, waves }),
+  playWave: (waveId: string, senderMemberId: string): Promise<{ wave: import("./types").Wave; runId: string }> =>
+    invoke<{ wave: import("./types").Wave; runId: string }>("play_wave", { waveId, senderMemberId }),
+  pauseWave: (waveId: string): Promise<import("./types").Wave> =>
+    invoke<import("./types").Wave>("pause_wave", { waveId }),
+  advanceWave: (waveId: string): Promise<import("./types").Wave> =>
+    invoke<import("./types").Wave>("advance_wave", { waveId }),
+  playVersion: (versionId: string, senderMemberId: string): Promise<{ wave: import("./types").Wave | null; runId?: string; status?: string }> =>
+    invoke<{ wave: import("./types").Wave | null; runId?: string; status?: string }>("play_version", { versionId, senderMemberId }),
+  pauseVersion: (versionId: string): Promise<{ ok: boolean }> =>
+    invoke<{ ok: boolean }>("pause_version", { versionId }),
+  releaseVersion: (versionId: string, gitTag?: string): Promise<import("./types").ProjectVersion> =>
+    invoke<import("./types").ProjectVersion>("release_version", { versionId, gitTag }),
   updateGroupWorkspace: (groupId: string, workspacePath: string) =>
     invoke<Group>("update_group_workspace_cmd", { groupId, workspacePath }),
   updateMemberWorkspace: (memberId: string, workspacePath: string) =>

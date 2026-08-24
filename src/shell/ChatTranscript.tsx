@@ -97,8 +97,9 @@ const TranscriptRow = memo(function TranscriptRow({
   const openMenu = (x: number, y: number) => setMenu({ x, y });
   const hold = useLongPress(openMenu);
 
+  const copySource = message.content || run?.errorMessage || "";
   const items: ActionItem[] = [
-    { id: "copy", label: "复制", onSelect: () => void copyText(message.content || "") },
+    { id: "copy", label: "复制", onSelect: () => void copyText(copySource) },
     { id: "quote", label: "引用", onSelect: () => onQuote?.(message, senderName) },
   ];
   if (showSpeak) {
@@ -153,7 +154,7 @@ const TranscriptRow = memo(function TranscriptRow({
     <div className={own ? "wp-row me" : "wp-row"} data-msg-id={message.id}>
       <div
         className={own ? "wp-av me" : "wp-av"}
-        style={{ background: sender?.avatarColor ?? "#8792a5" }}
+        style={{ background: sender?.avatarColor ?? "var(--lp-text-tertiary)" }}
       >
         {sender?.displayName.slice(0, 1) ?? "?"}
       </div>

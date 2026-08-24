@@ -39,3 +39,7 @@ dist.tar.gz
 .linlis/
 .ohmyworkpanel/
 .local-panel/
+
+.playwright-cli/
+src-tauri/.playwright-cli/
+

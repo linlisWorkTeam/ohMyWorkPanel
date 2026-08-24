@@ -5,6 +5,7 @@ set -euo pipefail
 source "$(dirname "$0")/release-layout.sh"
 
 BUILD="${1:-auto}" # auto | skip
+PRODUCTION_SERVICE="${OHMYWORKPANEL_PRODUCTION_SERVICE:-ohmyworkpanel.service}"
 
 echo "==> deploy-canary: slot=${CANARY_SLOT} port=${CANARY_PORT}"
 mkdir -p "${CANARY_SLOT}/bin" "${CANARY_SLOT}/dist" "${CANARY_SLOT}/meta" "${CANARY_SLOT}/scripts" "${CANARY_DATA}"
@@ -86,10 +87,10 @@ systemctl restart ohmyworkpanel-canary.service
 sleep 2
 systemctl is-active ohmyworkpanel-canary.service
 # Fail loud if deploy-canary accidentally stopped production.
-if ! systemctl is-active --quiet ohmyworkpanel.service; then
-  echo "ERROR: production ohmyworkpanel.service is not active after canary deploy" >&2
+if ! systemctl is-active --quiet "${PRODUCTION_SERVICE}"; then
+  echo "ERROR: production ${PRODUCTION_SERVICE} is not active after canary deploy" >&2
   echo "Canary must never take prod down — investigate before continuing." >&2
-  systemctl status ohmyworkpanel.service --no-pager -l >&2 || true
+  systemctl status "${PRODUCTION_SERVICE}" --no-pager -l >&2 || true
   exit 1
 fi
 curl -sS -o /dev/null -w "canary_http=%{http_code}\n" "http://127.0.0.1:${CANARY_PORT}/" || true

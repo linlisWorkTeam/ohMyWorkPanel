@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
+import { PageShell } from "./components/ui";
 import type { Experience, Member } from "./types";
 
 interface ExperiencePanelProps {
@@ -45,7 +46,7 @@ export function ExperiencePanel({ groupId, members, ownerId, onError }: Experien
   };
 
   return (
-    <div className="pm-panel">
+    <PageShell className="pm-panel" density="compact">
       <div className="pm-body">
         <div className="exp-toolbar">
           <input
@@ -100,7 +101,7 @@ export function ExperiencePanel({ groupId, members, ownerId, onError }: Experien
           </>
         )}
       </div>
-    </div>
+    </PageShell>
   );
 }
 

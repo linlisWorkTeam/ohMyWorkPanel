@@ -1,6 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { FormEvent, KeyboardEvent, memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from "react";
+import { FormEvent, KeyboardEvent, memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import { api, getAuthToken, onUnauthorized, requiresAuth, setAuthToken } from "./api";
 import {
   BOTTOM_THRESHOLD_PX,
@@ -42,7 +42,7 @@ import {
   sliceVisibleMessages,
 } from "./messageHistory";
 import { loadAuthUser, resolveSenderMemberId, saveAuthUser, type AuthUser } from "./authSession";
-import { useAppFrame, CONCEDE_RIGHT } from "./components/ui";
+import { ButtonGroup, FormField, Modal, Toast, UiButton, useAppFrame, CONCEDE_RIGHT } from "./components/ui";
 import { loadSendKeyMode, saveSendKeyMode, sendKeyHint, shouldSendOnKey, type SendKeyMode } from "./sendKey";
 import type { ChatEvent, ExtensionStatus, Group, GroupState, Member, PresetRole, RuntimeSettings, TaskRun } from "./types";
 import { Avatar, Status, TypingIndicator, RunQueuePane, EmptyHome } from "./components/furniture";
@@ -92,8 +92,9 @@ type NewMember = {
   roleDescription: string;
   adapter: string;
   executablePath: string;
-  chatbotProvider: "opencode-go" | "deepseek";
+  chatbotProvider: "opencode-go" | "deepseek" | "custom";
   apiKey: string;
+  apiUrl: string;
   model: string;
   loginUsername: string;
   loginPassword: string;
@@ -103,10 +104,16 @@ type NewMember = {
 type Session = "checking" | "login" | "ready";
 const emptyMember: NewMember = {
   kind: "agent", displayName: "", roleDescription: "", adapter: "mock", executablePath: "",
-  chatbotProvider: "opencode-go", apiKey: "", model: "",
+  chatbotProvider: "opencode-go", apiKey: "", apiUrl: "", model: "",
   loginUsername: "", loginPassword: "",
   userAddMode: "create", existingAuthUserId: "",
 };
+/** chatbot provider → adapter 键（DeepSeek 官方 / OpenCode Go / 自定义）。 */
+function chatbotAdapterFor(provider: "opencode-go" | "deepseek" | "custom"): string {
+  if (provider === "deepseek") return "chatbot-deepseek";
+  if (provider === "custom") return "chatbot-custom";
+  return "chatbot-opencode-go";
+}
 /** DeepSeek Harness Web UI 默认地址（`dsh web`，默认 :3080）。可手动改成实际端口。 */
 const DSH_WEB_URL = "http://127.0.0.1:3080";
 
@@ -164,6 +171,70 @@ export function App() {
   const [cliAdapters, setCliAdapters] = useState<CliAdapterOption[]>(FALLBACK_CLI_ADAPTERS);
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [settings, setSettings] = useState<RuntimeSettings | null>(null);
+  const [manifestUrl, setManifestUrl] = useState(() => localStorage.getItem("updateManifestUrl") ?? "");
+  const [updateMsg, setUpdateMsg] = useState<string | null>(null);
+  const [updateLink, setUpdateLink] = useState<string | null>(null);
+  const [updating, setUpdating] = useState(false);
+  const [updatingNow, setUpdatingNow] = useState(false);
+  const [updateNotice, setUpdateNotice] = useState<import("./types").UpdateCheckResult | null>(null);
+  // 启动就绪后自动检查一次更新（有清单 URL 且未忽略该版本时才弹窗），并每小时复查一次。
+  // ⚠️ 必须位于 auth early-return 之前（React #310：不得在 return 后调用 hooks）。
+  useEffect(() => {
+    if (session !== "ready") return;
+    const run = () => {
+      const url = localStorage.getItem("updateManifestUrl") ?? "";
+      void (async () => {
+        try {
+          const r = await api.checkForUpdate(url.trim() || undefined);
+          if (r.hasUpdate && localStorage.getItem("updateIgnored") !== r.latestVersion) {
+            setUpdateNotice(r);
+          }
+        } catch { /* 静默：网络异常不打扰 */ }
+      })();
+    };
+    const timer = window.setTimeout(run, 2500);
+    const interval = window.setInterval(run, 60 * 60 * 1000);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearInterval(interval);
+    };
+  }, [session]);
+  const runUpdateCheck = async () => {
+    setUpdating(true);
+    setUpdateMsg(null);
+    setUpdateLink(null);
+    try {
+      localStorage.setItem("updateManifestUrl", manifestUrl.trim());
+      const r = await api.checkForUpdate(manifestUrl.trim() || undefined);
+      if (!r.enabled) {
+        setUpdateMsg(r.error ? `未找到可用更新源：${r.error}` : "未找到可用更新源（可填写自定义清单 URL）。");
+      } else if (r.error) {
+        setUpdateMsg(r.error);
+      } else if (r.hasUpdate) {
+        setUpdateMsg(`发现新版本 ${r.latestVersion}（当前 ${r.currentVersion}）${r.notes ? `：${r.notes}` : ""}`);
+        setUpdateLink(r.downloadUrl ?? null);
+        if (localStorage.getItem("updateIgnored") !== r.latestVersion) setUpdateNotice(r);
+      } else {
+        setUpdateMsg(`已是最新版本（${r.currentVersion}）。`);
+      }
+    } catch (reason) {
+      setUpdateMsg(readError(reason));
+    } finally {
+      setUpdating(false);
+    }
+  };
+  // 一键更新：下载（sha256 校验）→ 自动关闭应用并静默安装到 %LOCALAPPDATA%\ohMyWorkPanel
+  const startUpdate = async (r: import("./types").UpdateCheckResult) => {
+    if (!r.downloadUrl || updatingNow) return;
+    setUpdatingNow(true);
+    try {
+      const path = await api.downloadUpdate(r.downloadUrl, r.sha256 ?? null);
+      await api.exitAndInstall(path); // 应用随即退出，安装器独立进程接管
+    } catch (reason) {
+      setUpdatingNow(false);
+      setError(readError(reason));
+    }
+  };
   const [agentCfgImported, setAgentCfgImported] = useState(false);
   const [wsLink, setWsLink] = useState<{ state: WsLinkState; elapsedMs: number }>({
     state: "connected",
@@ -823,6 +894,24 @@ export function App() {
       });
     } catch (reason) { setError(readError(reason)); }
   };
+  const changeMemberApiKey = async (member: Member, apiKey: string) => {
+    try {
+      const updated = await api.setMemberApiKey(member.id, apiKey || null);
+      setCurrent((prev) => {
+        if (!prev) return prev;
+        return { ...prev, members: prev.members.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)) };
+      });
+    } catch (reason) { setError(readError(reason)); }
+  };
+  const changeMemberApiUrl = async (member: Member, apiUrl: string) => {
+    try {
+      const updated = await api.setMemberApiUrl(member.id, apiUrl || null);
+      setCurrent((prev) => {
+        if (!prev) return prev;
+        return { ...prev, members: prev.members.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)) };
+      });
+    } catch (reason) { setError(readError(reason)); }
+  };
   const handleOcr = async () => {
     try {
       const selected = await open({
@@ -1098,10 +1187,11 @@ export function App() {
         executablePath: newMember.kind === "agent" ? newMember.executablePath : undefined,
         chatbotProvider: newMember.kind === "chatbot" ? newMember.chatbotProvider : undefined,
         apiKey: newMember.kind === "chatbot" ? newMember.apiKey : undefined,
+        apiUrl: newMember.kind === "chatbot" ? (newMember.apiUrl.trim() || undefined) : undefined,
         model: newMember.kind === "agent" || newMember.kind === "chatbot"
           ? (newMember.model || defaultModelForAdapter(
               newMember.kind === "chatbot"
-                ? (newMember.chatbotProvider === "deepseek" ? "chatbot-deepseek" : "chatbot-opencode-go")
+                ? chatbotAdapterFor(newMember.chatbotProvider)
                 : newMember.adapter,
             ) || undefined)
           : undefined,
@@ -1450,6 +1540,8 @@ export function App() {
           onRemove={removeMember}
           onDetect={detect}
           onModel={(m, model) => void changeMemberModel(m, model)}
+          onEditApiKey={(m, key) => void changeMemberApiKey(m, key)}
+          onEditApiUrl={(m, url) => void changeMemberApiUrl(m, url)}
           onCancelRun={(run) => void changeRun(run, "cancel")}
           onOpenDsh={() => setMainView("dsh")}
         />
@@ -1541,20 +1633,29 @@ export function App() {
           {addMemberKind === "chatbot" && <>
             <select value={newMember.chatbotProvider} onChange={(event) => {
               const chatbotProvider = event.target.value as NewMember["chatbotProvider"];
-              const adapter = chatbotProvider === "deepseek" ? "chatbot-deepseek" : "chatbot-opencode-go";
-              setNewMember((value) => ({ ...value, chatbotProvider, model: defaultModelForAdapter(adapter) }));
+              setNewMember((value) => ({ ...value, chatbotProvider, model: defaultModelForAdapter(chatbotAdapterFor(chatbotProvider)) }));
             }}>
               <option value="opencode-go">OpenCode Go</option>
               <option value="deepseek">DeepSeek 官方</option>
+              <option value="custom">自定义（OpenAI 兼容）</option>
             </select>
-            <select
-              value={newMember.model || defaultModelForAdapter(newMember.chatbotProvider === "deepseek" ? "chatbot-deepseek" : "chatbot-opencode-go")}
+            <input
+              value={newMember.apiUrl}
+              onChange={(event) => setNewMember((value) => ({ ...value, apiUrl: event.target.value }))}
+              placeholder="OpenAI 兼容端点，如 https://api.xxx.com/v1（自动拼 /chat/completions；不要填网站首页）"
+              required={newMember.chatbotProvider === "custom"}
+            />
+            <input
+              list="chatbot-model-options"
+              value={newMember.model || defaultModelForAdapter(chatbotAdapterFor(newMember.chatbotProvider))}
               onChange={(event) => setNewMember((value) => ({ ...value, model: event.target.value }))}
-            >
-              {modelsForAdapter(newMember.chatbotProvider === "deepseek" ? "chatbot-deepseek" : "chatbot-opencode-go").map((m) => (
-                <option key={m} value={m}>{m}</option>
+              placeholder="模型名（可直接输入任意模型，或从候选列表选择）"
+            />
+            <datalist id="chatbot-model-options">
+              {modelsForAdapter(chatbotAdapterFor(newMember.chatbotProvider)).map((m) => (
+                <option key={m} value={m} />
               ))}
-            </select>
+            </datalist>
             <input type="password" autoComplete="off" value={newMember.apiKey} onChange={(event) => setNewMember((value) => ({ ...value, apiKey: event.target.value }))} placeholder="API Key（仅存服务器，不进 git）" required />
             <p className="form-hint">{isChatGroup ? "聊天群可添加多个机器人。" : "项目群仅可添加一个聊天机器人。"}</p>
           </>}
@@ -1659,6 +1760,25 @@ export function App() {
                   ),
                 })}
               </p>
+              <h3 className="settings-section-title">更新</h3>
+              <FormField
+                label="更新清单 URL"
+                htmlFor="update-manifest-url"
+                hint="留空时自动发现本机 Web 服务或云端更新源。"
+              >
+                <input
+                  id="update-manifest-url"
+                  value={manifestUrl}
+                  onChange={(event) => setManifestUrl(event.target.value)}
+                  placeholder="可选：自定义清单 URL"
+                />
+              </FormField>
+              <ButtonGroup align="start">
+                <UiButton type="button" size="sm" onClick={() => void runUpdateCheck()} disabled={updating}>
+                  {updating ? "检查中…" : "检查更新"}
+                </UiButton>
+                {updateMsg && <span className="form-hint">{updateMsg}</span>}
+              </ButtonGroup>
               <button className="primary-wide" type="submit">保存设置</button>
             </form>
           ) : (
@@ -1745,11 +1865,38 @@ export function App() {
       </Modal>
     )}
     {releasingBannerText(wsLink.state, wsLink.elapsedMs) && (
-      <div className="error-toast" style={{ bottom: error ? 64 : 16 }}>
-        <span>{releasingBannerText(wsLink.state, wsLink.elapsedMs)}</span>
-      </div>
+      <Toast tone="warning" stacked={Boolean(error)}>{releasingBannerText(wsLink.state, wsLink.elapsedMs)}</Toast>
     )}
-    {error && <div className="error-toast"><span>{error}</span><button onClick={() => setError(null)}>×</button></div>}
+    {error && <Toast tone="danger" onClose={() => setError(null)}>{error}</Toast>}
+    {updateNotice && updateNotice.hasUpdate && updateNotice.latestVersion && (
+      <Modal title="发现新版本" onClose={() => setUpdateNotice(null)}>
+        <p className="form-hint" style={{ marginBottom: 10 }}>
+          {updateNotice.currentVersion} → <strong>{updateNotice.latestVersion}</strong>
+          {updateNotice.notes ? `　${updateNotice.notes}` : ""}
+        </p>
+        <ButtonGroup align="stretch">
+          <UiButton
+            type="button"
+            variant="primary"
+            disabled={updatingNow}
+            onClick={() => void startUpdate(updateNotice)}
+          >
+            {updatingNow ? "更新中…" : "立即更新"}
+          </UiButton>
+          <UiButton
+            type="button"
+            size="sm"
+            onClick={() => {
+              if (updateNotice.latestVersion) localStorage.setItem("updateIgnored", updateNotice.latestVersion);
+              setUpdateNotice(null);
+            }}
+          >
+            忽略此版本
+          </UiButton>
+          <UiButton type="button" size="sm" onClick={() => setUpdateNotice(null)}>稍后</UiButton>
+        </ButtonGroup>
+      </Modal>
+    )}
   </main>;
 }
 
@@ -1827,7 +1974,6 @@ function AuthScreen({ error, onError, onAuthed }: { error: string | null; onErro
   );
 }
 
-function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) { return <div className="modal-backdrop"><section className="modal"><header><h2>{title}</h2><button className="icon-button" onClick={onClose}>×</button></header>{children}</section></div>; }
 function NumberSetting({ label, value, onChange, min, max }: { label: string; value: number; onChange: (value: number) => void; min: number; max: number }) { return <label>{label}<input type="number" min={min} max={max} value={value} onChange={(event) => onChange(Number(event.target.value))} /></label>; }
 function isUnauthorizedError(reason: unknown) {
   const message = readError(reason);

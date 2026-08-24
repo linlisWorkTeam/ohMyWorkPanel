@@ -6,6 +6,7 @@ import { ThemeProvider } from "./theme";
 import "./shell/tokens.css";
 import "./styles.css";
 import "./themes.css";
+import "./components/ui/ui.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

@@ -49,6 +49,16 @@ systemctl is-active ohmyworkpanel.service
 
 `promote-canary.sh` 在 stop 之后设有 EXIT/INT/TERM trap，中断时仍会尝试 `systemctl start` 生产，避免永久 dead。
 
+## 3. 桌面包（Windows 本地构建）——替代式发布
+
+桌面安装包流程见 [`docs/how-to/build-desktop-package.md`](how-to/build-desktop-package.md)，要点：
+
+- **增量出包**：`$env:CARGO_PROFILE_RELEASE_INCREMENTAL = "true"` 后 `pnpm tauri build`
+  （release 增量缓存，小改动 ~1 分钟；首次全量 15–30 分钟）
+- 一键助手：`powershell -File scripts/build-desktop.ps1`（门禁 + 构建 + 覆盖发布 `.local-panel\release` + 校验和）
+- **替代式发布约定**（本轮验收期间）：所有 bugfix 统一收拢为一个版本（当前 2.1.2），同名安装包覆盖，不逐条升号
+- 门禁须含 `cargo check --lib`（gui 特性）——`--no-default-features` 门禁不编译 `commands.rs`，曾漏过 4 个编译错
+
 ## F. 前端壳冒烟（React / 静态资源）
 
 「前台崩了」常见并不是 React 逻辑 bug，而是 **壳起不来 / 资源错配 / 服务未拉起**。每次发版至少做：
