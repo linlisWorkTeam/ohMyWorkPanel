@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
+import { PageShell } from "./components/ui";
 import type { LogEntry, LogLevel } from "./types";
 
 const PAGE = 50;
@@ -47,7 +48,7 @@ export function LogsPanel({ onError }: { onError: (msg: string) => void }) {
   };
 
   return (
-    <div className="pm-panel">
+    <PageShell className="pm-panel" density="compact">
       <div className="pm-body">
         <div className="exp-toolbar">
           <select className="pm-select" value={level} onChange={(e) => setLevel(e.target.value as LogLevel | "")}>
@@ -100,6 +101,6 @@ export function LogsPanel({ onError }: { onError: (msg: string) => void }) {
           </>
         )}
       </div>
-    </div>
+    </PageShell>
   );
 }

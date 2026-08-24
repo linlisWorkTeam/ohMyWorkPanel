@@ -46,6 +46,7 @@ scripts/
 - **新增 CLI 适配器**：见 [`docs/superpowers/specs/2026-08-21-cli-adapter-manifest.md`](docs/superpowers/specs/2026-08-21-cli-adapter-manifest.md)（终态 `*.adapter.json`）。**P0 未落地前**仍可改 `AdapterKind` + `build_args` + `candidate_executables`；落地后内部新 CLI 只加 json，禁止 `sh -c`。chatbot / mock 不是 CLI 插件。
 - **Rust 风格**：`AppResult<T> = Result<T, String>`；行内链式 `map_err(|e| e.to_string())?` 与现有风格一致。
 - **前端适配器标签**：在 `App.tsx:155` 的 `<select>` 里更新文案；`types.ts:21` 的 adapter union 保持同步。
+- **前端页面与主题规范**：新增用户页面必须使用 `src/components/ui/PageLayout.tsx` 的页面骨架；弹窗、表单、按钮组、徽章、通知和右键菜单优先复用 `src/components/ui/` 原子组件。组件样式只引用语义 `--lp-*` token，不写颜色字面量；同时覆盖桌面/网页、窄容器、`max-width: 720px` 手机端及粗指针 44px 触控目标。提交前运行 `pnpm run check:colors`，规则测试见 `src/components/ui/uiComponents.test.ts`。
 - **Commit 风格**：中文或英文均可，建议类型前缀（`chore:`/`refactor:`/`feat:`/`test:`/`fix:`）。
 - **已忽略文件**：`node_modules/`、`dist/`、`src-tauri/target/`、`src-tauri/gen/`、`.pnpm-store/`、`*.sqlite3*`。
 

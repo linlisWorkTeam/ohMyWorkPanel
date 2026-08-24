@@ -309,10 +309,17 @@ pub fn add_member(input: AddMemberInput, state: State<'_, AppState>) -> AppResul
             .as_deref()
             .map(str::trim)
             .filter(|s| !s.is_empty())
-            .unwrap_or("deepseek-v4-flash");
+            .unwrap_or("deepseek-chat");
+        let api_url = input
+            .api_url
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
+        crate::adapters::chatbot::validate_api_url(api_url.as_deref())?;
         conn.execute(
-            "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at,api_key,warm_status,model) VALUES(?1,?2,NULL,'ready',?3,?4,'cold',?5)",
-            params![member_id, adapter, created_at, crate::db::encrypt_secret(api_key)?, model],
+            "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at,api_key,warm_status,model,api_url) VALUES(?1,?2,NULL,'ready',?3,?4,'cold',?5,?6)",
+            params![member_id, adapter, created_at, crate::db::encrypt_secret(api_key)?, model, api_url],
         )
         .map_err(|e| e.to_string())?;
     }
@@ -1083,4 +1090,524 @@ pub async fn get_run_phases(
     let state = state.inner().clone();
     let conn = open_db(&state.db_path)?;
     crate::db::list_run_phases(&conn, &run_id)
+}
+
+// ============================================================================
+// 版本 / Wave 工作流（Desktop 桥——与 web handler 同语义；桌面为单机无登录）
+// ============================================================================
+
+/// 桌面版版本管理权限：发送者须为本群活跃成员，且为群主或管理员成员。
+fn require_desktop_version_manager(
+    conn: &rusqlite::Connection,
+    group: &crate::models::Group,
+    sender_member_id: &str,
+) -> AppResult<()> {
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM members WHERE id=?1 AND group_id=?2 AND is_active=1",
+            params![sender_member_id, group.id],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if count != 1 {
+        return Err("发送者不是本群活跃成员。".into());
+    }
+    let is_manager = group.owner_member_id == sender_member_id
+        || group.admin_member_id.as_deref() == Some(sender_member_id);
+    if !is_manager {
+        return Err("仅群主或管理员可管理版本".into());
+    }
+    Ok(())
+}
+
+/// 桌面版：以群管理员 Agent 发起一次 kickoff 任务（消息 + mention + run + 调度）。
+fn kickoff_admin_run_desktop(
+    conn: &rusqlite::Connection,
+    state: &AppState,
+    app: &AppHandle,
+    group: &crate::models::Group,
+    sender_member_id: &str,
+    content: String,
+) -> AppResult<String> {
+    let admin = group
+        .admin_member_id
+        .clone()
+        .ok_or_else(|| "未设置管理员 Agent".to_string())?;
+    let msg = Message {
+        id: id(),
+        group_id: group.id.clone(),
+        sender_member_id: sender_member_id.to_string(),
+        parent_run_id: None,
+        content,
+        status: "completed".into(),
+        created_at: now(),
+        has_thinking: false,
+        has_artifact: false,
+    };
+    conn.execute(
+        "INSERT INTO messages(id,group_id,sender_member_id,parent_run_id,content,status,created_at) VALUES(?1,?2,?3,NULL,?4,?5,?6)",
+        params![msg.id, msg.group_id, msg.sender_member_id, msg.content, msg.status, msg.created_at],
+    )
+    .map_err(|e| e.to_string())?;
+    let _ = conn.execute(
+        "INSERT OR IGNORE INTO mentions(message_id,member_id) VALUES(?1,?2)",
+        params![msg.id, admin],
+    );
+    let rid = create_task_run(conn, &group.id, &msg.id, &admin, None, 0)?;
+    let _ = app.emit("chat-event", ChatEvent {
+        kind: "message_created".into(),
+        group_id: group.id.clone(),
+        run_id: None,
+        message_id: Some(msg.id),
+        delta: None,
+        status: Some("completed".into()),
+        error: None,
+        channel: None,
+        replace: None,
+        phase: None,
+        elapsed_ms: None,
+        total_ms: None,
+        seq: None,
+        delta_count: None,
+        rss_mib: None,
+    });
+    schedule_group(to_scheduler(state, app), group.id.clone());
+    Ok(rid)
+}
+
+fn admin_display_name(conn: &rusqlite::Connection, group: &crate::models::Group) -> String {
+    group
+        .admin_member_id
+        .as_ref()
+        .and_then(|aid| {
+            conn.query_row("SELECT display_name FROM members WHERE id=?1", params![aid], |r| r.get::<_, String>(0))
+                .ok()
+        })
+        .unwrap_or_else(|| "管理员".into())
+}
+
+#[tauri::command]
+pub async fn get_version_board(group_id: String, state: State<'_, AppState>) -> AppResult<crate::workflow::VersionBoard> {
+    let state = state.inner().clone();
+    let conn = open_db(&state.db_path)?;
+    let group = get_group(&conn, &group_id)?;
+    crate::workflow::board_for_group(&state.db_path, &group)
+}
+
+#[tauri::command]
+pub async fn create_project_version(
+    input: crate::workflow::CreateVersionInput,
+    state: State<'_, AppState>,
+) -> AppResult<crate::workflow::ProjectVersion> {
+    let state = state.inner().clone();
+    let conn = open_db(&state.db_path)?;
+    let group = get_group(&conn, &input.group_id)?;
+    let sender = input.requester_member_id.as_deref().unwrap_or_default();
+    require_desktop_version_manager(&conn, &group, sender)?;
+    crate::workflow::create_version(&conn, &group, &input)
+}
+
+#[tauri::command]
+pub async fn update_version_roadmap(
+    version_id: String,
+    input: crate::workflow::UpdateRoadmapInput,
+    state: State<'_, AppState>,
+) -> AppResult<crate::workflow::ProjectVersion> {
+    let state = state.inner().clone();
+    let conn = open_db(&state.db_path)?;
+    let v = crate::workflow::get_version(&conn, &version_id)?;
+    let group = get_group(&conn, &v.group_id)?;
+    let sender = input.requester_member_id.as_deref().unwrap_or_default();
+    require_desktop_version_manager(&conn, &group, sender)?;
+    crate::workflow::update_roadmap(&conn, &version_id, &input)
+}
+
+#[tauri::command]
+pub async fn start_version_ask(
+    version_id: String,
+    sender_member_id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<serde_json::Value> {
+    let state = state.inner().clone();
+    let conn = open_db(&state.db_path)?;
+    let v = crate::workflow::get_version(&conn, &version_id)?;
+    let group = get_group(&conn, &v.group_id)?;
+    require_desktop_version_manager(&conn, &group, &sender_member_id)?;
+    let v = crate::workflow::start_ask(&conn, &group, &version_id)?;
+    let prompt = crate::workflow::build_ask_kickoff_prompt(&v);
+    let content = format!("@{} {}", admin_display_name(&conn, &group), prompt);
+    let run_id = kickoff_admin_run_desktop(&conn, &state, &app, &group, &sender_member_id, content)?;
+    Ok(serde_json::json!({ "version": v, "runId": run_id }))
+}
+
+#[tauri::command]
+pub async fn cancel_version_ask(
+    version_id: String,
+    sender_member_id: Option<String>,
+    state: State<'_, AppState>,
+) -> AppResult<crate::workflow::ProjectVersion> {
+    let state = state.inner().clone();
+    let conn = open_db(&state.db_path)?;
+    let v = crate::workflow::get_version(&conn, &version_id)?;
+    let group = get_group(&conn, &v.group_id)?;
+    // 桌面单机：未显式传发送者时按群主处理
+    let sender = sender_member_id
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| group.owner_member_id.clone());
+    require_desktop_version_manager(&conn, &group, &sender)?;
+    crate::workflow::cancel_ask(&conn, &version_id)
+}
+
+#[tauri::command]
+pub async fn approve_version_waves(
+    version_id: String,
+    waves: Option<Vec<crate::workflow::ApproveWaveItem>>,
+    sender_member_id: Option<String>,
+    state: State<'_, AppState>,
+) -> AppResult<serde_json::Value> {
+    let state = state.inner().clone();
+    let conn = open_db(&state.db_path)?;
+    let v = crate::workflow::get_version(&conn, &version_id)?;
+    let group = get_group(&conn, &v.group_id)?;
+    // 桌面单机：未显式传发送者时按群主处理
+    let sender = sender_member_id
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| group.owner_member_id.clone());
+    require_desktop_version_manager(&conn, &group, &sender)?;
+    let mut input = crate::workflow::ApproveWavesInput { waves: waves.unwrap_or_default() };
+    if input.waves.is_empty() {
+        input.waves = crate::workflow::default_waves_from_roadmap(&v);
+    }
+    let (version, waves) = crate::workflow::approve_waves(&conn, &version_id, &input)?;
+    Ok(serde_json::json!({ "version": version, "waves": waves }))
+}
+
+#[tauri::command]
+pub async fn play_wave(
+    wave_id: String,
+    sender_member_id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<serde_json::Value> {
+    let state = state.inner().clone();
+    let conn = open_db(&state.db_path)?;
+    let w0 = crate::workflow::get_wave(&conn, &wave_id)?;
+    let group = get_group(&conn, &w0.group_id)?;
+    require_desktop_version_manager(&conn, &group, &sender_member_id)?;
+    let w = crate::workflow::play_wave(&conn, &wave_id)?;
+    let v = crate::workflow::get_version(&conn, &w.version_id)?;
+    let prompt = crate::workflow::build_wave_kickoff_prompt(&v, &w);
+    let run_id = kickoff_admin_run_desktop(
+        &conn,
+        &state,
+        &app,
+        &group,
+        &sender_member_id,
+        format!("@{} {prompt}", admin_display_name(&conn, &group)),
+    )?;
+    Ok(serde_json::json!({ "wave": w, "runId": run_id }))
+}
+
+#[tauri::command]
+pub async fn pause_wave(wave_id: String, state: State<'_, AppState>) -> AppResult<crate::workflow::Wave> {
+    let state = state.inner().clone();
+    let conn = open_db(&state.db_path)?;
+    crate::workflow::pause_wave(&conn, &wave_id)
+}
+
+#[tauri::command]
+pub async fn advance_wave(wave_id: String, state: State<'_, AppState>) -> AppResult<crate::workflow::Wave> {
+    let state = state.inner().clone();
+    let conn = open_db(&state.db_path)?;
+    crate::workflow::advance_wave_phase(&conn, &wave_id)
+}
+
+#[tauri::command]
+pub async fn play_version(
+    version_id: String,
+    sender_member_id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<serde_json::Value> {
+    let state = state.inner().clone();
+    let conn = open_db(&state.db_path)?;
+    let v = crate::workflow::get_version(&conn, &version_id)?;
+    let group = get_group(&conn, &v.group_id)?;
+    require_desktop_version_manager(&conn, &group, &sender_member_id)?;
+    let wave = crate::workflow::play_version_roadmap(&conn, &version_id)?;
+    if let Some(w) = wave {
+        let v = crate::workflow::get_version(&conn, &w.version_id)?;
+        let prompt = crate::workflow::build_wave_kickoff_prompt(&v, &w);
+        let run_id = kickoff_admin_run_desktop(
+            &conn,
+            &state,
+            &app,
+            &group,
+            &sender_member_id,
+            format!("@{} {prompt}", admin_display_name(&conn, &group)),
+        )?;
+        return Ok(serde_json::json!({ "wave": w, "runId": run_id }));
+    }
+    Ok(serde_json::json!({ "wave": null, "status": "awaiting_release" }))
+}
+
+#[tauri::command]
+pub async fn pause_version(version_id: String, state: State<'_, AppState>) -> AppResult<serde_json::Value> {
+    let state = state.inner().clone();
+    let conn = open_db(&state.db_path)?;
+    let v = crate::workflow::get_version(&conn, &version_id)?;
+    let _group = get_group(&conn, &v.group_id)?;
+    crate::workflow::pause_version_roadmap(&conn, &version_id)?;
+    Ok(serde_json::json!({ "ok": true }))
+}
+
+#[tauri::command]
+pub async fn release_version(
+    version_id: String,
+    git_tag: Option<String>,
+    sender_member_id: Option<String>,
+    state: State<'_, AppState>,
+) -> AppResult<crate::workflow::ProjectVersion> {
+    let state = state.inner().clone();
+    let conn = open_db(&state.db_path)?;
+    let v = crate::workflow::get_version(&conn, &version_id)?;
+    let group = get_group(&conn, &v.group_id)?;
+    // 桌面单机：未显式传发送者时按群主处理
+    let sender = sender_member_id
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| group.owner_member_id.clone());
+    require_desktop_version_manager(&conn, &group, &sender)?;
+    crate::workflow::mark_released(&conn, &version_id, git_tag)
+}
+
+/// 解析 "x.y.z" / "x.y.z-beta" / "x.y.z+build" → 数值三元组（忽略预发布/构建后缀）。
+/// （比较逻辑与单测见 models::parse_version / models::is_newer_version，双特性共同编译。）
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateCheckResult {
+    pub enabled: bool,
+    pub current_version: String,
+    pub latest_version: Option<String>,
+    pub has_update: bool,
+    pub notes: Option<String>,
+    pub download_url: Option<String>,
+    pub sha256: Option<String>,
+    pub error: Option<String>,
+}
+
+/// 检查更新：拉取更新清单（{version,notes,url,sha256}），与当前版本比较。
+/// 未配置 manifest_url 时的自动发现候选源（依次尝试，取第一个可解析的清单）：
+/// 1) 本机灰度 Web 服务（出包脚本同步 dist/update.json）
+/// 2) 云端发布源（ECS 灰度 Web；正式发布时部署清单+安装包）
+const DEFAULT_MANIFEST_CANDIDATES: [&str; 2] = [
+    "http://127.0.0.1:8082/update.json",
+    "http://101.132.60.79:8081/update.json",
+];
+
+#[tauri::command]
+pub async fn check_for_update(
+    manifest_url: Option<String>,
+    state: State<'_, AppState>,
+) -> AppResult<UpdateCheckResult> {
+    let state = state.inner().clone();
+    let current = env!("CARGO_PKG_VERSION").to_string();
+    let pinned = manifest_url
+        .map(|u| u.trim().to_string())
+        .filter(|u| !u.is_empty());
+    let candidates: Vec<String> = match &pinned {
+        Some(url) => vec![url.clone()],
+        // 未配置：自动发现（依次尝试默认源，静默跳过失败源）
+        None => DEFAULT_MANIFEST_CANDIDATES.iter().map(|s| s.to_string()).collect(),
+    };
+    let mut last_error: Option<String> = None;
+    for url in &candidates {
+        let output = match tokio::process::Command::new("curl")
+            .args(["-sS", "--max-time", "5", "-L", url])
+            .output()
+            .await
+        {
+            Ok(o) => o,
+            Err(e) => {
+                last_error = Some(format!("无法请求清单：{e}"));
+                continue;
+            }
+        };
+        if !output.status.success() {
+            last_error = Some(format!("HTTP 非 2xx（{url}）"));
+            continue;
+        }
+        let text = String::from_utf8_lossy(&output.stdout).to_string();
+        let value: serde_json::Value = match serde_json::from_str(&text) {
+            Ok(v) => v,
+            Err(e) => {
+                last_error = Some(format!("清单不是合法 JSON（{url}）：{e}"));
+                continue;
+            }
+        };
+        let Some(latest) = value
+            .get("version")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+        else {
+            last_error = Some(format!("清单缺少 version 字段（{url}）"));
+            continue;
+        };
+        let notes = value.get("notes").and_then(|v| v.as_str()).map(str::to_string);
+        let download_url = value.get("url").and_then(|v| v.as_str()).map(str::to_string);
+        let sha256 = value.get("sha256").and_then(|v| v.as_str()).map(str::to_string);
+        let has_update = crate::models::is_newer_version(&latest, &current);
+        if let Ok(conn) = open_db(&state.db_path) {
+            let _ = logger::info(
+                &conn,
+                "updater",
+                &format!("check: source={url} current={current} latest={latest} has_update={has_update}"),
+                None,
+            );
+        }
+        return Ok(UpdateCheckResult {
+            enabled: true,
+            current_version: current,
+            latest_version: Some(latest),
+            has_update,
+            notes,
+            download_url,
+            sha256,
+            error: None,
+        });
+    }
+    // 全部候选源失败：静默禁用（不打扰用户），保留首个错误供设置页排查
+    if let Ok(conn) = open_db(&state.db_path) {
+        let _ = logger::info(
+            &conn,
+            "updater",
+            &format!(
+                "check: all sources failed{}",
+                last_error.as_ref().map(|e| format!(" -> {e}")).unwrap_or_default()
+            ),
+            None,
+        );
+    }
+    Ok(UpdateCheckResult {
+        enabled: false,
+        current_version: current,
+        latest_version: None,
+        has_update: false,
+        notes: None,
+        download_url: None,
+        sha256: None,
+        error: last_error,
+    })
+}
+
+/// 下载安装包到 %TEMP%\ohmyworkpanel-update（可选 sha256 校验，失败即删除并报错）。
+#[tauri::command]
+pub async fn download_update(url: String, expected_sha256: Option<String>) -> AppResult<String> {
+    let dir = std::env::temp_dir().join("ohmyworkpanel-update");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("无法创建下载目录：{e}"))?;
+    let path = dir.join(format!("ohMyWorkPanel-{}.exe", id()));
+    let out = tokio::process::Command::new("curl")
+        .args(["-sSL", "--max-time", "600", "-o", path.to_str().unwrap_or(""), &url])
+        .output()
+        .await
+        .map_err(|e| format!("下载启动失败：{e}"))?;
+    if !out.status.success() {
+        let _ = std::fs::remove_file(&path);
+        return Err(format!(
+            "下载失败（HTTP/网络）：{}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+    if size < 1_000_000 {
+        let _ = std::fs::remove_file(&path);
+        return Err("下载文件异常（过小）".into());
+    }
+    if let Some(expected) = expected_sha256.map(|s| s.trim().to_ascii_lowercase()).filter(|s| !s.is_empty()) {
+        let got = sha256_of_file(&path)?;
+        if got != expected {
+            let _ = std::fs::remove_file(&path);
+            return Err(format!("下载校验失败：哈希不匹配（期望 {expected}，实际 {got}）"));
+        }
+    }
+    Ok(path.to_string_lossy().into_owned())
+}
+
+/// 计算文件 SHA256（Windows certutil，系统自带，避免新增依赖）。
+fn sha256_of_file(path: &std::path::Path) -> Result<String, String> {
+    let out = std::process::Command::new("certutil")
+        .args(["-hashfile", path.to_str().unwrap_or(""), "SHA256"])
+        .output()
+        .map_err(|e| format!("certutil 启动失败：{e}"))?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    for line in text.lines() {
+        let t = line.trim();
+        if t.len() == 64 && t.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Ok(t.to_ascii_lowercase());
+        }
+    }
+    Err(format!("certutil 输出无法解析：{}", text.chars().take(120).collect::<String>()))
+}
+
+/// 退出应用并静默安装：以独立进程启动安装器（/S + 显式 /D= 安装位），随后本进程退出。
+#[tauri::command]
+pub fn exit_and_install(installer_path: String, app: tauri::AppHandle) -> AppResult<()> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt as _;
+        let target = std::env::var("LOCALAPPDATA")
+            .map(|d| std::path::Path::new(&d).join("ohMyWorkPanel"))
+            .unwrap_or_else(|_| std::path::PathBuf::from(r"C:\ohMyWorkPanel"));
+        let mut cmd = std::process::Command::new(&installer_path);
+        cmd.args(["/S", &format!("/D={}", target.display())]);
+        // DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP：独立运行，不挂本进程控制台
+        cmd.creation_flags(0x00000008 | 0x00000200);
+        cmd.spawn().map_err(|e| format!("启动安装器失败：{e}"))?;
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = installer_path;
+        return Err("仅 Windows 桌面版支持自动安装".into());
+    }
+    app.exit(0);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn set_member_api_key(
+    member_id: String,
+    api_key: Option<String>,
+    state: State<'_, AppState>,
+) -> AppResult<Member> {
+    let state = state.inner().clone();
+    let conn = open_db(&state.db_path)?;
+    assert_member_mutable(&conn, &member_id)?;
+    crate::db::set_member_api_key(&conn, &member_id, api_key.as_deref())?;
+    conn.query_row(
+        &format!("{} WHERE m.id=?1", crate::db::MEMBER_SELECT),
+        params![member_id],
+        member_from_row,
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn set_member_api_url(
+    member_id: String,
+    api_url: Option<String>,
+    state: State<'_, AppState>,
+) -> AppResult<Member> {
+    let state = state.inner().clone();
+    crate::adapters::chatbot::validate_api_url(api_url.as_deref())?;
+    let conn = open_db(&state.db_path)?;
+    crate::db::assert_member_mutable(&conn, &member_id)?;
+    crate::db::set_member_api_url(&conn, &member_id, api_url.as_deref())?;
+    conn.query_row(
+        &format!("{} WHERE m.id=?1", crate::db::MEMBER_SELECT),
+        params![member_id],
+        member_from_row,
+    )
+    .map_err(|e| e.to_string())
 }

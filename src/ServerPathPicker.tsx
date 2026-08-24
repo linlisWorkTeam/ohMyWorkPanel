@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import { open } from "@tauri-apps/plugin-dialog";
 import { api } from "./api";
 import type { DirListing } from "./types";
 
@@ -7,6 +8,31 @@ interface Props {
   onChange: (path: string) => void;
   onError?: (msg: string) => void;
 }
+
+type Crumb = { label: string; path: string };
+
+/** 按平台切 crumb：Windows 用 `\`、Linux 用 `/`；均带根节点。 */
+function platformCrumbs(path: string | undefined): Crumb[] {
+  const current = path ?? "";
+  const parts = current.split(/[\/\\]/).filter(Boolean);
+  if (parts.length === 0) return [];
+  const win = /^[A-Za-z]:$/.test(parts[0]);
+  const crumbs: Crumb[] = [];
+  if (win) {
+    crumbs.push({ label: `${parts[0]}\\`, path: `${parts[0]}\\` });
+    for (let i = 1; i < parts.length; i++) {
+      crumbs.push({ label: parts[i], path: `${parts.slice(0, i + 1).join("\\")}\\` });
+    }
+  } else {
+    crumbs.push({ label: "/", path: "/" });
+    for (let i = 0; i < parts.length; i++) {
+      crumbs.push({ label: parts[i], path: `/${parts.slice(0, i + 1).join("/")}` });
+    }
+  }
+  return crumbs;
+}
+
+const isWindows = typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent);
 
 export function ServerPathPicker({ value, onChange, onError }: Props) {
   const [listing, setListing] = useState<DirListing | null>(null);
@@ -32,7 +58,19 @@ export function ServerPathPicker({ value, onChange, onError }: Props) {
     void load(value || "/");
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- initial browse only
 
-  const crumbs = (listing?.path ?? "/").split("/").filter(Boolean);
+  const crumbs = platformCrumbs(listing?.path);
+
+  const pickNativeDir = async () => {
+    try {
+      const picked = await open({ directory: true, multiple: false, title: "选择本机工作目录" });
+      if (typeof picked === "string" && picked.trim()) {
+        onChange(picked.trim());
+        void load(picked.trim());
+      }
+    } catch {
+      onError?.("本机目录选择仅桌面版可用；请在上方输入框手动填写绝对路径。");
+    }
+  };
 
   const createFolder = async (event?: FormEvent) => {
     event?.preventDefault();
@@ -65,23 +103,22 @@ export function ServerPathPicker({ value, onChange, onError }: Props) {
         <input
           value={manual}
           onChange={(e) => setManual(e.target.value)}
-          placeholder="服务器绝对路径，例如 /AI/ohMyWorkPanel"
+          placeholder={isWindows ? "本机绝对路径，例如 D:\\workspace\\ohMyWorkPanel" : "服务器绝对路径，例如 /AI/ohMyWorkPanel"}
           required
         />
+        <button type="button" className="pm-btn sm" onClick={pickNativeDir} title="通过系统对话框选择本机目录（桌面版）">
+          本机选择…
+        </button>
         <button type="button" onClick={() => { onChange(manual.trim()); void load(manual.trim() || "/"); }}>
           打开
         </button>
       </div>
       <div className="path-crumbs">
-        <button type="button" className="crumb" onClick={() => void load("/")}>/</button>
-        {crumbs.map((part, i) => {
-          const path = "/" + crumbs.slice(0, i + 1).join("/");
-          return (
-            <button key={path} type="button" className="crumb" onClick={() => void load(path)}>
-              {part}
-            </button>
-          );
-        })}
+        {crumbs.map((c, i) => (
+          <button key={i} type="button" className="crumb" onClick={() => void load(c.path)}>
+            {c.label}
+          </button>
+        ))}
         {loading && <span className="path-loading">加载中…</span>}
       </div>
       <div className="path-entries">

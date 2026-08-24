@@ -12,11 +12,13 @@ describe("agentModels", () => {
   });
 
   it("lists chatbot and cli models", () => {
-    expect(modelsForAdapter("chatbot-deepseek")).toContain("deepseek-v4-flash");
+    expect(modelsForAdapter("chatbot-deepseek")).toContain("deepseek-chat");
+    expect(defaultModelForAdapter("chatbot-deepseek")).toBe("deepseek-chat");
     expect(modelsForAdapter("codex")).toContain("deepseek-v4-flash");
     expect(defaultModelForAdapter("codex")).toBe("deepseek-v4-flash");
     expect(modelsForAdapter("codex").length).toBeGreaterThan(0);
     expect(defaultModelForAdapter("cursor")).toBe("auto");
+    expect(defaultModelForAdapter("chatbot-custom")).toBe("deepseek-chat");
   });
 
   it("includes cursor grok and kimi-k3 ids from CLI", () => {

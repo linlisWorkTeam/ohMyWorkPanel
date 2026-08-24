@@ -10,7 +10,7 @@ use rusqlite::Connection;
 
 use crate::db::AppResult;
 
-pub const SCHEMA_VERSION: i64 = 3;
+pub const SCHEMA_VERSION: i64 = 4;
 
 /// 运行所有未执行的迁移，并把 `user_version` 升到 `SCHEMA_VERSION`。
 /// 幂等：已是最新版本时直接返回。
@@ -26,6 +26,7 @@ pub fn migrate(connection: &Connection) -> AppResult<()> {
             1 => migrate_v1(connection)?,
             2 => migrate_v2(connection)?,
             3 => migrate_v3(connection)?,
+            4 => migrate_v4(connection)?,
             _ => unreachable!("invalid schema version {}", version),
         }
     }
@@ -107,6 +108,12 @@ fn migrate_v3(connection: &Connection) -> AppResult<()> {
         )
         .map_err(|e| e.to_string())?;
     let _ = connection.execute("DROP TABLE IF EXISTS run_phase_log", []);
+    Ok(())
+}
+
+/// v4：chatbot 支持自定义 OpenAI-compatible base URL（provider=custom）。
+fn migrate_v4(connection: &Connection) -> AppResult<()> {
+    let _ = connection.execute("ALTER TABLE agent_profiles ADD COLUMN api_url TEXT", []);
     Ok(())
 }
 

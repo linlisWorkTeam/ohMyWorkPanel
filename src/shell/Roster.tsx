@@ -18,6 +18,8 @@ export type RosterProps = {
   onModel: (member: Member, model: string) => void;
   onCancelRun: (run: TaskRun) => void;
   onOpenDsh?: (member: Member) => void;
+  onEditApiKey?: (member: Member, apiKey: string) => void;
+  onEditApiUrl?: (member: Member, apiUrl: string) => void;
 };
 
 export function Roster(props: RosterProps): JSX.Element {
@@ -45,6 +47,8 @@ function RosterRow({
   onModel,
   onCancelRun,
   onOpenDsh,
+  onEditApiKey,
+  onEditApiUrl,
 }: RosterProps & { member: Member }): JSX.Element {
   const detecting = detectingId === member.id;
   const online =
@@ -93,14 +97,52 @@ function RosterRow({
       onSelect: () => onAdmin(isAdmin ? null : member.id),
     });
   }
+  if ((member.kind === "agent" || member.kind === "chatbot") && !member.systemLocked) {
+    items.push({
+      id: "edit-api-key",
+      label: "编辑 API Key…",
+      onSelect: () => {
+        const value = window.prompt(
+          member.kind === "chatbot" ? "粘贴新的 API Key（留空则清除）：" : "粘贴新的 API Key（留空则清除）：",
+          "",
+        );
+        if (value !== null) onEditApiKey?.(member, value.trim());
+      },
+    });
+  }
+  if (member.kind === "chatbot" && !member.systemLocked) {
+    items.push({
+      id: "edit-api-url",
+      label: "编辑 API 地址…",
+      onSelect: () => {
+        const value = window.prompt(
+          "OpenAI 兼容端点，如 https://api.xxx.com/v1（留空则清除）：",
+          member.apiUrl ?? "",
+        );
+        if (value !== null) onEditApiUrl?.(member, value.trim());
+      },
+    });
+  }
   if (modelOptions.length > 0 && (member.kind === "agent" || member.kind === "chatbot") && !member.systemLocked) {
-    for (const model of modelOptions) {
-      items.push({
-        id: `model:${model}`,
-        label: member.model === model ? `模型 · ${model} ✓` : `切换为 ${model}`,
-        onSelect: () => onModel(member, model),
-      });
-    }
+    const children: ActionItem[] = modelOptions.map((model) => ({
+      id: `model:${model}`,
+      label: member.model === model ? `${model} ✓` : model,
+      onSelect: () => onModel(member, model),
+    }));
+    children.push({
+      id: "model:custom",
+      label: "自定义模型…",
+      onSelect: () => {
+        const custom = window.prompt("输入模型 ID（例如 my-model-7b）：", member.model ?? "");
+        const value = custom?.trim();
+        if (value) onModel(member, value);
+      },
+    });
+    items.push({
+      id: "models",
+      label: member.model ? `切换模型 · ${member.model}` : "切换模型",
+      children,
+    });
   }
   if (member.kind === "agent" && member.adapter === "dsh") {
     items.push({ id: "dsh", label: "跳转 DSH Web", onSelect: () => onOpenDsh?.(member) });
@@ -150,7 +192,7 @@ function RosterRow({
     >
       <div
         className="wp-m-av"
-        style={{ background: member.avatarColor ?? "#8792a5" }}
+        style={{ background: member.avatarColor ?? "var(--lp-text-tertiary)" }}
       >
         {member.displayName.slice(0, 1)}
         <i className={`dot ${dotClass}`.trim()} />

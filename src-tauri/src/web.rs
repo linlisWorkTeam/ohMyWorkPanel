@@ -737,6 +737,8 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, user_id: Opt
      executable_path: Option<String>,
      chatbot_provider: Option<String>,
      api_key: Option<String>,
+     /// 自定义 OpenAI-compatible base URL（provider=custom）
+     api_url: Option<String>,
      model: Option<String>,
      login_username: Option<String>,
      login_password: Option<String>,
@@ -902,10 +904,18 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, user_id: Opt
              .as_deref()
              .map(str::trim)
              .filter(|s| !s.is_empty())
-             .unwrap_or("deepseek-v4-flash");
+             .unwrap_or("deepseek-chat");
+         let api_url = input
+             .api_url
+             .as_deref()
+             .map(str::trim)
+             .filter(|s| !s.is_empty())
+             .map(str::to_string);
+         crate::adapters::chatbot::validate_api_url(api_url.as_deref())
+             .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
          conn.execute(
-             "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at,api_key,warm_status,model) VALUES(?1,?2,NULL,'ready',?3,?4,'cold',?5)",
-             params![member_id, adapter, created_at, crate::db::encrypt_secret(api_key).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?, model],
+             "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at,api_key,warm_status,model,api_url) VALUES(?1,?2,NULL,'ready',?3,?4,'cold',?5,?6)",
+             params![member_id, adapter, created_at, crate::db::encrypt_secret(api_key).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?, model, api_url],
          )
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
      }

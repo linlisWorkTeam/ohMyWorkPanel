@@ -67,6 +67,9 @@ pub struct Member {
     /// Preferred model id for this agent/chatbot (empty = provider default).
     #[serde(default)]
     pub model: Option<String>,
+    /// Custom OpenAI-compatible base URL (chatbot provider "custom"); empty = provider default.
+    #[serde(default)]
+    pub api_url: Option<String>,
     /// Linked login account (`users.id`) for kind=user members.
     #[serde(default)]
     pub auth_user_id: Option<String>,
@@ -178,9 +181,11 @@ pub struct AddMemberInput {
     pub avatar_color: Option<String>,
     pub adapter: Option<String>,
     pub executable_path: Option<String>,
-    /// chatbot provider: opencode-go | deepseek
+    /// chatbot provider: opencode-go | deepseek | custom
     pub chatbot_provider: Option<String>,
     pub api_key: Option<String>,
+    /// Custom OpenAI-compatible base URL（provider=custom 时必填，其余忽略）
+    pub api_url: Option<String>,
     /// Optional model override at create time
     pub model: Option<String>,
     /// Login username for kind=user (creates `users` row)
@@ -547,13 +552,55 @@ mod contract_tests {
             adapter: Some("mock".into()), executable_path: None, runtime_status: Some("ready".into()),
             tags: String::new(), created_at: 1, workspace_path: None, api_key_set: true,
             keep_alive: false, warm_status: None, model: None, auth_user_id: None,
-            invite_pending: false, system_locked: false,
+            invite_pending: false, system_locked: false, api_url: Some("https://api.example.com/v1".into()),
         };
         let mv = to_json(&member);
-        for key in ["displayName", "avatarColor", "roleDescription", "isActive", "runtimeStatus", "apiKeySet", "keepAlive", "authUserId", "invitePending", "systemLocked"] {
+        for key in ["displayName", "avatarColor", "roleDescription", "isActive", "runtimeStatus", "apiKeySet", "keepAlive", "authUserId", "invitePending", "systemLocked", "apiUrl"] {
             assert!(mv.get(key).is_some(), "缺少 {}", key);
         }
         assert!(mv.get("api_key").is_none(), "原始 API key 永不外泄（只暴露 apiKeySet）");
         assert!(mv.get("display_name").is_none());
+    }
+}
+
+/// 解析 "x.y.z" / "v2.1.3" / "x.y.z-beta" / "x.y.z+build" → 数值三元组（忽略 v 前缀、预发布/构建后缀）。
+pub fn parse_version(v: &str) -> (u64, u64, u64) {
+    let core = v.split(['-', '+']).next().unwrap_or(v);
+    let core = core.strip_prefix(['v', 'V']).unwrap_or(core);
+    let mut it = core.split('.');
+    (
+        it.next().and_then(|s| s.parse().ok()).unwrap_or(0),
+        it.next().and_then(|s| s.parse().ok()).unwrap_or(0),
+        it.next().and_then(|s| s.parse().ok()).unwrap_or(0),
+    )
+}
+
+/// latest > current（数值比较；等号不算有更新）。供「检查更新」使用。
+pub fn is_newer_version(latest: &str, current: &str) -> bool {
+    parse_version(latest) > parse_version(current)
+}
+
+#[cfg(test)]
+mod version_compare_tests {
+    use super::{is_newer_version, parse_version};
+
+    #[test]
+    fn parses_numeric_triple_ignoring_suffixes() {
+        assert_eq!(parse_version("2.1.2"), (2, 1, 2));
+        assert_eq!(parse_version("2.1.2-beta.1"), (2, 1, 2));
+        assert_eq!(parse_version("2.1.2+build77"), (2, 1, 2));
+        assert_eq!(parse_version("v2.1.3"), (2, 1, 3)); // GitHub 风格 tag 前缀归一
+        assert_eq!(parse_version("2.10.0"), (2, 10, 0));
+    }
+
+    #[test]
+    fn compares_versions_numerically() {
+        assert!(is_newer_version("2.1.3", "2.1.2"));
+        assert!(is_newer_version("2.1.10", "2.1.9"));
+        assert!(is_newer_version("3.0.0", "2.9.9"));
+        assert!(!is_newer_version("2.1.2", "2.1.2"));
+        assert!(!is_newer_version("2.1.2", "2.1.3"));
+        assert!(!is_newer_version("2.1.2-beta", "2.1.2"));
+        assert!(!is_newer_version("2.1.1", "2.1.2"));
     }
 }

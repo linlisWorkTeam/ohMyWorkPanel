@@ -1,12 +1,4 @@
 html {
-  --lp-bg-app: var(--bg);
-  --lp-bg-sidebar: var(--surf);
-  --lp-bg-panel: var(--surf);
-  --lp-bg-elevated: var(--elev);
-  --lp-text: var(--ink);
-  --lp-text-muted: var(--dim);
-  --lp-accent: var(--acc);
-  --lp-border: var(--line);
   --bg-app: var(--bg);
   --bg-sidebar-solid: var(--surf);
   --bg-chat: var(--bg);
@@ -62,25 +54,6 @@ html {
   --warn: #b7791f;
   --error: var(--danger);
   /* ── LP 语义别名层（P0.1 新增，均由既有 token 组合 → 零视觉回归）── */
-  --lp-bg-app: var(--bg);
-  --lp-bg-sidebar: var(--surf);
-  --lp-bg-panel: var(--surf);
-  --lp-bg-elevated: var(--elev);
-  --lp-bg-overlay: rgba(0, 0, 0, .5);
-  --lp-bg-hover: color-mix(in srgb, var(--text) 8%, transparent);
-  --lp-bg-active: color-mix(in srgb, var(--accent) 16%, transparent);
-  --lp-border-l1: var(--border-soft);
-  --lp-border-l2: var(--border);
-  --lp-text-primary: var(--text);
-  --lp-text-secondary: var(--text-soft);
-  --lp-text-tertiary: var(--text-faint);
-  --lp-text-on-sidebar: var(--text-on-sidebar);
-  --lp-accent: var(--acc);
-  --lp-accent-strong: var(--accent-strong);
-  --lp-ring: var(--ring);
-  --lp-success: var(--success);
-  --lp-warn: var(--warn);
-  --lp-error: var(--error);
 }
 
 [data-theme="forge"] {
@@ -1476,35 +1449,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   --accent-contrast: #fff;
   --selected: rgba(31, 155, 184, .16);
   --hover-sidebar: rgba(31, 155, 184, .08);
-  --lp-bg-app: var(--bg);
-  --lp-bg-surface: var(--s-bg1);
-  --lp-bg-sidebar: var(--surf);
-  --lp-bg-panel: var(--surf);
-  --lp-bg-elev: var(--s-bg2);
-  --lp-bg-elevated: var(--elev);
-  --lp-bg-hover: rgba(31, 155, 184, .08);
-  --lp-bg-active: rgba(31, 155, 184, .16);
-  --lp-border: var(--line);
-  --lp-border-strong: rgba(11, 31, 51, .26);
-  --lp-border-l1: var(--lp-border);
-  --lp-border-l2: var(--lp-border-strong);
-  --lp-text: var(--ink);
-  --lp-text-dim: var(--s-muted);
-  --lp-text-faint: var(--s-faint);
-  --lp-text-invert: #fff;
-  --lp-text-primary: var(--lp-text);
-  --lp-text-secondary: var(--lp-text-dim);
-  --lp-text-tertiary: var(--lp-text-faint);
-  --lp-text-on-sidebar: var(--s-paper);
-  --lp-accent: var(--acc);
-  --lp-accent-strong: #0f7f98;
-  --lp-accent-soft: rgba(31, 155, 184, .12);
-  --lp-composer: rgba(255, 255, 255, .88);
-  --lp-rail: var(--s-bg1);
-  --lp-bubble-ai: var(--s-bg2);
-  --lp-bubble-user: rgba(31, 155, 184, .14);
-  --lp-scroll: rgba(91, 122, 148, .35);
-  --lp-ring: #1f9bb8;
   --scanline-opacity: 0;
   --grid-opacity: .05;
 }
@@ -1536,35 +1480,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   --accent-contrast: var(--s-ink);
   --selected: rgba(0, 240, 255, .15);
   --hover-sidebar: rgba(0, 240, 255, .07);
-  --lp-bg-app: var(--bg);
-  --lp-bg-surface: var(--s-bg1);
-  --lp-bg-sidebar: var(--surf);
-  --lp-bg-panel: var(--surf);
-  --lp-bg-elev: var(--s-bg2);
-  --lp-bg-elevated: var(--elev);
-  --lp-bg-hover: rgba(0, 240, 255, .07);
-  --lp-bg-active: rgba(0, 240, 255, .15);
-  --lp-border: var(--line);
-  --lp-border-strong: rgba(0, 240, 255, .4);
-  --lp-border-l1: var(--lp-border);
-  --lp-border-l2: var(--lp-border-strong);
-  --lp-text: var(--ink);
-  --lp-text-dim: var(--s-muted);
-  --lp-text-faint: var(--s-faint);
-  --lp-text-invert: var(--s-ink);
-  --lp-text-primary: var(--lp-text);
-  --lp-text-secondary: var(--lp-text-dim);
-  --lp-text-tertiary: var(--lp-text-faint);
-  --lp-text-on-sidebar: var(--s-paper);
-  --lp-accent: var(--acc);
-  --lp-accent-strong: #7deeff;
-  --lp-accent-soft: rgba(0, 240, 255, .12);
-  --lp-composer: rgba(28, 17, 50, .74);
-  --lp-rail: var(--s-bg1);
-  --lp-bubble-ai: var(--s-bg2);
-  --lp-bubble-user: rgba(0, 240, 255, .16);
-  --lp-scroll: rgba(0, 240, 255, .25);
-  --lp-ring: #7deeff;
   --scanline-opacity: .05;
   --grid-opacity: .06;
 }
@@ -1596,35 +1511,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   --accent-contrast: var(--s-ink);
   --selected: rgba(245, 166, 35, .16);
   --hover-sidebar: rgba(245, 166, 35, .08);
-  --lp-bg-app: var(--bg);
-  --lp-bg-surface: var(--s-bg1);
-  --lp-bg-sidebar: var(--surf);
-  --lp-bg-panel: var(--surf);
-  --lp-bg-elev: var(--s-bg2);
-  --lp-bg-elevated: var(--elev);
-  --lp-bg-hover: rgba(245, 166, 35, .08);
-  --lp-bg-active: rgba(245, 166, 35, .16);
-  --lp-border: var(--line);
-  --lp-border-strong: rgba(245, 166, 35, .5);
-  --lp-border-l1: var(--lp-border);
-  --lp-border-l2: var(--lp-border-strong);
-  --lp-text: var(--ink);
-  --lp-text-dim: var(--s-muted);
-  --lp-text-faint: var(--s-faint);
-  --lp-text-invert: var(--s-ink);
-  --lp-text-primary: var(--lp-text);
-  --lp-text-secondary: var(--lp-text-dim);
-  --lp-text-tertiary: var(--lp-text-faint);
-  --lp-text-on-sidebar: var(--s-paper);
-  --lp-accent: var(--acc);
-  --lp-accent-strong: #ffc15e;
-  --lp-accent-soft: rgba(245, 166, 35, .13);
-  --lp-composer: rgba(34, 37, 43, .84);
-  --lp-rail: var(--s-bg1);
-  --lp-bubble-ai: var(--s-bg2);
-  --lp-bubble-user: rgba(255, 106, 0, .19);
-  --lp-scroll: rgba(159, 178, 193, .32);
-  --lp-ring: #f5a623;
   --scanline-opacity: .03;
   --grid-opacity: .05;
 }
@@ -1656,35 +1542,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   --accent-contrast: var(--s-ink);
   --selected: rgba(224, 138, 60, .17);
   --hover-sidebar: rgba(224, 138, 60, .08);
-  --lp-bg-app: var(--bg);
-  --lp-bg-surface: var(--s-bg1);
-  --lp-bg-sidebar: var(--surf);
-  --lp-bg-panel: var(--surf);
-  --lp-bg-elev: var(--s-bg2);
-  --lp-bg-elevated: var(--elev);
-  --lp-bg-hover: rgba(224, 138, 60, .08);
-  --lp-bg-active: rgba(224, 138, 60, .17);
-  --lp-border: var(--line);
-  --lp-border-strong: rgba(224, 138, 60, .45);
-  --lp-border-l1: var(--lp-border);
-  --lp-border-l2: var(--lp-border-strong);
-  --lp-text: var(--ink);
-  --lp-text-dim: var(--s-muted);
-  --lp-text-faint: var(--s-faint);
-  --lp-text-invert: var(--s-ink);
-  --lp-text-primary: var(--lp-text);
-  --lp-text-secondary: var(--lp-text-dim);
-  --lp-text-tertiary: var(--lp-text-faint);
-  --lp-text-on-sidebar: var(--s-paper);
-  --lp-accent: var(--acc);
-  --lp-accent-strong: #f0a861;
-  --lp-accent-soft: rgba(224, 138, 60, .14);
-  --lp-composer: rgba(28, 24, 24, .84);
-  --lp-rail: var(--s-bg1);
-  --lp-bubble-ai: var(--s-bg2);
-  --lp-bubble-user: rgba(224, 138, 60, .17);
-  --lp-scroll: rgba(180, 156, 130, .32);
-  --lp-ring: #e08a3c;
   --scanline-opacity: .02;
   --grid-opacity: .04;
 }
@@ -1716,35 +1573,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   --accent-contrast: #fff;
   --selected: rgba(106, 143, 78, .18);
   --hover-sidebar: rgba(106, 143, 78, .09);
-  --lp-bg-app: var(--bg);
-  --lp-bg-surface: var(--s-bg1);
-  --lp-bg-sidebar: var(--surf);
-  --lp-bg-panel: var(--surf);
-  --lp-bg-elev: var(--s-bg2);
-  --lp-bg-elevated: var(--elev);
-  --lp-bg-hover: rgba(106, 143, 78, .09);
-  --lp-bg-active: rgba(106, 143, 78, .18);
-  --lp-border: var(--line);
-  --lp-border-strong: rgba(31, 58, 46, .26);
-  --lp-border-l1: var(--lp-border);
-  --lp-border-l2: var(--lp-border-strong);
-  --lp-text: var(--ink);
-  --lp-text-dim: var(--s-muted);
-  --lp-text-faint: var(--s-faint);
-  --lp-text-invert: #fff;
-  --lp-text-primary: var(--lp-text);
-  --lp-text-secondary: var(--lp-text-dim);
-  --lp-text-tertiary: var(--lp-text-faint);
-  --lp-text-on-sidebar: var(--s-paper);
-  --lp-accent: var(--acc);
-  --lp-accent-strong: #557a3c;
-  --lp-accent-soft: rgba(106, 143, 78, .13);
-  --lp-composer: rgba(255, 255, 255, .88);
-  --lp-rail: var(--s-bg1);
-  --lp-bubble-ai: var(--s-bg2);
-  --lp-bubble-user: rgba(106, 143, 78, .16);
-  --lp-scroll: rgba(86, 112, 95, .35);
-  --lp-ring: #6a8f4e;
   --scanline-opacity: 0;
   --grid-opacity: .04;
 }
@@ -1776,35 +1604,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   --accent-contrast: var(--s-ink);
   --selected: rgba(242, 235, 224, .13);
   --hover-sidebar: rgba(242, 235, 224, .06);
-  --lp-bg-app: var(--bg);
-  --lp-bg-surface: var(--s-bg1);
-  --lp-bg-sidebar: var(--surf);
-  --lp-bg-panel: var(--surf);
-  --lp-bg-elev: var(--s-bg2);
-  --lp-bg-elevated: var(--elev);
-  --lp-bg-hover: rgba(242, 235, 224, .06);
-  --lp-bg-active: rgba(242, 235, 224, .13);
-  --lp-border: var(--line);
-  --lp-border-strong: rgba(217, 75, 61, .48);
-  --lp-border-l1: var(--lp-border);
-  --lp-border-l2: var(--lp-border-strong);
-  --lp-text: var(--ink);
-  --lp-text-dim: var(--s-muted);
-  --lp-text-faint: var(--s-faint);
-  --lp-text-invert: var(--s-ink);
-  --lp-text-primary: var(--lp-text);
-  --lp-text-secondary: var(--lp-text-dim);
-  --lp-text-tertiary: var(--lp-text-faint);
-  --lp-text-on-sidebar: var(--s-paper);
-  --lp-accent: var(--acc);
-  --lp-accent-strong: #ff6a5c;
-  --lp-accent-soft: rgba(217, 75, 61, .13);
-  --lp-composer: rgba(19, 20, 23, .86);
-  --lp-rail: var(--s-bg1);
-  --lp-bubble-ai: var(--s-bg2);
-  --lp-bubble-user: rgba(242, 235, 224, .15);
-  --lp-scroll: rgba(154, 154, 162, .32);
-  --lp-ring: #d94b3d;
   --scanline-opacity: 0;
   --grid-opacity: .03;
 }
@@ -1836,35 +1635,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   --accent-contrast: #fff;
   --selected: rgba(23, 24, 26, .08);
   --hover-sidebar: rgba(23, 24, 26, .05);
-  --lp-bg-app: var(--bg);
-  --lp-bg-surface: var(--s-bg1);
-  --lp-bg-sidebar: var(--surf);
-  --lp-bg-panel: var(--surf);
-  --lp-bg-elev: var(--s-bg2);
-  --lp-bg-elevated: var(--elev);
-  --lp-bg-hover: rgba(23, 24, 26, .05);
-  --lp-bg-active: rgba(23, 24, 26, .08);
-  --lp-border: var(--line);
-  --lp-border-strong: rgba(23, 24, 26, .14);
-  --lp-border-l1: var(--lp-border);
-  --lp-border-l2: var(--lp-border-strong);
-  --lp-text: var(--ink);
-  --lp-text-dim: var(--s-muted);
-  --lp-text-faint: var(--s-faint);
-  --lp-text-invert: #fff;
-  --lp-text-primary: var(--lp-text);
-  --lp-text-secondary: var(--lp-text-dim);
-  --lp-text-tertiary: var(--lp-text-faint);
-  --lp-text-on-sidebar: var(--s-paper);
-  --lp-accent: var(--acc);
-  --lp-accent-strong: #17181a;
-  --lp-accent-soft: rgba(23, 24, 26, .08);
-  --lp-composer: #ffffff;
-  --lp-rail: var(--s-bg1);
-  --lp-bubble-ai: var(--s-bg2);
-  --lp-bubble-user: rgba(23, 24, 26, .06);
-  --lp-scroll: rgba(92, 95, 102, .35);
-  --lp-ring: #17181a;
   --scanline-opacity: 0;
   --grid-opacity: 0;
 }
@@ -2273,6 +2043,90 @@ kbd {
 }
 .ctx-menu button:hover { background: rgba(255, 255, 255, .1); }
 .ctx-menu button.danger { color: #ff8a8a; }
+.ctx-menu .ctx-group { display: flex; flex-direction: column; }
+.ctx-menu .ctx-group > button { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.ctx-menu .ctx-group > button .ctx-arrow { font-style: normal; opacity: .75; font-size: 11px; }
+.ctx-menu .ctx-group > button.open { background: rgba(255, 255, 255, .12); }
+.ctx-menu .ctx-sub {
+  display: flex;
+  flex-direction: column;
+  margin: 0 4px 4px 10px;
+  padding-left: 8px;
+  border-left: 2px solid rgba(255, 255, 255, .16);
+}
+.ctx-menu .ctx-sub button { padding: 7px 10px; font-size: 13px; }
+
+/* THEME_SEMANTIC_TOKENS_START
+   Stable component contract. Theme palettes live in shell/tokens.css;
+   pages and shared components consume only these semantic names. */
+:root,
+[data-theme="atlas"],
+[data-theme="cyberpunk"],
+[data-theme="industrial"],
+[data-theme="forge"],
+[data-theme="moss"],
+[data-theme="noir"],
+[data-theme="minimal"] {
+  --lp-bg-app: var(--bg);
+  --lp-bg-surface: var(--surf);
+  --lp-bg-sidebar: var(--surf);
+  --lp-bg-panel: var(--surf);
+  --lp-bg-elev: var(--elev);
+  --lp-bg-elevated: var(--elev);
+  --lp-bg-overlay: color-mix(in srgb, var(--bg) 72%, transparent);
+  --lp-bg-hover: color-mix(in srgb, var(--ink) 8%, transparent);
+  --lp-bg-active: color-mix(in srgb, var(--acc) 16%, transparent);
+  --lp-disabled-bg: color-mix(in srgb, var(--elev) 76%, var(--bg));
+  --lp-border: var(--line);
+  --lp-border-strong: color-mix(in srgb, var(--acc) 42%, var(--line));
+  --lp-border-l1: var(--line);
+  --lp-border-l2: var(--lp-border-strong);
+  --lp-text: var(--ink);
+  --lp-text-muted: var(--dim);
+  --lp-text-dim: var(--dim);
+  --lp-text-faint: color-mix(in srgb, var(--dim) 72%, transparent);
+  --lp-text-primary: var(--ink);
+  --lp-text-secondary: var(--dim);
+  --lp-text-tertiary: var(--lp-text-faint);
+  --lp-text-on-sidebar: var(--ink);
+  --lp-text-invert: var(--on-accent);
+  --lp-disabled-text: color-mix(in srgb, var(--dim) 64%, transparent);
+  --lp-accent: var(--acc);
+  --lp-accent-strong: var(--acc2);
+  --lp-accent-soft: color-mix(in srgb, var(--acc) 14%, transparent);
+  --lp-ring: color-mix(in srgb, var(--acc) 62%, transparent);
+  --lp-success: var(--ok);
+  --lp-warn: var(--warning);
+  --lp-error: var(--critical);
+  --lp-composer: var(--elev);
+  --lp-rail: var(--surf);
+  --lp-bubble-ai: var(--elev);
+  --lp-bubble-user: var(--user);
+  --lp-scroll: color-mix(in srgb, var(--dim) 36%, transparent);
+  --lp-shadow-color: var(--shadow-color);
+  --lp-shadow: 0 18px 48px var(--shadow-color);
+  --lp-radius-sm: max(4px, calc(var(--radius-mode) * .65));
+  --lp-radius-md: var(--radius-mode);
+  --lp-radius-lg: calc(var(--radius-mode) * 1.4);
+
+  /* Legacy compatibility: new code must not consume these aliases. */
+  --bg-app: var(--lp-bg-app);
+  --bg-surface: var(--lp-bg-surface);
+  --bg-modal: var(--lp-bg-elev);
+  --text: var(--lp-text-primary);
+  --text-soft: var(--lp-text-secondary);
+  --text-faint: var(--lp-text-tertiary);
+  --border: var(--lp-border-l2);
+  --border-soft: var(--lp-border-l1);
+  --accent: var(--lp-accent);
+  --accent-strong: var(--lp-accent-strong);
+  --success: var(--lp-success);
+  --warn: var(--lp-warn);
+  --danger: var(--lp-error);
+  --error: var(--lp-error);
+  --ring: var(--lp-ring);
+}
+/* THEME_SEMANTIC_TOKENS_END */
 .bubble-stop {
   position: absolute;
   right: 8px;
@@ -2350,6 +2204,4 @@ header .theme-pop { display: none; }
 @media (prefers-reduced-motion: reduce) {
   body::after { animation: none !important; opacity: 0 !important; }
 }
-
-
 
