@@ -8,29 +8,29 @@ import {
   firstUnreadIndex,
   formatQuotePrefix,
   isNearBottom,
-} from "./chatUi";
-import { currentMentionQuery, findMentionedMemberIds } from "./mentions";
+} from "./chat/chatUi";
+import { currentMentionQuery, findMentionedMemberIds } from "./chat/mentions";
 import {
   appendChannelDelta,
   hasRenderableContent,
   isLazyMessageChannel,
   parseMessageContent,
-} from "./messageContent";
-import { defaultModelForAdapter, modelsForAdapter, applyAgentModelsPayload } from "./agentModels";
-import { FALLBACK_CLI_ADAPTERS, mergeCliAdapters, type CliAdapterOption } from "./adaptersCatalog";
-import { canSubmitUserMember, chatbotSlotTaken, memberRosterAction, type UserAddMode } from "./memberForm";
-import { InviteLanding, parseInviteTokenFromPath } from "./InviteLanding";
-import { markdownToHtml } from "./markdownLite";
-import { detectMemoryPressure, formatHeartbeatLabel } from "./heartbeatPolicy";
-import { agentBusyLabel, queueCounts, runsForAgentActive } from "./queueCounts";
+} from "./chat/messageContent";
+import { defaultModelForAdapter, modelsForAdapter, applyAgentModelsPayload } from "./agents/agentModels";
+import { FALLBACK_CLI_ADAPTERS, mergeCliAdapters, type CliAdapterOption } from "./agents/adaptersCatalog";
+import { canSubmitUserMember, chatbotSlotTaken, memberRosterAction, type UserAddMode } from "./members/memberForm";
+import { InviteLanding, parseInviteTokenFromPath } from "./accounts/InviteLanding";
+import { markdownToHtml } from "./chat/markdownLite";
+import { detectMemoryPressure, formatHeartbeatLabel } from "./observability/heartbeatPolicy";
+import { agentBusyLabel, queueCounts, runsForAgentActive } from "./members/queueCounts";
 import {
   bumpUnread,
   clearUnread,
   formatUnreadBadge,
   sortGroupsForSidebar,
-} from "./groupListSort";
-import { isIgnorableWsKind, shouldResyncAfterWsEvent, subscribeWsLinkState } from "./realtimeWs";
-import { releasingBannerText, type WsLinkState } from "./releasingState";
+} from "./groups/groupListSort";
+import { isIgnorableWsKind, shouldResyncAfterWsEvent, subscribeWsLinkState } from "./observability/realtimeWs";
+import { releasingBannerText, type WsLinkState } from "./observability/releasingState";
 import type { MetricsSample } from "./types";
 import {
   INITIAL_VISIBLE_MESSAGES,
@@ -40,10 +40,10 @@ import {
   prependOlderMessages,
   shouldLoadOlderOnScroll,
   sliceVisibleMessages,
-} from "./messageHistory";
-import { loadAuthUser, resolveSenderMemberId, saveAuthUser, type AuthUser } from "./authSession";
+} from "./chat/messageHistory";
+import { loadAuthUser, resolveSenderMemberId, saveAuthUser, type AuthUser } from "./accounts/authSession";
 import { ButtonGroup, FormField, Modal, Toast, UiButton, useAppFrame, CONCEDE_RIGHT } from "./components/ui";
-import { loadSendKeyMode, saveSendKeyMode, sendKeyHint, shouldSendOnKey, type SendKeyMode } from "./sendKey";
+import { loadSendKeyMode, saveSendKeyMode, sendKeyHint, shouldSendOnKey, type SendKeyMode } from "./chat/sendKey";
 import type { ChatEvent, ExtensionStatus, Group, GroupState, Member, PresetRole, RuntimeSettings, TaskRun } from "./types";
 import { Avatar, Status, TypingIndicator, RunQueuePane, EmptyHome } from "./components/furniture";
 import { RightDockHost } from "./components/RightDockHost";
@@ -55,22 +55,22 @@ import { useGoalBar } from "./hooks/useGoalBar";
 import { useComposerDraft } from "./hooks/useComposerDraft";
 import { Brand, ThemeSwitcher, HeaderThemePop } from "./theme";
 import { PHASE_LABEL, readError } from "./components/uiShared";
-import { ExperiencePanel } from "./ExperiencePanel";
-import { LogsPanel } from "./LogsPanel";
-import { ServerPathPicker } from "./ServerPathPicker";
-import { ExtensionPanel } from "./ExtensionPanel";
-import { VersionView } from "./VersionView";
-import { GroupSettingsView } from "./GroupSettingsView";
-import { AgentConfigView } from "./AgentConfigView";
+import { ExperiencePanel } from "./observability/ExperiencePanel";
+import { LogsPanel } from "./observability/LogsPanel";
+import { ServerPathPicker } from "./groups/ServerPathPicker";
+import { ExtensionPanel } from "./extensions/ExtensionPanel";
+import { VersionView } from "./workflow/VersionView";
+import { GroupSettingsView } from "./groups/GroupSettingsView";
+import { AgentConfigView } from "./agents/AgentConfigView";
 import {
   collectExtensionTabViews,
   parseExtMainView,
-} from "./extensions";
+} from "./extensions/extensions";
 import {
   buildLiveMentionMessage,
   messageToPlainText,
   resolveLiveResponder,
-} from "./liveBridge";
+} from "./extensions/liveBridge";
 import {
   cancelHoldRecording,
   combineComposerAndTranscript,
@@ -80,7 +80,7 @@ import {
   stopHoldRecordingToWav,
   sttViaProxy,
   ttsPlaybackViaProxy,
-} from "./liveVoice";
+} from "./extensions/liveVoice";
 import { listContributions } from "./contrib/registry";
 import { readDockGeom, writeDockGeom, type DockGeom } from "./contrib/dockGeom";
 import { SLASH_COMMANDS } from "./contrib/slash";

@@ -23,7 +23,7 @@ describe("theme chrome imports stay alive in App.tsx", () => {
   });
 
   it("value-imports FALLBACK_CLI_ADAPTERS so the web minifier cannot drop the catalog", () => {
-    expect(app).toMatch(/import\s*\{[^}]*\bFALLBACK_CLI_ADAPTERS\b[^}]*\}\s*from\s*["']\.\/adaptersCatalog["']/);
+    expect(app).toMatch(/import\s*\{[^}]*\bFALLBACK_CLI_ADAPTERS\b[^}]*\}\s*from\s*["']\.\/agents\/adaptersCatalog["']/);
     expect(app).toMatch(/useState<CliAdapterOption\[\]>\(FALLBACK_CLI_ADAPTERS\)/);
   });
 });

@@ -15,20 +15,29 @@ AI agent 贡献者请遵循以下项目约定。
 ## 项目结构
 
 ```text
-src/                    # React 前端
-  App.tsx               # 入口组件（群侧栏/聊天面板/成员面板/设置）
+src/                    # React 前端；入口层只放启动/共享契约，业务按领域下沉
+  App.tsx               # 薄入口与主壳组装
+  accounts/             # 登录、邀请、会话
+  agents/               # Agent 配置、适配器目录、模型目录
+  chat/                 # 消息、提及、历史、输入行为
+  groups/               # 群设置、工作区选择、群排序
+  members/              # 成员表单、运行队列投影
+  workflow/             # 版本、Roadmap、Wave、项目管理
+  extensions/           # Extend、Live bridge、Live voice
+  observability/        # 日志、经验、心跳、发布连接状态
   api.ts                # Tauri invoke 封装
   types.ts              # 前后端共享类型
-  mentions.ts           # @ 提及解析
-  mentions.test.ts
   styles.css
-src-tauri/src/          # Rust 后端
+src-tauri/src/          # Rust 后端；实现按产品领域下沉
+  accounts/             # 认证、在线状态
+  agents/               # Agent 配置、模型目录、CLI adapters
+  operations/           # 日志、指标、Ops、保活、发布 drain
   lib.rs                # 应用启动、AppState、模块声明
   models.rs             # serde 数据模型（Group/Member/Message/TaskRun/...）
   db.rs                 # SQLite 初始化、查询、写入辅助
   commands.rs           # 全部 #[tauri::command]
   scheduler.rs          # 任务调度/执行/委派/完成
-  adapters/             # Agent 适配器
+  agents/adapters/      # Agent 适配器
     mod.rs              # AdapterKind 枚举 + run_streaming 共享执行
     parse.rs            # JSON 行解析 + 单测
     mock.rs             # 本地模拟
@@ -43,6 +52,8 @@ scripts/
 ## 编码约定
 
 - **IPC 兼容**：不改动 `tauri::command` 签名、前端 API 调用、SQLite schema。破坏性 API 变更需明确讨论。
+- **目录即架构**：业务文件按产品领域放置，禁止重新平铺到 `src/` / `src-tauri/src/`，禁止新增 `misc` / `helpers` / `common` 等无清晰边界的收容目录；详见 [`docs/reference/code-organization.md`](docs/reference/code-organization.md)。
+- **AI Harness**：AI 编码、注释、测试、commit 和 PR 证据遵循 [`docs/reference/ai-contribution-harness.md`](docs/reference/ai-contribution-harness.md)；编码中运行 `pnpm run check:ai`，commit 后在干净工作树运行 `pnpm run submit:ai`。不得把命令启动、截断输出或仅生成 PR 元数据声称为检查/PR 已成功。
 - **新增 CLI 适配器**：见 [`docs/superpowers/specs/2026-08-21-cli-adapter-manifest.md`](docs/superpowers/specs/2026-08-21-cli-adapter-manifest.md)（终态 `*.adapter.json`）。**P0 未落地前**仍可改 `AdapterKind` + `build_args` + `candidate_executables`；落地后内部新 CLI 只加 json，禁止 `sh -c`。chatbot / mock 不是 CLI 插件。
 - **Rust 风格**：`AppResult<T> = Result<T, String>`；行内链式 `map_err(|e| e.to_string())?` 与现有风格一致。
 - **前端适配器标签**：在 `App.tsx:155` 的 `<select>` 里更新文案；`types.ts:21` 的 adapter union 保持同步。
@@ -58,6 +69,8 @@ scripts/
 | `pnpm tauri dev` | 启动桌面应用（开发） |
 | `pnpm test` | 前端 Vitest |
 | `pnpm run test:gate` / `./scripts/test-gate.sh` | 部署前门禁（Vitest + `cargo test --lib`） |
+| `pnpm run check:ai` | AI 快速 Harness（目录/文档/脚本/仓库卫生） |
+| `pnpm run submit:ai` | commit 后完整 AI 提交 Harness（需干净工作树） |
 | `cd src-tauri && cargo test --no-default-features --lib` | Rust 单测（与门禁一致） |
 | `cd src-tauri && cargo build` | Rust 编译检查 |
 | `powershell -File scripts/smoke-adapters.ps1` | 适配器 smoke（不进门禁） |
@@ -76,7 +89,7 @@ scripts/
 - **Extend 页签入口**：PanelLive 等扩展 UI 必须走平台同源代理（如 `/api/extensions/panellive/...`），**禁止** iframe 直连 `http://127.0.0.1:端口`（浏览器会打到用户本机，且 HTTPS 会混合内容拦截）。
 - **Live / Host 仓边界**：STT/TTS/`live.html` **只改** `/AI/WorkPanelLive`（独立 git）；代理/`LivePanel`/短回复/A2A **只改**本仓。正式 Live 群 workspace=`/AI/WorkPanelLive`；错名群 `WorPanelLive（废弃·错名）` 已归档勿解档。见 `docs/superpowers/specs/2026-08-05-workspace-boundary-live-host.md`。
 - **群公告**：等同全员项目级 rule，写入后注入 Agent prompt，并尝试同步工作区 `.cursor/rules/group-announcement.mdc`。
-- **Live 豆包语音 UX**：主聊天「按住说话 / 气泡播放」在 Host（`src/liveVoice.ts`）；媒体走 `/api/extensions/panellive`；契约见 `docs/superpowers/specs/2026-08-05-doubao-voice-ux-host.md`。
+- **Live 豆包语音 UX**：主聊天「按住说话 / 气泡播放」在 Host（`src/extensions/liveVoice.ts`）；媒体走 `/api/extensions/panellive`；契约见 `docs/superpowers/specs/2026-08-05-doubao-voice-ux-host.md`。
 - 本机需 Node 20+、Rust stable、WebView2（Windows）。
 - Agent 运行依赖本机已登录的 CLI（codex/claude/opencode/agent）。
 - `cargo test` 需在 `src-tauri/` 目录运行。

@@ -1,12 +1,12 @@
 import { memo, useEffect, useState } from "react";
 import { api } from "../api";
-import { hasRenderableContent, parseMessageContent } from "../messageContent";
-import { markdownToHtml } from "../markdownLite";
-import { modelsForAdapter } from "../agentModels";
-import { agentBusyLabel, queueCounts, runsForAgentActive } from "../queueCounts";
-import { memberRosterAction } from "../memberForm";
+import { hasRenderableContent, parseMessageContent } from "../chat/messageContent";
+import { markdownToHtml } from "../chat/markdownLite";
+import { modelsForAdapter } from "../agents/agentModels";
+import { agentBusyLabel, queueCounts, runsForAgentActive } from "../members/queueCounts";
+import { memberRosterAction } from "../members/memberForm";
 import { PHASE_LABEL, time, dayLabel, readError } from "./uiShared";
-import { applySelfDetailsToggle } from "../detailsToggle";
+import { applySelfDetailsToggle } from "../chat/detailsToggle";
 import type { Group, GroupState, Member, RunPhaseEntry, TaskRun } from "../types";
 import { ContextActionMenu, useLongPress, type ActionItem } from "./ContextActionMenu";
 

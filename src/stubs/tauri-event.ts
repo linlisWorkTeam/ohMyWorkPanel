@@ -8,13 +8,13 @@ import {
   reconnectDelayMs,
   WS_CLIENT_HEARTBEAT_MS,
   WS_RECONNECTED_KIND,
-} from "../realtimeWs";
+} from "../observability/realtimeWs";
 import {
   nextLinkStateOnClose,
   RELEASING_HEALTH_POLL_MS,
   RELEASING_WINDOW_MS,
   type WsLinkState,
-} from "../releasingState";
+} from "../observability/releasingState";
 
 type WsListener = (event: { payload: any }) => void;
 const listeners = new Map<string, Set<WsListener>>();

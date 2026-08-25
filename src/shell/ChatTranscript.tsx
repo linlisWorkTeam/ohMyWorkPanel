@@ -2,7 +2,7 @@ import { Fragment, memo, useState, type JSX } from "react";
 import { ContextActionMenu, useLongPress, type ActionItem } from "../components/ContextActionMenu";
 import { MessagePartsBody, TypingIndicator } from "../components/furniture";
 import { PHASE_LABEL, dayLabel, time } from "../components/uiShared";
-import { hasRenderableContent } from "../messageContent";
+import { hasRenderableContent } from "../chat/messageContent";
 import type { GroupState, Member, TaskRun } from "../types";
 
 export type ChatTranscriptProps = {

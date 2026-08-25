@@ -18,8 +18,8 @@ describe("shared UI governance", () => {
     expect(css).toContain("@container (max-width: 560px)");
     expect(css).toContain("@media (max-width: 720px)");
     expect(css).toContain("@media (hover: none), (pointer: coarse)");
-    expect(read("src/ExperiencePanel.tsx")).toContain("<PageShell");
-    expect(read("src/LogsPanel.tsx")).toContain("<PageShell");
+    expect(read("src/observability/ExperiencePanel.tsx")).toContain("<PageShell");
+    expect(read("src/observability/LogsPanel.tsx")).toContain("<PageShell");
   });
 
   it("styles primitives with semantic tokens only", () => {
@@ -30,7 +30,7 @@ describe("shared UI governance", () => {
 
   it("migrates real Modal, Toast, Badge, and ContextMenu consumers", () => {
     expect(read("src/App.tsx")).toMatch(/import\s*\{[^}]*Modal[^}]*Toast[^}]*\}\s*from\s*["']\.\/components\/ui["']/s);
-    expect(read("src/PmPanel.tsx")).toContain("<Badge");
+    expect(read("src/workflow/PmPanel.tsx")).toContain("<Badge");
     expect(read("src/components/ContextActionMenu.tsx")).toContain("ContextMenu as ContextActionMenu");
   });
 });

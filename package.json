@@ -10,7 +10,9 @@
     "tauri": "tauri",
     "test": "vitest run",
     "test:gate": "bash scripts/test-gate.sh",
-    "check:colors": "node scripts/check-color-purity.mjs"
+    "check:colors": "node scripts/check-color-purity.mjs",
+    "check:ai": "bash scripts/ai-harness.sh check",
+    "submit:ai": "bash scripts/ai-harness.sh submit"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.8.0",

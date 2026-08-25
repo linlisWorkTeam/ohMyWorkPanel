@@ -163,6 +163,17 @@ status: active
 | 响应式 | 页面骨架、窄容器、手机底部抽屉/菜单、44px 触控目标 | ✅ 代码与视觉证据 |
 | 发版 | bugfix 分支 → 灰度 `:8081` §F → PR 合入 → tag / GitHub Release | 进行中 |
 
+### 阶段 7.3 — 代码目录治理（轨道 E）
+
+| 切片 | 内容 | 状态 |
+|---|---|---|
+| D1 | 前端业务文件按 accounts/chat/groups/members/agents/workflow/extensions/observability 归档 | ✅ 行为不变迁移 |
+| D2 | Rust accounts/agents/operations 领域目录 + 兼容 re-export | ✅ 行为不变迁移 |
+| D3 | web/db/scheduler 巨型模块按领域继续拆分 | Backlog；后续独立切片 |
+| 规范 | 目录作为架构文档；禁止业务文件回流入口目录 | ✅ 参考文档 + 贡献指南 |
+| AI Harness | AI 编码、commit、PR 证据规范 + 可执行结构/提交门禁 | ✅ 脚本、模板、参考文档 |
+
+
 ---
 
 ## 锁定的产品方向（勿漂移）
