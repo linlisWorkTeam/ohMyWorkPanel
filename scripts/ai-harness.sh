@@ -49,8 +49,21 @@ check_tracked_hygiene() {
   backups="$(git ls-files '*.bak' '*.bak.*' '*.old' '*_final' '*_final.*')"
   [[ -z "${backups}" ]] || fail "tracked backup files are forbidden: ${backups//$'\n'/, }"
 
-  added_markers="$(git diff --unified=0 HEAD -- src src-tauri/src \
-    | grep '^+' | grep -v '^+++' \
+  local diff_base=""
+  if [[ -n "${AI_HARNESS_BASE_REF:-}" ]] && git rev-parse --verify "${AI_HARNESS_BASE_REF}^{commit}" >/dev/null 2>&1; then
+    diff_base="${AI_HARNESS_BASE_REF}"
+  elif git rev-parse --verify origin/main^{commit} >/dev/null 2>&1; then
+    diff_base="origin/main"
+  elif git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+    diff_base="HEAD^"
+  fi
+
+  added_markers="$({
+    if [[ -n "${diff_base}" ]]; then
+      git diff --unified=0 "${diff_base}...HEAD" -- src src-tauri/src
+    fi
+    git diff --unified=0 HEAD -- src src-tauri/src
+  } | grep '^+' | grep -v '^+++' \
     | grep -E '(^|[^A-Za-z0-9_])(TODO|FIXME)([^A-Za-z0-9_]|$)' \
     | grep -vE '(issue|spec|docs/|根据项目实际补充)' || true)"
   if [[ -n "${added_markers}" ]]; then
