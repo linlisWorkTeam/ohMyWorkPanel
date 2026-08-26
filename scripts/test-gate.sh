@@ -15,6 +15,18 @@ export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-1}"
 # Keep Node heap modest on 2GB hosts. Never ulimit -v the whole script (Vitest Wasm needs headroom).
 export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=768}"
 
+echo "==> test-gate: AI contribution harness"
+bash "${ROOT}/scripts/ai-harness.test.sh"
+
+echo "==> test-gate: frontend color purity"
+pnpm run check:colors
+
+echo "==> test-gate: frontend production build"
+pnpm run build
+
+echo "==> test-gate: web production build"
+pnpm run build:web
+
 echo "==> test-gate: frontend (vitest)"
 pnpm exec vitest run --pool=forks --maxWorkers=1
 

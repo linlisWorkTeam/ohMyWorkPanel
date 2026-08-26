@@ -13,6 +13,8 @@
 
 - [项目 README](../README.md)
 - [贡献指南](../CONTRIBUTING.md)
+- [代码目录组织](reference/code-organization.md)
+- [AI 编码与提交 Harness](reference/ai-contribution-harness.md)
 - [安全策略](../SECURITY.md)
 - [变更记录](../CHANGELOG.md)
 

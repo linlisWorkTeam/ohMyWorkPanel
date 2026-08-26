@@ -29,6 +29,18 @@ cargo test --no-default-features --lib
 
 真实 Agent CLI 的 smoke 检查是尽力项，不应把未安装或未登录的 CLI 当作代码测试失败。
 
+## 代码放置规则
+
+目录是架构文档。新增代码按产品领域放入 `src/accounts/`、`src/chat/`、`src/groups/`、`src/members/`、`src/agents/`、`src/workflow/`、`src/extensions/`、`src/observability/` 或对应 Rust 领域目录，不把业务文件重新平铺到入口目录，也不创建 `misc`、`helpers`、`common` 等无明确边界的收容目录。
+
+完整规则和当前目录图见 [`docs/reference/code-organization.md`](docs/reference/code-organization.md)。目录迁移必须保持 Tauri IPC、Web API 和 SQLite schema 兼容；行为变更应另行提交。
+
+## AI Agent 贡献
+
+AI 编码和提交必须遵循 [`docs/reference/ai-contribution-harness.md`](docs/reference/ai-contribution-harness.md)。编码过程中运行 `pnpm run check:ai`；commit subject 先用 `./scripts/ai-harness.sh commit-message "type: summary"` 验证；提交后、创建 PR 前在干净工作树运行 `pnpm run submit:ai`。
+
+Harness 只验证可自动执行的底线，不替代设计评审、canary 验证或生产批准，也不会替 AI 创建 commit、push 或 promote。
+
 ## 提交 Pull Request
 
 1. 从最新默认分支创建分支，并只提交与问题相关的文件。

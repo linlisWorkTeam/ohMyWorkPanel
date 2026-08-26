@@ -5,6 +5,8 @@
 - [CLI 与 Agent 适配器](cli.md)
 - [配置参考](configuration.md)
 - [Web API 参考](api.md)
+- [代码目录组织](code-organization.md)
+- [AI 编码与提交 Harness](ai-contribution-harness.md)
 
 ## 证据边界
 

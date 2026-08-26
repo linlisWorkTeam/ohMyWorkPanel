@@ -1,6 +1,14 @@
-pub mod auth;
-pub mod agent_config;
-mod adapters;
+pub mod accounts;
+pub mod agents;
+pub mod operations;
+
+// Compatibility re-exports preserve existing Rust paths while the filesystem is
+// organized by product domain. New code should use the domain paths.
+pub use accounts::{auth, presence};
+pub use agents::{agent_config, model_catalog};
+pub(crate) use agents::adapters;
+pub use operations::{keepalive, logger, metrics, ops, release_drain};
+
 pub mod a2a;
 
 #[cfg(feature = "gui")]
@@ -10,21 +18,14 @@ pub mod codex_proxy;
 mod context_policy;
 mod context_seams;
 pub mod db;
-pub mod presence;
 pub mod extensions;
 pub mod live_prompt;
 pub mod fs_browse;
-pub mod keepalive;
 pub mod memory;
 pub mod wiki_context;
 mod message_content;
 mod models;
-pub mod logger;
-pub mod metrics;
-pub mod model_catalog;
-pub mod release_drain;
 pub mod event_sender;
-pub mod ops;
 pub mod orchestrator;
 pub mod scheduler;
 pub mod git_inspect;

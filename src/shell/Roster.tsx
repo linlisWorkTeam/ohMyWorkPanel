@@ -1,8 +1,8 @@
 import { useEffect, useState, type JSX } from "react";
-import { modelsForAdapter } from "../agentModels";
+import { modelsForAdapter } from "../agents/agentModels";
 import { ContextActionMenu, useLongPress, type ActionItem } from "../components/ContextActionMenu";
-import { memberRosterAction } from "../memberForm";
-import { agentBusyLabel, queueCounts, runsForAgentActive } from "../queueCounts";
+import { memberRosterAction } from "../members/memberForm";
+import { agentBusyLabel, queueCounts, runsForAgentActive } from "../members/queueCounts";
 import type { Group, Member, TaskRun } from "../types";
 
 export type RosterProps = {
