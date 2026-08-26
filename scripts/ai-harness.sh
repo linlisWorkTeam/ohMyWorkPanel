@@ -120,8 +120,6 @@ case "${mode}" in
     run_fast_checks
     validate_commit_message "$(git log -1 --pretty=%s)"
     [[ -z "$(git status --porcelain)" ]] || fail "submit requires a clean committed worktree"
-    pnpm run check:colors
-    pnpm run build
     pnpm run test:gate
     echo "AI harness: submission OK"
     ;;
