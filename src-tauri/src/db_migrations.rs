@@ -10,7 +10,7 @@ use rusqlite::Connection;
 
 use crate::db::AppResult;
 
-pub const SCHEMA_VERSION: i64 = 4;
+pub const SCHEMA_VERSION: i64 = 5;
 
 /// 运行所有未执行的迁移，并把 `user_version` 升到 `SCHEMA_VERSION`。
 /// 幂等：已是最新版本时直接返回。
@@ -27,6 +27,7 @@ pub fn migrate(connection: &Connection) -> AppResult<()> {
             2 => migrate_v2(connection)?,
             3 => migrate_v3(connection)?,
             4 => migrate_v4(connection)?,
+            5 => migrate_v5(connection)?,
             _ => unreachable!("invalid schema version {}", version),
         }
     }
@@ -117,6 +118,43 @@ fn migrate_v4(connection: &Connection) -> AppResult<()> {
     Ok(())
 }
 
+/// v5：Self-Marketing campaign 运行态。业务 payload 使用版本化 JSON，避免 MVP 过早拆表。
+fn migrate_v5(connection: &Connection) -> AppResult<()> {
+    connection.execute_batch(r#"
+CREATE TABLE IF NOT EXISTS content_campaigns (
+  id TEXT PRIMARY KEY,
+  group_id TEXT NOT NULL,
+  requested_by TEXT NOT NULL,
+  planner_agent_id TEXT NOT NULL,
+  writer_agent_id TEXT NOT NULL,
+  status TEXT NOT NULL,
+  source_mode TEXT NOT NULL,
+  base_ref TEXT,
+  head_ref TEXT NOT NULL,
+  snapshot_json TEXT NOT NULL,
+  brief_json TEXT,
+  drafts_json TEXT NOT NULL DEFAULT '[]',
+  validation_json TEXT NOT NULL DEFAULT '[]',
+  planner_run_id TEXT,
+  writer_run_id TEXT,
+  revision INTEGER NOT NULL DEFAULT 0,
+  feedback TEXT,
+  feedback_by TEXT,
+  error_message TEXT,
+  approved_by TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_content_campaigns_group
+  ON content_campaigns(group_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_content_campaigns_planner_run
+  ON content_campaigns(planner_run_id);
+CREATE INDEX IF NOT EXISTS idx_content_campaigns_writer_run
+  ON content_campaigns(writer_run_id);
+"#).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// 老库 members 表没有 `chatbot` 分支 / `tags` 列时重建（幂等：DDL 已含 chatbot 则跳过）。
 fn migrate_members_allow_chatbot(connection: &Connection) -> AppResult<()> {
     let ddl: String = connection
@@ -196,6 +234,8 @@ mod tests {
         assert!(column_names(&conn, "agent_profiles").contains(&"api_key".to_string()));
         assert!(column_names(&conn, "groups").contains(&"group_kind".to_string()));
         assert!(column_names(&conn, "run_events").contains(&"seq".to_string()));
+        assert!(column_names(&conn, "content_campaigns").contains(&"snapshot_json".to_string()));
+        assert!(column_names(&conn, "content_campaigns").contains(&"feedback_by".to_string()));
         let rpl: i64 = conn
             .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='run_phase_log'", [], |r| r.get(0))
             .unwrap();
@@ -255,6 +295,7 @@ mod tests {
         assert!(column_names(&conn, "agent_profiles").contains(&"api_key".to_string()));
         assert!(column_names(&conn, "groups").contains(&"group_kind".to_string()));
         assert!(column_names(&conn, "run_events").contains(&"seq".to_string()));
+        assert!(column_names(&conn, "content_campaigns").contains(&"validation_json".to_string()));
         let rpl_legacy: i64 = conn
             .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='run_phase_log'", [], |r| r.get(0))
             .unwrap();

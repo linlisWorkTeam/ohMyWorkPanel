@@ -173,6 +173,17 @@ status: active
 | 规范 | 目录作为架构文档；禁止业务文件回流入口目录 | ✅ 参考文档 + 贡献指南 |
 | AI Harness | AI 编码、commit、PR 证据规范 + 可执行结构/提交门禁 | ✅ 脚本、模板、参考文档 |
 
+### 阶段 8 — **v2.2.0（待审查）** Self-Marketing MVP（轨道 H）
+
+> 让工作群基于绑定仓库的可追溯证据生成对外内容，先在群聊里审核；本阶段不连接发布平台。Spec：[`specs/2026-09-01-self-marketing-mvp.md`](superpowers/specs/2026-09-01-self-marketing-mvp.md)。
+
+| 切片 | 内容 | 状态 |
+|---|---|---|
+| M1 上下文 | README / CHANGELOG / docs / commit / diff 的受限快照与证据引用 | ✅ 已实现，待 PR 审查 |
+| M2 编排 | Content Brief → 五渠道草稿 → 事实/风格校验，允许 `no_content` | ✅ 已实现，待 PR 审查 |
+| M3 审核 | 群聊发起、查看、要求修改、批准、Markdown 导出 | ✅ 已实现，待 PR 审查 |
+| M4 发布 | 平台 OAuth、自动发布、指标回流 | Backlog；明确不进 MVP |
+
 
 ---
 
@@ -187,6 +198,7 @@ status: active
 | **E 质量** | 门禁绿 + 策略文档同步 | 纯函数/调度单测；补缺口见 testing-strategy | 用真 CLI smoke 替代门禁 |
 | **F 工作流 V1.3.0** | Git Tag 版本 + Ask + Wave | 见阶段 5 设计文 | 一次做完 S1–S4；自动无审批 promote |
 | **G 自举运行时** | 借 DSH 自举能力：会话可回放/分叉、能力可热载/可回滚、subagent 跨进程委派；**自举只由预制不可改的两级自举 Agent 执行（ohMyWorkPanel 组 `linlis-super-harness` 完整 / 普通群极简 `bootstrap-dsh`）** | 群聊治理层（决策卡/审批）先行；两级 `system_locked` 不可修改；完整自举写回权只挂 `linlis-super-harness`；DSH 进程隔离 + 锁版本；自举动作必须经群聊人类批准 | 把 dsh 内核寄生进 ohMyWorkPanel；agent 自我批准/绕过灰度；普通 Agent 或极简 bootstrap-dsh 拥有面板自举写回权 |
+| **H 项目传播** | 工作群内的证据化 Self-Marketing | 仓库快照、Content Brief、五渠道草稿、确定性校验、人类审核与导出 | 自动发布、增长分析、营销 CRM、无证据卖点、把未提交改动默认当成已发布事实 |
 
 ### 轨道 D — 聊天群（已对齐的方向，待拍板开工）
 
@@ -212,6 +224,7 @@ status: active
 7. **轨道 G 自举运行时（新占位）**：设计 Spec `2026-08-16-dsh-self-bootstrap-runtime.md` + 群聊治理层 `2026-08-16-group-chat-governance-plane.md`；P0（dsh headless 适配器 + DSH Web 嵌入）✅；P1 ACP 会话回放待立项（先立群聊治理层）。**小组件定位**：见 `specs/2026-08-16-widget-capability-placement.md`（widget=页签/能力，不单独建群；仅治理型项目群例外）。
 8. **Agent 配置一键导入（I1，轨道 A / 发布打包）**：代码已落地（阶段 5.1）；下一步 ECS canary `:8081` 部署 + 群公告 →（批）promote 生产；顺带验证「服务器导出 → 新机一键导入」端到端与前端壳冒烟（`release-checklist.md §F`）。
 9. **CLI 适配器 Manifest（轨道 A）**：SSOT accepted — `specs/2026-08-21-cli-adapter-manifest.md`。**P0 已灰度 `:8081`**（查表 + `GET /api/adapters`）；P0.1+ 未开工。
+10. **Self-Marketing MVP（轨道 H）**：v2.2.0 切片 M1–M3 已实现并进入 PR 审查；仅生成、校验、群聊审核与导出，自动发布和数据反馈留到后续阶段。
 
 ---
 
