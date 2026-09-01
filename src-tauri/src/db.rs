@@ -93,6 +93,138 @@ pub fn decrypt_secret(stored: &str) -> AppResult<String> {
     String::from_utf8(pt).map_err(|e| e.to_string())
 }
 
+#[derive(Debug, Clone)]
+pub struct ConnecterProviderProfile {
+    pub member_id: String,
+    pub base_url: String,
+    pub bearer_token: String,
+    pub group_ref: String,
+    pub target_subject_id: String,
+    pub env: String,
+}
+
+pub fn insert_connecter_provider_profile(
+    connection: &Connection,
+    profile: &ConnecterProviderProfile,
+) -> AppResult<()> {
+    let encrypted = encrypt_secret(profile.bearer_token.trim())?;
+    let ts = now();
+    connection
+        .execute(
+            "INSERT INTO connecter_provider_profiles(member_id,base_url,bearer_token,group_ref,target_subject_id,env,created_at,updated_at)
+             VALUES(?1,?2,?3,?4,?5,?6,?7,?7)
+             ON CONFLICT(member_id) DO UPDATE SET base_url=excluded.base_url,bearer_token=excluded.bearer_token,
+               group_ref=excluded.group_ref,target_subject_id=excluded.target_subject_id,env=excluded.env,updated_at=excluded.updated_at",
+            params![
+                profile.member_id,
+                profile.base_url,
+                encrypted,
+                profile.group_ref,
+                profile.target_subject_id,
+                profile.env,
+                ts
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn get_connecter_provider_profile(
+    connection: &Connection,
+    member_id: &str,
+) -> AppResult<ConnecterProviderProfile> {
+    let raw = connection
+        .query_row(
+            "SELECT member_id,base_url,bearer_token,group_ref,target_subject_id,env FROM connecter_provider_profiles WHERE member_id=?1",
+            params![member_id],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, String>(5)?,
+                ))
+            },
+        )
+        .optional()
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Connecter 远程 Agent 未配置 provider。".to_string())?;
+    Ok(ConnecterProviderProfile {
+        member_id: raw.0,
+        base_url: raw.1,
+        bearer_token: decrypt_secret(&raw.2)?,
+        group_ref: raw.3,
+        target_subject_id: raw.4,
+        env: raw.5,
+    })
+}
+
+pub fn set_task_run_provider_dispatch_id(
+    connection: &Connection,
+    run_id: &str,
+    dispatch_id: &str,
+) -> AppResult<()> {
+    let changed = connection
+        .execute(
+            "UPDATE task_runs SET provider_dispatch_id=?1 WHERE id=?2 AND (provider_dispatch_id IS NULL OR provider_dispatch_id=?1)",
+            params![dispatch_id, run_id],
+        )
+        .map_err(|e| e.to_string())?;
+    if changed == 0 {
+        return Err("任务已绑定另一个 Connecter dispatch。".into());
+    }
+    Ok(())
+}
+
+pub fn get_task_run_provider_dispatch_id(
+    connection: &Connection,
+    run_id: &str,
+) -> AppResult<Option<String>> {
+    connection
+        .query_row(
+            "SELECT provider_dispatch_id FROM task_runs WHERE id=?1",
+            params![run_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map(|value| value.flatten())
+        .map_err(|e| e.to_string())
+}
+
+pub fn get_connecter_cancel_target(
+    connection: &Connection,
+    run_id: &str,
+) -> AppResult<Option<(ConnecterProviderProfile, String)>> {
+    let row: Option<(String, Option<String>)> = connection
+        .query_row(
+            "SELECT agent_member_id,provider_dispatch_id FROM task_runs WHERE id=?1",
+            params![run_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    let Some((member_id, Some(dispatch_id))) = row else {
+        return Ok(None);
+    };
+    let adapter: Option<String> = connection
+        .query_row(
+            "SELECT adapter FROM agent_profiles WHERE member_id=?1",
+            params![member_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    if adapter.as_deref() != Some(crate::adapters::connecter_remote::ADAPTER_ID) {
+        return Ok(None);
+    }
+    Ok(Some((
+        get_connecter_provider_profile(connection, &member_id)?,
+        dispatch_id,
+    )))
+}
+
 pub fn init_db(path: &Path) -> AppResult<()> {
     let connection = open_db(path)?;
     // Initialize logs table
@@ -2210,6 +2342,69 @@ mod tests {
         // 清空
         set_member_api_key(&conn, "a", None).unwrap();
         assert!(get_agent_api_key(&conn, "a").unwrap().is_none());
+    }
+
+    #[test]
+    fn connecter_provider_profile_is_encrypted_cascades_and_anchors_dispatch() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        init_db(file.path()).unwrap();
+        let conn = open_db(file.path()).unwrap();
+        conn.execute("INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at) VALUES('g','g','.','u',NULL,1)", []).unwrap();
+        conn.execute("INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,tags) VALUES('u','g','user','u','#000','',1,1,'')", []).unwrap();
+        conn.execute("INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,tags) VALUES('a','g','agent','a','#000','',1,1,'')", []).unwrap();
+        conn.execute("INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at) VALUES('a','connecter-remote',NULL,'unknown',1)", []).unwrap();
+        conn.execute("INSERT INTO messages(id,group_id,sender_member_id,parent_run_id,content,status,created_at) VALUES('m','g','u',NULL,'x','completed',1)", []).unwrap();
+        conn.execute("INSERT INTO task_runs(id,group_id,root_message_id,agent_member_id,depth,status,created_at) VALUES('r','g','m','a',0,'running',1)", []).unwrap();
+
+        insert_connecter_provider_profile(
+            &conn,
+            &ConnecterProviderProfile {
+                member_id: "a".into(),
+                base_url: "https://connecter.example".into(),
+                bearer_token: "service-secret-123".into(),
+                group_ref: "wp:canary:g".into(),
+                target_subject_id: "runner:a".into(),
+                env: "canary".into(),
+            },
+        )
+        .unwrap();
+        let stored: String = conn
+            .query_row(
+                "SELECT bearer_token FROM connecter_provider_profiles WHERE member_id='a'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(stored.starts_with("v1:"));
+        assert!(!stored.contains("service-secret-123"));
+        let profile = get_connecter_provider_profile(&conn, "a").unwrap();
+        assert_eq!(profile.bearer_token, "service-secret-123");
+
+        set_task_run_provider_dispatch_id(&conn, "r", "dispatch-1").unwrap();
+        set_task_run_provider_dispatch_id(&conn, "r", "dispatch-1").unwrap();
+        assert_eq!(
+            get_task_run_provider_dispatch_id(&conn, "r").unwrap().as_deref(),
+            Some("dispatch-1")
+        );
+        assert!(set_task_run_provider_dispatch_id(&conn, "r", "dispatch-2").is_err());
+        assert_eq!(
+            get_connecter_cancel_target(&conn, "r")
+                .unwrap()
+                .unwrap()
+                .1,
+            "dispatch-1"
+        );
+
+        conn.execute("DELETE FROM task_runs WHERE id='r'", []).unwrap();
+        conn.execute("DELETE FROM members WHERE id='a'", []).unwrap();
+        let profile_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM connecter_provider_profiles WHERE member_id='a'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(profile_count, 0);
     }
 
     #[test]

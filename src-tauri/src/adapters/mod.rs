@@ -1,4 +1,5 @@
 pub mod chatbot;
+pub mod connecter_remote;
 mod claude;
 pub(crate) mod codex;
 mod cursor;

@@ -17,7 +17,13 @@ import {
   parseMessageContent,
 } from "./messageContent";
 import { defaultModelForAdapter, modelsForAdapter, applyAgentModelsPayload } from "./agentModels";
-import { FALLBACK_CLI_ADAPTERS, mergeCliAdapters, type CliAdapterOption } from "./adaptersCatalog";
+import {
+  CONNECTER_REMOTE_ADAPTER,
+  FALLBACK_CLI_ADAPTERS,
+  buildAgentAdapterPayload,
+  mergeCliAdapters,
+  type CliAdapterOption,
+} from "./adaptersCatalog";
 import { canSubmitUserMember, chatbotSlotTaken, memberRosterAction, type UserAddMode } from "./memberForm";
 import { InviteLanding, parseInviteTokenFromPath } from "./InviteLanding";
 import { markdownToHtml } from "./markdownLite";
@@ -91,6 +97,11 @@ type NewMember = {
   chatbotProvider: "opencode-go" | "deepseek";
   apiKey: string;
   model: string;
+  connecterBaseUrl: string;
+  connecterEnv: string;
+  connecterGroupRef: string;
+  connecterTargetSubjectId: string;
+  connecterBearer: string;
   loginUsername: string;
   loginPassword: string;
   userAddMode: UserAddMode;
@@ -100,6 +111,8 @@ type Session = "checking" | "login" | "ready";
 const emptyMember: NewMember = {
   kind: "agent", displayName: "", roleDescription: "", adapter: "mock", executablePath: "",
   chatbotProvider: "opencode-go", apiKey: "", model: "",
+  connecterBaseUrl: "", connecterEnv: "canary", connecterGroupRef: "",
+  connecterTargetSubjectId: "", connecterBearer: "",
   loginUsername: "", loginPassword: "",
   userAddMode: "create", existingAuthUserId: "",
 };
@@ -785,6 +798,7 @@ export function App() {
     .join(" · ");
   const hasUnread = groups.some((g) => (g.unreadCount ?? 0) > 0);
   const addMemberKind = chatbotTaken && newMember.kind === "chatbot" ? "agent" : newMember.kind;
+  const isConnecterRemote = addMemberKind === "agent" && newMember.adapter === CONNECTER_REMOTE_ADAPTER.id;
   const activeGroups = sortGroupsForSidebar(groups.filter((g) => !g.archived));
   const archivedGroups = groups.filter((g) => g.archived);
   const mentionSuggestions = mentionQuery === null ? [] : activeMembers.filter((member) => member.displayName.toLowerCase().includes(mentionQuery.toLowerCase())).slice(0, 8);
@@ -1097,17 +1111,23 @@ export function App() {
         kind: newMember.kind,
         displayName: newMember.displayName,
         roleDescription: newMember.roleDescription,
-        adapter: newMember.kind === "agent" ? newMember.adapter : undefined,
-        executablePath: newMember.kind === "agent" ? newMember.executablePath : undefined,
-        chatbotProvider: newMember.kind === "chatbot" ? newMember.chatbotProvider : undefined,
-        apiKey: newMember.kind === "chatbot" ? newMember.apiKey : undefined,
-        model: newMember.kind === "agent" || newMember.kind === "chatbot"
-          ? (newMember.model || defaultModelForAdapter(
-              newMember.kind === "chatbot"
-                ? (newMember.chatbotProvider === "deepseek" ? "chatbot-deepseek" : "chatbot-opencode-go")
-                : newMember.adapter,
-            ) || undefined)
-          : undefined,
+        ...(newMember.kind === "agent" ? buildAgentAdapterPayload({
+          adapter: newMember.adapter,
+          executablePath: newMember.executablePath,
+          model: newMember.model || defaultModelForAdapter(newMember.adapter) || undefined,
+          connecterBaseUrl: newMember.connecterBaseUrl,
+          connecterEnv: newMember.connecterEnv,
+          connecterGroupRef: newMember.connecterGroupRef,
+          connecterTargetSubjectId: newMember.connecterTargetSubjectId,
+          connecterBearer: newMember.connecterBearer,
+        }) : {}),
+        ...(newMember.kind === "chatbot" ? {
+          chatbotProvider: newMember.chatbotProvider,
+          apiKey: newMember.apiKey,
+          model: newMember.model || defaultModelForAdapter(
+              newMember.chatbotProvider === "deepseek" ? "chatbot-deepseek" : "chatbot-opencode-go",
+            ) || undefined,
+        } : {}),
         loginUsername: newMember.kind === "user" && newMember.userAddMode === "create"
           ? newMember.loginUsername.trim()
           : undefined,
@@ -1564,12 +1584,49 @@ export function App() {
               <option key={a.id} value={a.id}>{a.displayName}</option>
             ))}
             </select>
-            {modelsForAdapter(newMember.adapter).length > 0 && (
+            {!isConnecterRemote && modelsForAdapter(newMember.adapter).length > 0 && (
               <select value={newMember.model || defaultModelForAdapter(newMember.adapter)} onChange={(event) => setNewMember((value) => ({ ...value, model: event.target.value }))}>
                 {modelsForAdapter(newMember.adapter).map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
             )}
-            <input value={newMember.executablePath} onChange={(event) => setNewMember((value) => ({ ...value, executablePath: event.target.value }))} placeholder="可执行文件路径（可选）" />
+            {isConnecterRemote ? <>
+              <input
+                type="url"
+                value={newMember.connecterBaseUrl}
+                onChange={(event) => setNewMember((value) => ({ ...value, connecterBaseUrl: event.target.value }))}
+                placeholder="Connecter Base URL，例如 http://127.0.0.1:9080"
+                required
+              />
+              <input
+                value={newMember.connecterEnv}
+                onChange={(event) => setNewMember((value) => ({ ...value, connecterEnv: event.target.value }))}
+                placeholder="环境（env）"
+                required
+              />
+              <input
+                value={newMember.connecterGroupRef}
+                onChange={(event) => setNewMember((value) => ({ ...value, connecterGroupRef: event.target.value }))}
+                placeholder="Directory Group Ref"
+                required
+              />
+              <input
+                value={newMember.connecterTargetSubjectId}
+                onChange={(event) => setNewMember((value) => ({ ...value, connecterTargetSubjectId: event.target.value }))}
+                placeholder="远端 Runner Subject ID"
+                required
+              />
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={newMember.connecterBearer}
+                onChange={(event) => setNewMember((value) => ({ ...value, connecterBearer: event.target.value }))}
+                placeholder="WorkPanel 专用 Connecter Bearer"
+                required
+              />
+              <p className="form-hint">Bearer 独立保存，不会当作普通 Agent API Key 使用或回显。</p>
+            </> : (
+              <input value={newMember.executablePath} onChange={(event) => setNewMember((value) => ({ ...value, executablePath: event.target.value }))} placeholder="可执行文件路径（可选）" />
+            )}
           </>}
           {addMemberKind === "chatbot" && <>
             <select value={newMember.chatbotProvider} onChange={(event) => {

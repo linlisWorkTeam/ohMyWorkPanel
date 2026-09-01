@@ -178,6 +178,16 @@ pub struct AddMemberInput {
     pub avatar_color: Option<String>,
     pub adapter: Option<String>,
     pub executable_path: Option<String>,
+    /// Connecter remote provider base URL (http/https only).
+    pub connecter_base_url: Option<String>,
+    /// Connecter environment used for runner binding (for example `canary`).
+    pub connecter_env: Option<String>,
+    /// Stable Connecter group reference (for example `wp:ecs-canary:group-id`).
+    pub connecter_group_ref: Option<String>,
+    /// Directory subject id of the remote Runner.
+    pub connecter_target_subject_id: Option<String>,
+    /// Dedicated WorkPanel service bearer; accepted on write and never returned in Member DTOs.
+    pub connecter_bearer: Option<String>,
     /// chatbot provider: opencode-go | deepseek
     pub chatbot_provider: Option<String>,
     pub api_key: Option<String>,
@@ -554,6 +564,7 @@ mod contract_tests {
             assert!(mv.get(key).is_some(), "缺少 {}", key);
         }
         assert!(mv.get("api_key").is_none(), "原始 API key 永不外泄（只暴露 apiKeySet）");
+        assert!(mv.get("connecterBearer").is_none(), "Connecter bearer 永不进入 Member DTO");
         assert!(mv.get("display_name").is_none());
     }
 }

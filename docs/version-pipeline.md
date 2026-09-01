@@ -141,6 +141,7 @@ status: active
 | 对话/成员 | 微信手感：长按菜单、引用前缀、通讯录成员行 | ✅ 代码 |
 | 七主题 | 六套成戏 + `minimal` 极简 | ✅ 代码 |
 | 发版 | 灰度 §F → tag `v2.1.0` →（批）promote | 代码齐，待 ECS 灰度 |
+| **远程 Agent Provider** | **`connecter-remote`：WorkPanel 经 Connecter Directory/Federation 调度其他设备上的 Runner；独立加密 bearer、幂等 dispatch、取消与单次落库** | **代码 + 本地真实 Codex E2E ✅；待 ECS `:8081` 部署，禁止直接 promote** |
 
 ---
 
@@ -180,6 +181,7 @@ status: active
 7. **轨道 G 自举运行时（新占位）**：设计 Spec `2026-08-16-dsh-self-bootstrap-runtime.md` + 群聊治理层 `2026-08-16-group-chat-governance-plane.md`；P0（dsh headless 适配器 + DSH Web 嵌入）✅；P1 ACP 会话回放待立项（先立群聊治理层）。**小组件定位**：见 `specs/2026-08-16-widget-capability-placement.md`（widget=页签/能力，不单独建群；仅治理型项目群例外）。
 8. **Agent 配置一键导入（I1，轨道 A / 发布打包）**：代码已落地（阶段 5.1）；下一步 ECS canary `:8081` 部署 + 群公告 →（批）promote 生产；顺带验证「服务器导出 → 新机一键导入」端到端与前端壳冒烟（`release-checklist.md §F`）。
 9. **CLI 适配器 Manifest（轨道 A）**：SSOT accepted — `specs/2026-08-21-cli-adapter-manifest.md`。**P0 已灰度 `:8081`**（查表 + `GET /api/adapters`）；P0.1+ 未开工。
+10. **Connecter 远程 Agent Provider（轨道 A）**：`connecter-remote` 通过 WorkPanel service dispatch API 调度跨设备 Runner；本切片完成成员配置、加密 bearer、POST/GET/cancel、重启幂等和前端配置，仅部署 `:8081` canary。
 
 ---
 

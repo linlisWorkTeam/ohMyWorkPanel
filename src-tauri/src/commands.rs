@@ -214,6 +214,20 @@ pub fn add_member(input: AddMemberInput, state: State<'_, AppState>) -> AppResul
     if invite_mode && input.kind != "user" {
         return Err("仅用户成员支持邀请链接。".into());
     }
+    let requested_adapter = input.adapter.as_deref().unwrap_or("mock");
+    let connecter_profile = if input.kind == "agent"
+        && crate::adapters::connecter_remote::is_connecter_remote(requested_adapter)
+    {
+        Some(crate::adapters::connecter_remote::validate_profile_input(
+            input.connecter_base_url.as_deref(),
+            input.connecter_bearer.as_deref(),
+            input.connecter_group_ref.as_deref(),
+            input.connecter_target_subject_id.as_deref(),
+            input.connecter_env.as_deref(),
+        )?)
+    } else {
+        None
+    };
     let conn = open_db(&state.db_path)?;
     let group = get_group(&conn, &input.group_id)?;
     if input.kind == "chatbot" && group.group_kind != "chat" {
@@ -261,7 +275,9 @@ pub fn add_member(input: AddMemberInput, state: State<'_, AppState>) -> AppResul
     .map_err(|e| e.to_string())?;
     if input.kind == "agent" {
         let adapter = input.adapter.unwrap_or_else(|| "mock".into());
-        crate::adapters::manifest::resolve_adapter(&adapter)?;
+        if !crate::adapters::connecter_remote::is_connecter_remote(&adapter) {
+            crate::adapters::manifest::resolve_adapter(&adapter)?;
+        }
         let default_ws = if group.workspace_path.trim().is_empty() {
             None
         } else {
@@ -295,6 +311,19 @@ pub fn add_member(input: AddMemberInput, state: State<'_, AppState>) -> AppResul
             ],
         )
         .map_err(|e| e.to_string())?;
+        if let Some(profile) = connecter_profile {
+            crate::db::insert_connecter_provider_profile(
+                &conn,
+                &crate::db::ConnecterProviderProfile {
+                    member_id: member_id.clone(),
+                    base_url: profile.base_url,
+                    bearer_token: profile.bearer_token,
+                    group_ref: profile.group_ref,
+                    target_subject_id: profile.target_subject_id,
+                    env: profile.env,
+                },
+            )?;
+        }
     } else if input.kind == "chatbot" {
         let provider = input.chatbot_provider.as_deref().unwrap_or("opencode-go");
         let adapter = crate::adapters::chatbot::normalize_adapter(provider)?;
@@ -607,15 +636,26 @@ pub async fn cancel_run(
     let Some(info) = crate::db::cancel_run(&conn, &run_id)? else {
         return Ok(());
     };
-    if let Some(token) = state
-        .cancellations
-        .lock()
-        .map_err(|_| "取消锁不可用".to_string())?
-        .get(&run_id)
-    {
-        token.store(true, Ordering::SeqCst);
-    }
+    let remote_cancel = crate::db::get_connecter_cancel_target(&conn, &run_id)?;
+    let live_worker = {
+        let tokens = state
+            .cancellations
+            .lock()
+            .map_err(|_| "取消锁不可用".to_string())?;
+        if let Some(token) = tokens.get(&run_id) {
+            token.store(true, Ordering::SeqCst);
+            true
+        } else {
+            false
+        }
+    };
     insert_run_event(&conn, &run_id, "cancelled", "{}")?;
+    drop(conn);
+    if !live_worker {
+        if let Some((profile, dispatch_id)) = remote_cancel {
+            let _ = crate::adapters::connecter_remote::cancel_dispatch(&profile, &dispatch_id).await;
+        }
+    }
     let _ = app.emit("chat-event", ChatEvent {
             kind: "run_status".into(),
             group_id: info.group_id,
@@ -671,6 +711,16 @@ pub async fn detect_agent(member_id: String, state: State<'_, AppState>) -> AppR
         .optional()
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "找不到 Agent 配置。".to_string())?;
+    if crate::adapters::connecter_remote::is_connecter_remote(&record.0) {
+        let profile = crate::db::get_connecter_provider_profile(&conn, &member_id)?;
+        crate::adapters::connecter_remote::validate_stored_profile(&profile)?;
+        conn.execute(
+            "UPDATE agent_profiles SET runtime_status='ready',updated_at=?1 WHERE member_id=?2",
+            params![now(), member_id],
+        )
+        .map_err(|e| e.to_string())?;
+        return Ok("ready".into());
+    }
     let spec = crate::adapters::manifest::resolve_adapter(&record.0)?;
     if spec.builtin_kind() == Some(AdapterKind::Mock) {
         conn.execute(

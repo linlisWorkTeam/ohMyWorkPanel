@@ -735,6 +735,11 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, user_id: Opt
      avatar_color: Option<String>,
      adapter: Option<String>,
      executable_path: Option<String>,
+     connecter_base_url: Option<String>,
+     connecter_env: Option<String>,
+     connecter_group_ref: Option<String>,
+     connecter_target_subject_id: Option<String>,
+     connecter_bearer: Option<String>,
      chatbot_provider: Option<String>,
      api_key: Option<String>,
      model: Option<String>,
@@ -788,6 +793,23 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, user_id: Opt
      if invite_mode && input.kind != "user" {
          return Err((StatusCode::BAD_REQUEST, "仅用户成员支持邀请链接".into()));
      }
+     let requested_adapter = input.adapter.as_deref().unwrap_or("mock");
+     let connecter_profile = if input.kind == "agent"
+         && crate::adapters::connecter_remote::is_connecter_remote(requested_adapter)
+     {
+         Some(
+             crate::adapters::connecter_remote::validate_profile_input(
+                 input.connecter_base_url.as_deref(),
+                 input.connecter_bearer.as_deref(),
+                 input.connecter_group_ref.as_deref(),
+                 input.connecter_target_subject_id.as_deref(),
+                 input.connecter_env.as_deref(),
+             )
+             .map_err(|e| (StatusCode::BAD_REQUEST, e))?,
+         )
+     } else {
+         None
+     };
      let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
      require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
      let group = db_get_group(&conn, &input.group_id)
@@ -849,8 +871,10 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, user_id: Opt
      .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
      if input.kind == "agent" {
          let adapter = input.adapter.unwrap_or_else(|| "mock".into());
-         crate::adapters::manifest::resolve_adapter(&adapter)
-             .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+         if !crate::adapters::connecter_remote::is_connecter_remote(&adapter) {
+             crate::adapters::manifest::resolve_adapter(&adapter)
+                 .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+         }
          let default_ws = if group.workspace_path.trim().is_empty() {
              None
          } else {
@@ -884,6 +908,20 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, user_id: Opt
              ],
          )
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+         if let Some(profile) = connecter_profile {
+             crate::db::insert_connecter_provider_profile(
+                 &conn,
+                 &crate::db::ConnecterProviderProfile {
+                     member_id: member_id.clone(),
+                     base_url: profile.base_url,
+                     bearer_token: profile.bearer_token,
+                     group_ref: profile.group_ref,
+                     target_subject_id: profile.target_subject_id,
+                     env: profile.env,
+                 },
+             )
+             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+         }
      } else if input.kind == "chatbot" {
          let provider = input
              .chatbot_provider
@@ -1215,7 +1253,28 @@ async fn get_message_channel_part_web(
      else {
          return Ok(Json(()));
      };
+     let remote_cancel = crate::db::get_connecter_cancel_target(&conn, &run_id)
+         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+     let live_worker = {
+         let tokens = state
+             .sched
+             .cancellations
+             .lock()
+             .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "取消锁不可用".into()))?;
+         if let Some(token) = tokens.get(&run_id) {
+             token.store(true, std::sync::atomic::Ordering::SeqCst);
+             true
+         } else {
+             false
+         }
+     };
      logger::warn(&conn, "run", &format!("run {} cancelled", run_id), None);
+     drop(conn);
+     if !live_worker {
+         if let Some((profile, dispatch_id)) = remote_cancel {
+             let _ = crate::adapters::connecter_remote::cancel_dispatch(&profile, &dispatch_id).await;
+         }
+     }
      web_emit(&state.tx, &info.group_id, "run_status", None, Some(&run_id), Some("cancelled"), None);
      Ok(Json(()))
  }
