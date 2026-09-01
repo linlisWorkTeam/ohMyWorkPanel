@@ -22,6 +22,7 @@ use std::{
     },
 };
 use std::path::PathBuf;
+use std::time::Duration;
 
 /// Common scheduler state available to both Tauri and Web modes
 #[derive(Clone, Debug)]
@@ -526,6 +527,64 @@ async fn run_agent(
     token: &Arc<AtomicBool>,
 ) -> AppResult<()> {
     let adapter_name = context.agent.adapter.as_deref().unwrap_or("mock");
+
+    // Non-CLI provider: WorkPanel owns the local run/message lifecycle while Connecter
+    // dispatches to a remote Runner with writeBack=false. A persisted dispatch id resumes
+    // polling after restart; the POST idempotency key covers the crash window before save.
+    if adapters::connecter_remote::is_connecter_remote(adapter_name) {
+        emit_phase(
+            state,
+            &context.group.id,
+            &context.run.id,
+            "provider_dispatch",
+        );
+        let (profile, existing_dispatch_id) = {
+            let conn = open_db(&state.db_path)?;
+            (
+                crate::db::get_connecter_provider_profile(&conn, &context.agent.id)?,
+                crate::db::get_task_run_provider_dispatch_id(&conn, &context.run.id)?,
+            )
+        };
+        let snapshot = if let Some(dispatch_id) = existing_dispatch_id {
+            adapters::connecter_remote::get_dispatch(&profile, &dispatch_id).await?
+        } else {
+            let created = adapters::connecter_remote::create_dispatch(
+                &profile,
+                &context.run.id,
+                &context.group.id,
+                &context.agent.id,
+                &context.group.name,
+                &context.prompt,
+            )
+            .await?;
+            let conn = open_db(&state.db_path)?;
+            crate::db::set_task_run_provider_dispatch_id(
+                &conn,
+                &context.run.id,
+                &created.dispatch_id,
+            )?;
+            created
+        };
+        emit_phase(
+            state,
+            &context.group.id,
+            &context.run.id,
+            "awaiting_remote_result",
+        );
+        let text = adapters::connecter_remote::poll_until_terminal(
+            &profile,
+            snapshot,
+            Duration::from_secs(context.settings.run_timeout_seconds.max(30) as u64),
+            Duration::from_secs(1),
+            token,
+        )
+        .await?;
+        if !token.load(Ordering::SeqCst) {
+            emit_phase(state, &context.group.id, &context.run.id, "streaming");
+            append_delta(state, &context.run, "final", &text, false)?;
+        }
+        return Ok(());
+    }
 
     // Fast path: HTTP chatbot (no CLI / no tools)
     if context.agent.kind == "chatbot" || chatbot::is_chatbot_adapter(adapter_name) {

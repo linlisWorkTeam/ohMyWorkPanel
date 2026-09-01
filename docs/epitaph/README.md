@@ -8,6 +8,7 @@ Active handoff notes for future agents.
 
 | Date | Topic | Status |
 |------|-------|--------|
+| 2026-09-01 | [Connecter 远程 Provider + 本机 Codex 端到端](./2026-09-01-connecter-remote-provider.md) | active |
 | 2026-08-25 | [代码目录治理](./2026-08-25-code-directory-governance.md) | active |
 | 2026-08-24 | [v2.1.2 发布验收](./2026-08-24-v2.1.2-release-verify.md) | canary-verified |
 | 2026-08-22 | [v2.1.0 壳层扩展 + 七主题 + 微信对话](./2026-08-22-v2.1-chrome-extend.md) | active |

@@ -1,0 +1,33 @@
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+
+describe("connecter-remote member form", () => {
+  const app = readFileSync("src/App.tsx", "utf8");
+
+  it("shows remote settings instead of CLI executable and model controls", () => {
+    expect(app).toContain("const isConnecterRemote =");
+    expect(app).toContain("!isConnecterRemote && modelsForAdapter(newMember.adapter).length > 0");
+    expect(app).toContain("{isConnecterRemote ? <>");
+    expect(app).toMatch(/isConnecterRemote \? <>[\s\S]*connecterBaseUrl[\s\S]*connecterEnv[\s\S]*connecterGroupRef[\s\S]*connecterTargetSubjectId[\s\S]*connecterBearer[\s\S]*: \([\s\S]*executablePath/);
+  });
+
+  it("shows the canonical Directory groupRef shape", () => {
+    expect(app).toContain("wp:ecs-canary:seed-group-ohmyworkpanel");
+  });
+
+  it("uses a non-autofilled password input for the dedicated bearer", () => {
+    expect(app).toMatch(/type="password"[\s\S]{0,160}autoComplete="new-password"[\s\S]{0,160}value=\{newMember\.connecterBearer\}/);
+    expect(app).not.toContain("apiKey: newMember.connecterBearer");
+  });
+
+  it("preserves custom chatbot URL/model handling separately", () => {
+    expect(app).toContain('chatbotProvider: "opencode-go" | "deepseek" | "custom"');
+    expect(app).toContain("apiUrl: newMember.apiUrl.trim() || undefined");
+    expect(app).toContain("chatbotAdapterFor(newMember.chatbotProvider)");
+  });
+
+  it("builds agent adapter fields through the mutually exclusive payload helper", () => {
+    expect(app).toContain("buildAgentAdapterPayload({");
+    expect(app).toContain("connecterBearer: newMember.connecterBearer");
+  });
+});

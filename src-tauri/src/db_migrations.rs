@@ -10,7 +10,7 @@ use rusqlite::Connection;
 
 use crate::db::AppResult;
 
-pub const SCHEMA_VERSION: i64 = 4;
+pub const SCHEMA_VERSION: i64 = 5;
 
 /// 运行所有未执行的迁移，并把 `user_version` 升到 `SCHEMA_VERSION`。
 /// 幂等：已是最新版本时直接返回。
@@ -27,6 +27,7 @@ pub fn migrate(connection: &Connection) -> AppResult<()> {
             2 => migrate_v2(connection)?,
             3 => migrate_v3(connection)?,
             4 => migrate_v4(connection)?,
+            5 => migrate_v5(connection)?,
             _ => unreachable!("invalid schema version {}", version),
         }
     }
@@ -117,6 +118,39 @@ fn migrate_v4(connection: &Connection) -> AppResult<()> {
     Ok(())
 }
 
+/// v5：收敛 main-v4（已有 api_url）和旧 provider-v4（已有 Connecter schema）两条谱系。
+/// 所有操作均幂等，确保任一 v4 数据库升级后同时具备两组字段。
+fn migrate_v5(connection: &Connection) -> AppResult<()> {
+    let _ = connection.execute("ALTER TABLE agent_profiles ADD COLUMN api_url TEXT", []);
+    connection
+        .execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS connecter_provider_profiles (
+  member_id TEXT PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE,
+  base_url TEXT NOT NULL,
+  bearer_token TEXT NOT NULL,
+  group_ref TEXT NOT NULL,
+  target_subject_id TEXT NOT NULL,
+  env TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+"#,
+        )
+        .map_err(|e| e.to_string())?;
+    let _ = connection.execute(
+        "ALTER TABLE task_runs ADD COLUMN provider_dispatch_id TEXT",
+        [],
+    );
+    connection
+        .execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_task_runs_provider_dispatch_id ON task_runs(provider_dispatch_id) WHERE provider_dispatch_id IS NOT NULL",
+            [],
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// 老库 members 表没有 `chatbot` 分支 / `tags` 列时重建（幂等：DDL 已含 chatbot 则跳过）。
 fn migrate_members_allow_chatbot(connection: &Connection) -> AppResult<()> {
     let ddl: String = connection
@@ -193,7 +227,10 @@ mod tests {
         assert!(column_names(&conn, "task_runs").contains(&"review_status".to_string()));
         assert!(column_names(&conn, "task_runs").contains(&"wave_id".to_string()));
         assert!(column_names(&conn, "task_runs").contains(&"version_id".to_string()));
+        assert!(column_names(&conn, "task_runs").contains(&"provider_dispatch_id".to_string()));
+        assert!(column_names(&conn, "connecter_provider_profiles").contains(&"bearer_token".to_string()));
         assert!(column_names(&conn, "agent_profiles").contains(&"api_key".to_string()));
+        assert!(column_names(&conn, "agent_profiles").contains(&"api_url".to_string()));
         assert!(column_names(&conn, "groups").contains(&"group_kind".to_string()));
         assert!(column_names(&conn, "run_events").contains(&"seq".to_string()));
         let rpl: i64 = conn
@@ -252,7 +289,10 @@ mod tests {
         assert!(column_names(&conn, "task_runs").contains(&"review_status".to_string()));
         assert!(column_names(&conn, "task_runs").contains(&"wave_id".to_string()));
         assert!(column_names(&conn, "task_runs").contains(&"version_id".to_string()));
+        assert!(column_names(&conn, "task_runs").contains(&"provider_dispatch_id".to_string()));
+        assert!(column_names(&conn, "connecter_provider_profiles").contains(&"target_subject_id".to_string()));
         assert!(column_names(&conn, "agent_profiles").contains(&"api_key".to_string()));
+        assert!(column_names(&conn, "agent_profiles").contains(&"api_url".to_string()));
         assert!(column_names(&conn, "groups").contains(&"group_kind".to_string()));
         assert!(column_names(&conn, "run_events").contains(&"seq".to_string()));
         let rpl_legacy: i64 = conn
@@ -287,5 +327,55 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='members'", [], |r| r.get(0))
             .unwrap();
         assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn main_v4_database_converges_to_provider_v5() {
+        let file = NamedTempFile::new().unwrap();
+        let conn = open_db(file.path()).unwrap();
+        conn.execute_batch(
+            r#"
+            CREATE TABLE members (id TEXT PRIMARY KEY);
+            CREATE TABLE agent_profiles (member_id TEXT PRIMARY KEY, api_url TEXT);
+            CREATE TABLE task_runs (id TEXT PRIMARY KEY);
+            PRAGMA user_version=4;
+            "#,
+        )
+        .unwrap();
+        migrate(&conn).unwrap();
+        assert_eq!(user_version(&conn), SCHEMA_VERSION);
+        assert!(column_names(&conn, "agent_profiles").contains(&"api_url".to_string()));
+        assert!(column_names(&conn, "task_runs").contains(&"provider_dispatch_id".to_string()));
+        assert!(column_names(&conn, "connecter_provider_profiles").contains(&"env".to_string()));
+    }
+
+    #[test]
+    fn legacy_provider_v4_database_converges_to_main_v5() {
+        let file = NamedTempFile::new().unwrap();
+        let conn = open_db(file.path()).unwrap();
+        conn.execute_batch(
+            r#"
+            CREATE TABLE members (id TEXT PRIMARY KEY);
+            CREATE TABLE agent_profiles (member_id TEXT PRIMARY KEY);
+            CREATE TABLE task_runs (id TEXT PRIMARY KEY, provider_dispatch_id TEXT);
+            CREATE TABLE connecter_provider_profiles (
+              member_id TEXT PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE,
+              base_url TEXT NOT NULL,
+              bearer_token TEXT NOT NULL,
+              group_ref TEXT NOT NULL,
+              target_subject_id TEXT NOT NULL,
+              env TEXT NOT NULL,
+              created_at INTEGER NOT NULL,
+              updated_at INTEGER NOT NULL
+            );
+            PRAGMA user_version=4;
+            "#,
+        )
+        .unwrap();
+        migrate(&conn).unwrap();
+        assert_eq!(user_version(&conn), SCHEMA_VERSION);
+        assert!(column_names(&conn, "agent_profiles").contains(&"api_url".to_string()));
+        assert!(column_names(&conn, "task_runs").contains(&"provider_dispatch_id".to_string()));
+        assert!(column_names(&conn, "connecter_provider_profiles").contains(&"env".to_string()));
     }
 }
