@@ -178,7 +178,7 @@ status: active
 | 切片 | 内容 | 状态 |
 |---|---|---|
 | Provider | `connecter-remote` 经 Connecter Directory/Federation 调度其他设备 Runner | 最新 `main` 代码 + 本地真实 Codex E2E ✅ |
-| 安全与恢复 | 独立加密 bearer、幂等 dispatch、取消、重启恢复、`writeBack=false` | schema v5 兼容迁移 + 全量门禁 ✅ |
+| 安全与恢复 | 独立加密 bearer、幂等 dispatch、取消、重启恢复、`writeBack=false` | schema v6 兼容迁移（含已占用 v5 的部署谱系）+ 全量门禁 ✅ |
 | 发版 | WorkPanel 与 Connecter Host 仅部署 ECS `:8081` canary | 待 PR、ECS 自举与 UI 直调；禁止 promote `:8080` |
 
 

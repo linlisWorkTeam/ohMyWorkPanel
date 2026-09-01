@@ -18,7 +18,7 @@ status: active
 
 - Rust adapter 移入 `src-tauri/src/agents/adapters/`，前端 catalog/测试移入 `src/agents/`，不回退代码目录治理。
 - 保留 v2.1.2 custom chatbot `api_url`、Shell/UI atoms、更新检查和现有 IPC；Provider 字段只做兼容加法。
-- schema v5 同时兼容 main-v4 与早期 provider-v4 数据库，不能再次占用 v4。
+- schema v6 同时兼容 main-v4、早期 provider-v4，以及已占用 v5 但缺少 provider schema 的数据库；v5 版本号碰撞由 ECS canary 实测发现。
 
 ## 最新 main 验证（2026-09-02）
 
@@ -26,7 +26,7 @@ status: active
 - 前端：36 files / 131 tests；TypeScript、桌面 build、Web build、颜色门禁均通过。
 - Rust：157 tests；server 与 GUI `cargo check` 均通过。
 - AI Harness fast checks、Markdown links 与 Extension Host purity：通过。
-- schema v5 的 fresh、legacy、second-boot、main-v4、provider-v4 汇合测试均通过。
+- schema v6 的 fresh、legacy、second-boot、main-v4、provider-v4、foreign-main-v5 汇合测试均通过。
 - ECS Cloud Assistant 只读调用 ECS Codex 成功：`ECS_CODEX_READY|branch=master|head=ef6c741306c5668b17a01f137be27037162607cb`。
 
 ## 当前待办

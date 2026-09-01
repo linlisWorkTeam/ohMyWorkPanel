@@ -34,8 +34,8 @@ environment: canary-only
 ## 数据库兼容
 
 - 最新 `main` 的 schema v4 已用于 `agent_profiles.api_url`。
-- Provider 使用 schema v5，幂等确保 `api_url`、`connecter_provider_profiles`、`task_runs.provider_dispatch_id` 与唯一索引同时存在。
-- v5 必须让 main-v4 数据库与早期 provider-v4 数据库汇合到相同终态，避免任一部署跳过另一套迁移。
+- Provider 使用 schema v6，幂等确保 `api_url`、`connecter_provider_profiles`、`task_runs.provider_dispatch_id` 与唯一索引同时存在。
+- v6 必须让 main-v4、早期 provider-v4，以及已占用 `user_version=5` 但尚无 provider schema 的已部署数据库汇合到相同终态，避免版本号碰撞跳过迁移。
 
 ## 安全约束
 

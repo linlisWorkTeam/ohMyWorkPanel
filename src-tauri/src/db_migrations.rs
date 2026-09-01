@@ -10,7 +10,7 @@ use rusqlite::Connection;
 
 use crate::db::AppResult;
 
-pub const SCHEMA_VERSION: i64 = 5;
+pub const SCHEMA_VERSION: i64 = 6;
 
 /// 运行所有未执行的迁移，并把 `user_version` 升到 `SCHEMA_VERSION`。
 /// 幂等：已是最新版本时直接返回。
@@ -28,6 +28,7 @@ pub fn migrate(connection: &Connection) -> AppResult<()> {
             3 => migrate_v3(connection)?,
             4 => migrate_v4(connection)?,
             5 => migrate_v5(connection)?,
+            6 => migrate_v6(connection)?,
             _ => unreachable!("invalid schema version {}", version),
         }
     }
@@ -149,6 +150,13 @@ CREATE TABLE IF NOT EXISTS connecter_provider_profiles (
         )
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// v6：修复另一条 main-v5 谱系已经把 `user_version` 升到 5、但没有
+/// Connecter provider schema 的版本号碰撞。重复执行 v5 的幂等收敛操作，
+/// 让这类已部署数据库也能补齐 provider 表、dispatch 列与唯一索引。
+fn migrate_v6(connection: &Connection) -> AppResult<()> {
+    migrate_v5(connection)
 }
 
 /// 老库 members 表没有 `chatbot` 分支 / `tags` 列时重建（幂等：DDL 已含 chatbot 则跳过）。
@@ -330,7 +338,7 @@ mod tests {
     }
 
     #[test]
-    fn main_v4_database_converges_to_provider_v5() {
+    fn main_v4_database_converges_to_provider_v6() {
         let file = NamedTempFile::new().unwrap();
         let conn = open_db(file.path()).unwrap();
         conn.execute_batch(
@@ -350,7 +358,7 @@ mod tests {
     }
 
     #[test]
-    fn legacy_provider_v4_database_converges_to_main_v5() {
+    fn legacy_provider_v4_database_converges_to_provider_v6() {
         let file = NamedTempFile::new().unwrap();
         let conn = open_db(file.path()).unwrap();
         conn.execute_batch(
@@ -375,6 +383,25 @@ mod tests {
         migrate(&conn).unwrap();
         assert_eq!(user_version(&conn), SCHEMA_VERSION);
         assert!(column_names(&conn, "agent_profiles").contains(&"api_url".to_string()));
+        assert!(column_names(&conn, "task_runs").contains(&"provider_dispatch_id".to_string()));
+        assert!(column_names(&conn, "connecter_provider_profiles").contains(&"env".to_string()));
+    }
+
+    #[test]
+    fn foreign_main_v5_database_converges_to_provider_v6() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let conn = open_db(file.path()).unwrap();
+        conn.execute_batch(
+            r#"
+            CREATE TABLE members (id TEXT PRIMARY KEY);
+            CREATE TABLE agent_profiles (member_id TEXT PRIMARY KEY, api_url TEXT);
+            CREATE TABLE task_runs (id TEXT PRIMARY KEY);
+            PRAGMA user_version=5;
+            "#,
+        )
+        .unwrap();
+        migrate(&conn).unwrap();
+        assert_eq!(user_version(&conn), SCHEMA_VERSION);
         assert!(column_names(&conn, "task_runs").contains(&"provider_dispatch_id".to_string()));
         assert!(column_names(&conn, "connecter_provider_profiles").contains(&"env".to_string()));
     }
