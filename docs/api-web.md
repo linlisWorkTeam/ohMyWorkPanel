@@ -66,6 +66,18 @@
 | GET | `/api/health`（无鉴权；发布/重连探活） |
 | GET | `/api/metrics/latest`（主进程 RSS/CPU；设置页 5s 拉） |
 
+## Self-Marketing
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET/POST | `/api/groups/{group_id}/marketing/campaigns` | 列出或创建 campaign；POST body 中 `groupId` 必须与路径一致 |
+| GET | `/api/marketing/campaigns/{campaign_id}` | 读取冻结 Brief、草稿、校验和审核状态 |
+| POST | `/api/marketing/campaigns/{campaign_id}/revise` | body `{ actorMemberId, feedback }`；基于原 Brief 重写 |
+| POST | `/api/marketing/campaigns/{campaign_id}/approve` | body `{ actorMemberId }`；阻断校验存在时拒绝 |
+| GET | `/api/marketing/campaigns/{campaign_id}/export` | 返回 `{ filename, markdown }`；不写入工作区、不发布 |
+
+使用流程、权限和 schema 见 [`reference/self-marketing.md`](reference/self-marketing.md)。
+
 ## 设置 / OCR / 预设角色
 
 | 方法 | 路径 |

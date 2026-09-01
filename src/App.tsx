@@ -85,6 +85,7 @@ import { listContributions } from "./contrib/registry";
 import { readDockGeom, writeDockGeom, type DockGeom } from "./contrib/dockGeom";
 import { SLASH_COMMANDS } from "./contrib/slash";
 import type { UiContribution } from "./contrib/types";
+import { MarketingLaunchForm } from "./marketing/MarketingMessage";
 
 type NewMember = {
   kind: "agent" | "user" | "chatbot";
@@ -145,6 +146,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [inviteLinkFlash, setInviteLinkFlash] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [showMarketing, setShowMarketing] = useState(false);
   const [showMembers, setShowMembers] = useState(() =>
     typeof window === "undefined" || window.matchMedia("(min-width: 1081px)").matches,
   );
@@ -585,7 +587,7 @@ export function App() {
             messages[idx] = {
               ...message,
               content: appendChannelDelta(message.content, channel, delta, replace),
-              status: "streaming",
+              status: payload.status === "completed" ? "completed" : "streaming",
             };
           }
           return { ...previous, messages };
@@ -740,15 +742,16 @@ export function App() {
         event.preventDefault();
         setShowMembers((open) => !open);
       } else if (event.key === "Escape") {
-        if (showCreate || showAddMember) event.preventDefault();
+        if (showCreate || showAddMember || showMarketing) event.preventDefault();
         setShowCreate(false);
         setShowAddMember(false);
+        setShowMarketing(false);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frame.toggleLeft, showCreate, showAddMember]);
+  }, [frame.toggleLeft, showCreate, showAddMember, showMarketing]);
 
   useEffect(() => {
     const check = () => {
@@ -968,6 +971,17 @@ export function App() {
     const body = quote
       ? `${formatQuotePrefix(quote.author, quote.excerpt)}${composer}`
       : composer;
+    if (body.trim() === "/market") {
+      if (current.group.groupKind === "chat") {
+        setError("Self-Marketing 需要绑定 Git 工作区的项目群");
+        return;
+      }
+      setComposer("");
+      setQuote(null);
+      setSlashOpen(false);
+      setShowMarketing(true);
+      return;
+    }
     setComposer("");
     setQuote(null);
     setSending(true);
@@ -1399,6 +1413,7 @@ export function App() {
               playingMessageId={playingMessageId}
               onPlayVoice={playMessageVoice}
               onQuote={(msg, senderName) => setQuote({ author: senderName, excerpt: extractReplyPreview(msg.content, 80) })}
+              onMarketingError={(message) => setError(message)}
             />
           )}
           {current.runs
@@ -1472,10 +1487,20 @@ export function App() {
                   {voiceBusy ? "…" : "🎙"}
                 </button>
               )}
+              {!isChatGroup && (
+                <button
+                  type="button"
+                  className="tool-btn"
+                  title="根据最近项目进展生成宣传内容"
+                  onClick={() => setShowMarketing(true)}
+                >
+                  ◇
+                </button>
+              )}
               <button
                 type="button"
                 className="tool-btn spacer"
-                title="斜杠命令 /board /approve /wave"
+                title="斜杠命令 /board /approve /wave /market"
                 onClick={() => {
                   setComposer((v) => (v.startsWith("/") ? v : v ? v : "/"));
                   setSlashOpen(true);
@@ -1811,7 +1836,7 @@ export function App() {
                 <tr><td><code>Ctrl/⌘ + 1</code></td><td>左栏展开 / 折叠为控制轨</td></tr>
                 <tr><td><code>Ctrl/⌘ + 2</code></td><td>打开或关闭右栏</td></tr>
                 <tr><td><code>@</code></td><td>提及成员</td></tr>
-                <tr><td><code>/</code></td><td>/board /approve /wave</td></tr>
+                <tr><td><code>/</code></td><td>/board /approve /wave /market</td></tr>
               </tbody>
             </table>
           </details>
@@ -1866,6 +1891,22 @@ export function App() {
     )}
     {releasingBannerText(wsLink.state, wsLink.elapsedMs) && (
       <Toast tone="warning" stacked={Boolean(error)}>{releasingBannerText(wsLink.state, wsLink.elapsedMs)}</Toast>
+    )}
+    {showMarketing && current && senderMemberId && !isChatGroup && (
+      <Modal title="生成项目宣传内容" onClose={() => setShowMarketing(false)}>
+        <MarketingLaunchForm
+          groupId={current.group.id}
+          requestedBy={senderMemberId}
+          members={members}
+          onCancel={() => setShowMarketing(false)}
+          onError={(message) => setError(message)}
+          onCreated={() => {
+            setShowMarketing(false);
+            forceScrollGroupId.current = current.group.id;
+            void refresh(current.group.id);
+          }}
+        />
+      </Modal>
     )}
     {error && <Toast tone="danger" onClose={() => setError(null)}>{error}</Toast>}
     {updateNotice && updateNotice.hasUpdate && updateNotice.latestVersion && (

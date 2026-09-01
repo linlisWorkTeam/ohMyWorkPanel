@@ -20,6 +20,7 @@ mod context_seams;
 pub mod db;
 pub mod extensions;
 pub mod live_prompt;
+pub mod marketing;
 pub mod fs_browse;
 pub mod memory;
 pub mod wiki_context;
@@ -152,6 +153,12 @@ pub fn run() {
             commands::ops_deploy_canary,
             commands::set_group_archived_cmd,
             commands::update_member_model_cmd,
+            commands::create_marketing_campaign,
+            commands::list_marketing_campaigns,
+            commands::get_marketing_campaign,
+            commands::revise_marketing_campaign,
+            commands::approve_marketing_campaign,
+            commands::export_marketing_campaign,
         ])
         .run(tauri::generate_context!())
         .expect("Failed to launch ohMyWorkPanel");

@@ -333,11 +333,24 @@ fn get_execution_context(state: &SchedulerState, run_id: &str) -> AppResult<Exec
             truncate_chars_end(&lines, max_history_chars)
         );
     }
-    let root = history
+    let root_raw = history
         .iter()
         .find(|m| m.id == run.root_message_id)
-        .map(|m| truncate_chars(&parts_to_plain_text(&m.content), 8_000))
+        .map(|m| parts_to_plain_text(&m.content))
+        .or_else(|| {
+            conn.query_row(
+                "SELECT content FROM messages WHERE id=?1",
+                params![run.root_message_id],
+                |row| row.get::<_, String>(0),
+            )
+            .ok()
+            .map(|content| parts_to_plain_text(&content))
+        })
         .unwrap_or_default();
+    // Self-Marketing keeps the visible root message compact and expands its frozen,
+    // evidence-bounded prompt only inside the scheduler.
+    let root = crate::marketing::expand_internal_prompt(&conn, &root_raw)
+        .unwrap_or_else(|| truncate_chars(&root_raw, 8_000));
 
     // G3: Inject relevant past experiences from shared memory
     let experiences = (|| -> AppResult<Vec<Experience>> {
@@ -1096,6 +1109,7 @@ async fn finish_failed(state: &SchedulerState, run_id: &str, error: &str) {
                 state.clone(),
             );
         }
+        crate::marketing::on_run_terminal(state, run_id, false, Some(error));
     }
 }
 
@@ -1233,6 +1247,7 @@ async fn finish_completed(state: &SchedulerState, context: &ExecutionContext) {
                     state.clone(),
                 );
             }
+            crate::marketing::on_run_terminal(state, &context.run.id, true, None);
         }
         delegate_from_admin(state, context, &message_id).await;
     }

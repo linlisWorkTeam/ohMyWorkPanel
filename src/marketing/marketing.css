@@ -1,0 +1,172 @@
+.marketing-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  color: var(--lp-text-secondary);
+}
+
+.marketing-pulse {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--lp-accent);
+  box-shadow: 0 0 0 4px var(--lp-accent-soft);
+}
+
+.marketing-card {
+  display: grid;
+  gap: 12px;
+  width: min(660px, 100%);
+  color: var(--lp-text-primary);
+}
+
+.marketing-card-head,
+.marketing-draft-title,
+.marketing-actions,
+.marketing-launch-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.marketing-card-head > div {
+  display: grid;
+  gap: 2px;
+}
+
+.marketing-eyebrow,
+.marketing-revision,
+.marketing-facts,
+.marketing-draft small,
+.marketing-update small {
+  color: var(--lp-text-tertiary);
+  font-size: 12px;
+}
+
+.marketing-eyebrow {
+  letter-spacing: .12em;
+}
+
+.marketing-revision {
+  border: 1px solid var(--lp-border-l1);
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+
+.marketing-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+
+.marketing-unreleased,
+.marketing-error,
+.marketing-validation [data-severity="error"] {
+  color: var(--lp-error);
+}
+
+.marketing-brief,
+.marketing-validation,
+.marketing-draft {
+  border: 1px solid var(--lp-border-l1);
+  border-radius: var(--lp-radius-md);
+  background: var(--lp-bg-surface);
+  padding: 10px 12px;
+}
+
+.marketing-brief summary,
+.marketing-validation summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.marketing-update {
+  border-top: 1px solid var(--lp-border-l1);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.marketing-update p,
+.marketing-validation p {
+  margin: 4px 0;
+}
+
+.marketing-boundary {
+  color: var(--lp-warn);
+}
+
+.marketing-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+
+.marketing-tabs button,
+.marketing-actions button,
+.marketing-review button,
+.marketing-launch-actions button,
+.marketing-draft-title button {
+  min-height: 36px;
+  border: 1px solid var(--lp-border-l1);
+  border-radius: var(--lp-radius-sm);
+  background: var(--lp-bg-elev);
+  color: var(--lp-text-primary);
+  padding: 7px 10px;
+}
+
+.marketing-tabs button[aria-selected="true"],
+.marketing-actions button:last-child,
+.marketing-launch-actions button:last-child {
+  border-color: var(--lp-accent);
+  background: var(--lp-accent-soft);
+  color: var(--lp-accent-strong);
+}
+
+.marketing-draft pre {
+  margin: 10px 0;
+  max-height: 380px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: inherit;
+  line-height: 1.65;
+}
+
+.marketing-review {
+  display: grid;
+  gap: 8px;
+}
+
+.marketing-review textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.marketing-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.marketing-check input {
+  width: auto;
+}
+
+@media (max-width: 720px), (pointer: coarse) {
+  .marketing-tabs button,
+  .marketing-actions button,
+  .marketing-review button,
+  .marketing-launch-actions button,
+  .marketing-draft-title button {
+    min-height: 44px;
+  }
+
+  .marketing-actions,
+  .marketing-launch-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+}
