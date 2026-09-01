@@ -173,15 +173,15 @@ status: active
 | 规范 | 目录作为架构文档；禁止业务文件回流入口目录 | ✅ 参考文档 + 贡献指南 |
 | AI Harness | AI 编码、commit、PR 证据规范 + 可执行结构/提交门禁 | ✅ 脚本、模板、参考文档 |
 
-### 阶段 8 — **v2.2.0（待审查）** Self-Marketing MVP（轨道 H）
+### 阶段 8 — **v2.2.0（待合并）** Self-Marketing MVP（轨道 H）
 
 > 让工作群基于绑定仓库的可追溯证据生成对外内容，先在群聊里审核；本阶段不连接发布平台。Spec：[`specs/2026-09-01-self-marketing-mvp.md`](superpowers/specs/2026-09-01-self-marketing-mvp.md)。
 
 | 切片 | 内容 | 状态 |
 |---|---|---|
-| M1 上下文 | README / CHANGELOG / docs / commit / diff 的受限快照与证据引用 | ✅ 已实现，待 PR 审查 |
-| M2 编排 | Content Brief → 五渠道草稿 → 事实/风格校验，允许 `no_content` | ✅ 已实现，待 PR 审查 |
-| M3 审核 | 群聊发起、查看、要求修改、批准、Markdown 导出 | ✅ 已实现，待 PR 审查 |
+| M1 上下文 | README / CHANGELOG / docs / commit / diff 的受限快照与证据引用 | ✅ 已实现并通过隔离数据目录验收 |
+| M2 编排 | Content Brief → 五渠道草稿 → 事实/风格校验，允许 `no_content` | ✅ 真实 Codex Planner/Writer 五渠道抽样通过 |
+| M3 审核 | 群聊发起、查看、要求修改、批准、Markdown 导出 | ✅ revision=1、零阻断项、批准与导出通过；桌面 Web 可视验收零控制台错误 |
 | M4 发布 | 平台 OAuth、自动发布、指标回流 | Backlog；明确不进 MVP |
 
 
@@ -224,7 +224,7 @@ status: active
 7. **轨道 G 自举运行时（新占位）**：设计 Spec `2026-08-16-dsh-self-bootstrap-runtime.md` + 群聊治理层 `2026-08-16-group-chat-governance-plane.md`；P0（dsh headless 适配器 + DSH Web 嵌入）✅；P1 ACP 会话回放待立项（先立群聊治理层）。**小组件定位**：见 `specs/2026-08-16-widget-capability-placement.md`（widget=页签/能力，不单独建群；仅治理型项目群例外）。
 8. **Agent 配置一键导入（I1，轨道 A / 发布打包）**：代码已落地（阶段 5.1）；下一步 ECS canary `:8081` 部署 + 群公告 →（批）promote 生产；顺带验证「服务器导出 → 新机一键导入」端到端与前端壳冒烟（`release-checklist.md §F`）。
 9. **CLI 适配器 Manifest（轨道 A）**：SSOT accepted — `specs/2026-08-21-cli-adapter-manifest.md`。**P0 已灰度 `:8081`**（查表 + `GET /api/adapters`）；P0.1+ 未开工。
-10. **Self-Marketing MVP（轨道 H）**：v2.2.0 切片 M1–M3 已实现并进入 PR 审查；仅生成、校验、群聊审核与导出，自动发布和数据反馈留到后续阶段。
+10. **Self-Marketing MVP（轨道 H）**：v2.2.0 切片 M1–M3 已实现并通过本机真实 Agent、群聊 UI、灰度构建与 Connector 远程 Agent 联合验收；等待 PR 合并。仅生成、校验、群聊审核与导出，自动发布和数据反馈留到后续阶段。
 
 ---
 

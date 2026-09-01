@@ -139,37 +139,77 @@ fn compact_snapshot(campaign: &ContentCampaign) -> serde_json::Value {
         .snapshot
         .evidence
         .iter()
-        .take(18)
+        .take(6)
         .map(|item| {
-            let excerpt = item.excerpt.chars().take(650).collect::<String>();
+            let excerpt = item.excerpt.chars().take(360).collect::<String>();
             json!({
                 "id": item.id,
                 "kind": item.kind,
-                "source": item.source,
+                "source": item.source.chars().take(120).collect::<String>(),
                 "excerpt": excerpt,
                 "contentHash": item.content_hash,
                 "releaseState": item.release_state,
             })
         })
         .collect::<Vec<_>>();
+    let commits = campaign
+        .snapshot
+        .commits
+        .iter()
+        .take(10)
+        .map(|item| {
+            json!({
+                "sha": item.sha,
+                "subject": item.subject.chars().take(160).collect::<String>(),
+            })
+        })
+        .collect::<Vec<_>>();
+    let changed_files = campaign
+        .snapshot
+        .changed_files
+        .iter()
+        .take(12)
+        .map(|path| path.chars().take(120).collect::<String>())
+        .collect::<Vec<_>>();
+    let uncommitted_files = campaign
+        .snapshot
+        .uncommitted_files
+        .iter()
+        .take(8)
+        .map(|path| path.chars().take(120).collect::<String>())
+        .collect::<Vec<_>>();
+    let banned_phrases = campaign
+        .snapshot
+        .config
+        .banned_phrases
+        .iter()
+        .take(12)
+        .map(|phrase| phrase.chars().take(40).collect::<String>())
+        .collect::<Vec<_>>();
     json!({
         "baseRef": campaign.snapshot.base_ref,
         "headRef": campaign.snapshot.head_ref,
         "sourceMode": campaign.snapshot.source_mode,
-        "commits": campaign.snapshot.commits,
-        "changedFiles": campaign.snapshot.changed_files,
-        "uncommittedFiles": campaign.snapshot.uncommitted_files,
+        "commits": commits,
+        "changedFiles": changed_files,
+        "uncommittedFiles": uncommitted_files,
         "evidence": evidence,
-        "projectContext": campaign.snapshot.config.project_context.chars().take(1600).collect::<String>(),
-        "brandGuide": campaign.snapshot.config.brand_guide.chars().take(1600).collect::<String>(),
-        "bannedPhrases": campaign.snapshot.config.banned_phrases,
-        "snapshotTruncated": campaign.snapshot.truncated,
+        "projectContext": campaign.snapshot.config.project_context.chars().take(400).collect::<String>(),
+        "brandGuide": campaign.snapshot.config.brand_guide.chars().take(400).collect::<String>(),
+        "bannedPhrases": banned_phrases,
+        "snapshotTruncated": campaign.snapshot.truncated
+            || campaign.snapshot.evidence.len() > 6
+            || campaign.snapshot.commits.len() > 10
+            || campaign.snapshot.changed_files.len() > 12
+            || campaign.snapshot.uncommitted_files.len() > 8,
     })
 }
 
 fn planner_prompt(campaign: &ContentCampaign) -> String {
+    // CLI adapters pass prompts through argv. Keep this projection compact enough for the
+    // Windows CreateProcess command-line limit while retaining the full snapshot in SQLite.
     let snapshot =
-        serde_json::to_string_pretty(&compact_snapshot(campaign)).unwrap_or_else(|_| "{}".into());
+        serde_json::to_string(&compact_snapshot(campaign)).unwrap_or_else(|_| "{}".into());
     format!(
         r#"【Self-Marketing / Content Planner】
 你负责判断最近项目更新是否值得对外传播，并生成唯一事实源 Content Brief。
@@ -177,7 +217,7 @@ fn planner_prompt(campaign: &ContentCampaign) -> String {
 硬规则：
 1. 只能使用下面 snapshot 的事实。每个 update / proofPoint 都必须引用真实 evidenceRefs。
 2. 未提交证据只能标记 releaseState=unreleased，不能写成已发布。
-3. 不值得宣传时必须选择 no_content；不要为了交差制造卖点。
+3. publish 只表示“值得生成供用户审核的草稿”，不等于已经对外发布；已提交但未发版的开发进展也可以 publish，但必须按 committed / unreleased 明确表述。hold 表示当前证据或时机不足、暂不生成草稿；完全没有传播价值时选择 no_content。不要为了交差制造卖点。
 4. 禁止夸大、行业排名、无证据性能数字和绝对承诺。
 5. 只输出一个 JSON 对象，不要 Markdown fence、解释或 @提及。
 
@@ -721,6 +761,69 @@ mod tests {
         let raw = "```json\n{\"value\":1}\n```";
         let value: serde_json::Value = extract_json(raw).unwrap();
         assert_eq!(value["value"], 1);
+    }
+
+    #[test]
+    fn planner_prompt_is_bounded_for_windows_cli_adapters() {
+        let campaign: ContentCampaign = serde_json::from_value(json!({
+            "id": "campaign-long",
+            "groupId": "group",
+            "requestedBy": "owner",
+            "plannerAgentId": "planner",
+            "writerAgentId": "writer",
+            "status": "planning",
+            "sourceMode": "committed",
+            "baseRef": "main",
+            "headRef": "head",
+            "snapshot": {
+                "schemaVersion": 1,
+                "repositoryRoot": "C:\\repo",
+                "baseRef": "main",
+                "headRef": "head",
+                "sourceMode": "committed",
+                "commits": (0..30).map(|i| json!({"sha": format!("sha-{i}"), "subject": "c".repeat(1000)})).collect::<Vec<_>>(),
+                "changedFiles": (0..100).map(|i| format!("src/{i}/{}", "f".repeat(300))).collect::<Vec<_>>(),
+                "uncommittedFiles": (0..100).map(|i| format!("docs/{i}/{}", "u".repeat(300))).collect::<Vec<_>>(),
+                "evidence": (0..40).map(|i| json!({
+                    "id": format!("ev-{i:03}"),
+                    "kind": "diff",
+                    "source": "s".repeat(500),
+                    "excerpt": "e".repeat(5000),
+                    "contentHash": format!("hash-{i}"),
+                    "releaseState": "committed"
+                })).collect::<Vec<_>>(),
+                "config": {
+                    "projectContext": "p".repeat(10000),
+                    "brandGuide": "b".repeat(10000),
+                    "channelTemplates": {},
+                    "bannedPhrases": (0..100).map(|_| "x".repeat(500)).collect::<Vec<_>>()
+                },
+                "truncated": false,
+                "collectedAt": 1
+            },
+            "brief": null,
+            "drafts": [],
+            "validation": [],
+            "plannerRunId": null,
+            "writerRunId": null,
+            "revision": 0,
+            "feedback": null,
+            "feedbackBy": null,
+            "errorMessage": null,
+            "approvedBy": null,
+            "createdAt": 1,
+            "updatedAt": 1
+        })).unwrap();
+
+        let prompt = planner_prompt(&campaign);
+        assert!(
+            prompt.chars().count() < 12_000,
+            "prompt length={}",
+            prompt.chars().count()
+        );
+        assert!(prompt.contains("ev-000"));
+        assert!(!prompt.contains("ev-006"));
+        assert_eq!(compact_snapshot(&campaign)["snapshotTruncated"], true);
     }
 
     #[test]

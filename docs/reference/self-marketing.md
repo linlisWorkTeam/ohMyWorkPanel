@@ -51,6 +51,8 @@ Planner 必须返回 `ContentBrief`：
 }
 ```
 
+`publishability=publish` 仅表示值得生成供用户审核的草稿，并不表示内容或版本已经发布。已提交但未发版的开发进展可以进入草稿阶段，但必须保留 `committed` / `unreleased` 边界；`hold` 表示当前证据或时机不足、暂不生成草稿，`no_content` 表示没有值得传播的更新。
+
 Writer 返回 `DraftBundle`，必须恰好覆盖 `xiaohongshu`、`x`、`zhihu`、`bilibili`、`github_release`。每个草稿的 `claimRefs` 只能引用同一 Brief 内的 update / proof point ID。
 
 ## 权限与生命周期

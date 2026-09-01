@@ -9,15 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-<!-- Add unreleased changes here. -->
+- Added evidence-backed Self-Marketing campaigns with bounded Git context, Content Brief planning, five channel drafts, group-chat review, approval, and Markdown export.
+- Added an opt-in `OHMYWORKPANEL_CODEX_NATIVE_AUTH` mode for reusing an authenticated Codex CLI session.
 
 ### Changed
 
-<!-- Add unreleased changes here. -->
+- Clarified that marketing `publish` means “generate drafts for human review,” not “already released,” and bounded Planner prompts for Windows CLI adapters.
 
 ### Fixed
 
-<!-- Add unreleased changes here. -->
+- Prevented the deterministic marketing reviewer from treating negated risk disclaimers such as “不保证” and “不是零风险” as promotional absolute claims.
 
 ## [2.1.2] - 2026-08-24
 

@@ -268,7 +268,7 @@ pub fn validate_drafts(
         }
         let combined = format!("{}\n{}", draft.title, draft.body);
         for phrase in &snapshot.config.banned_phrases {
-            if !phrase.is_empty() && combined.contains(phrase) {
+            if !phrase.is_empty() && contains_unnegated_phrase(&combined, phrase) {
                 findings.push(finding(
                     "error",
                     "style.banned_phrase",
@@ -288,10 +288,7 @@ pub fn validate_drafts(
             "guaranteed",
         ];
         for phrase in absolute_phrases {
-            if combined
-                .to_ascii_lowercase()
-                .contains(&phrase.to_ascii_lowercase())
-            {
+            if contains_unnegated_phrase(&combined, phrase) {
                 findings.push(finding(
                     "error",
                     "style.absolute_claim",
@@ -355,6 +352,42 @@ pub fn validate_drafts(
         }
     }
     findings
+}
+
+fn contains_unnegated_phrase(text: &str, phrase: &str) -> bool {
+    if phrase.is_empty() {
+        return false;
+    }
+    let text = text.to_lowercase();
+    let phrase = phrase.to_lowercase();
+    text.match_indices(&phrase).any(|(start, _)| {
+        let prefix = &text[..start];
+        let prefix = prefix
+            .chars()
+            .rev()
+            .take(12)
+            .collect::<String>()
+            .chars()
+            .rev()
+            .collect::<String>();
+        ![
+            "不",
+            "不是",
+            "并非",
+            "不代表",
+            "不等于",
+            "不能",
+            "不会",
+            "未",
+            "没有",
+            "无意",
+            "not ",
+            "no ",
+            "without ",
+        ]
+        .iter()
+        .any(|negation| prefix.ends_with(negation))
+    })
 }
 
 #[cfg(test)]
@@ -438,6 +471,15 @@ mod tests {
         let findings = validate_drafts(&snapshot, &brief, &drafts);
         assert!(findings.iter().any(|f| f.code == "style.banned_phrase"));
         assert!(findings.iter().any(|f| f.code == "draft.missing_channel"));
+    }
+
+    #[test]
+    fn negated_risk_disclaimers_are_not_marketing_claims() {
+        assert!(!contains_unnegated_phrase("这些限制不代表零风险。", "零风险"));
+        assert!(!contains_unnegated_phrase("当前方案不保证消除所有风险。", "保证"));
+        assert!(!contains_unnegated_phrase("This is not zero risk.", "zero risk"));
+        assert!(contains_unnegated_phrase("这是一套零风险方案。", "零风险"));
+        assert!(contains_unnegated_phrase("我们保证消除风险。", "保证"));
     }
 
     #[test]

@@ -313,7 +313,7 @@ where
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    if kind == Some(AdapterKind::Codex) {
+    if kind == Some(AdapterKind::Codex) && !codex::native_auth_enabled() {
         // systemd units usually omit shell OPENAI_API_KEY; fall back to ~/.codex/auth.json
         // (same key OpenCode Zen Go / local Codex CLI already use).
         match codex::resolve_api_key(api_key) {
