@@ -67,7 +67,7 @@ pub fn encrypt_secret(plain: &str) -> AppResult<String> {
     let mut nonce_bytes = [0u8; 12];
     OsRng.fill_bytes(&mut nonce_bytes);
     let ct = cipher
-        .encrypt(Nonce::from_slice(&nonce_bytes), plain.as_bytes())
+        .encrypt(&Nonce::from(nonce_bytes), plain.as_bytes())
         .map_err(|e| format!("secret encrypt failed: {e}"))?;
     let enc = base64::engine::general_purpose::STANDARD;
     Ok(format!("v1:{}:{}", enc.encode(nonce_bytes), enc.encode(ct)))
@@ -86,13 +86,16 @@ pub fn decrypt_secret(stored: &str) -> AppResult<String> {
     let nonce_b64 = parts.next().unwrap_or_default();
     let ct_b64 = parts.next().unwrap_or_default();
     let enc = base64::engine::general_purpose::STANDARD;
-    let nonce = enc
+    let nonce_bytes = enc
         .decode(nonce_b64)
         .map_err(|e| format!("nonce decode: {e}"))?;
+    let nonce: [u8; 12] = nonce_bytes
+        .try_into()
+        .map_err(|_| "nonce 长度非法".to_string())?;
     let ct = enc.decode(ct_b64).map_err(|e| format!("ct decode: {e}"))?;
     let cipher = Aes256Gcm::new_from_slice(&machine_key()).map_err(|e| e.to_string())?;
     let pt = cipher
-        .decrypt(Nonce::from_slice(&nonce), ct.as_ref())
+        .decrypt(&Nonce::from(nonce), ct.as_ref())
         .map_err(|e| format!("secret decrypt failed（key 文件被换？）: {e}"))?;
     String::from_utf8(pt).map_err(|e| e.to_string())
 }
@@ -1128,14 +1131,14 @@ pub fn list_agent_profiles(
 
 /// Generic app_settings string read (None when absent).
 pub fn get_setting_str(connection: &Connection, key: &str) -> AppResult<Option<String>> {
-    Ok(connection
+    connection
         .query_row(
             "SELECT value FROM app_settings WHERE key=?1",
             params![key],
             |r| r.get::<_, String>(0),
         )
         .optional()
-        .map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())
 }
 
 /// Generic app_settings upsert.
@@ -2338,7 +2341,7 @@ pub fn query_experiences(
     query: &str,
     limit: i64,
 ) -> AppResult<Vec<Experience>> {
-    let limit = limit.min(50).max(1);
+    let limit = limit.clamp(1, 50);
     let pattern = format!("%{}%", query);
     let mut stmt = conn.prepare(
         "SELECT id,group_id,source_member_id,title,content,tags,created_at,updated_at FROM experiences WHERE group_id=?1 AND (content LIKE ?2 OR title LIKE ?3 OR tags LIKE ?4) ORDER BY created_at DESC LIMIT ?5"

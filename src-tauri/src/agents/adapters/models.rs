@@ -43,7 +43,8 @@ pub fn models_for_adapter(adapter: &str) -> &'static [&'static str] {
     }
 }
 
-pub fn default_model(adapter: &str) -> Option<&'static str> {
+#[cfg(test)]
+fn default_model(adapter: &str) -> Option<&'static str> {
     models_for_adapter(adapter).first().copied()
 }
 

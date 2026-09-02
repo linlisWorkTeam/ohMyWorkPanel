@@ -21,6 +21,9 @@ bash "${ROOT}/scripts/ai-harness.test.sh"
 echo "==> test-gate: frontend color purity"
 pnpm run check:colors
 
+echo "==> test-gate: frontend lint"
+pnpm run lint
+
 echo "==> test-gate: frontend production build"
 pnpm run build
 
@@ -29,6 +32,12 @@ pnpm run build:web
 
 echo "==> test-gate: frontend (vitest)"
 pnpm exec vitest run --pool=forks --maxWorkers=1
+
+echo "==> test-gate: rust format"
+cargo fmt --manifest-path "${ROOT}/src-tauri/Cargo.toml" --all -- --check
+
+echo "==> test-gate: rust clippy"
+cargo clippy --manifest-path "${ROOT}/src-tauri/Cargo.toml" --all-targets --all-features -- -D warnings
 
 echo "==> test-gate: rust lib (no gui features)"
 # Isolate ulimit so it cannot affect this shell after cargo exits.

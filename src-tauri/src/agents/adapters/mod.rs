@@ -13,9 +13,7 @@ pub mod parse;
 
 use crate::db::AppResult;
 use manifest::SpawnSpec;
-use parse::{
-    parse_agent_event, parse_agent_line, parse_openclaw_mixed_output, DeltaMode, ParsedEvent,
-};
+use parse::{parse_agent_event, parse_openclaw_mixed_output, DeltaMode, ParsedEvent};
 use std::{
     path::Path,
     process::Stdio,
@@ -44,13 +42,13 @@ pub enum AdapterKind {
     Dsh,
 }
 
-/// 适配器能力描述（轻量注册表条目）。
+#[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AdapterDescriptor {
-    pub key: &'static str,
-    pub label: &'static str,
-    pub needs_member_api_key: bool,
-    pub spawnable: bool,
+struct AdapterDescriptor {
+    key: &'static str,
+    label: &'static str,
+    needs_member_api_key: bool,
+    spawnable: bool,
 }
 
 impl AdapterKind {
@@ -79,8 +77,8 @@ impl AdapterKind {
         }
     }
 
-    /// 全部适配器（轻量注册表：新增适配器只需在此登记并在 `descriptor`/`parse` 补一行）。
-    pub const ALL: [AdapterKind; 7] = [
+    #[cfg(test)]
+    const ALL: [AdapterKind; 7] = [
         Self::Mock,
         Self::Codex,
         Self::ClaudeCode,
@@ -90,8 +88,8 @@ impl AdapterKind {
         Self::Dsh,
     ];
 
-    /// 能力描述（key / 展示名 / 是否需要成员级 API key / 是否可 spawn）。
-    pub fn descriptor(self) -> AdapterDescriptor {
+    #[cfg(test)]
+    fn descriptor(self) -> AdapterDescriptor {
         let label = match self {
             Self::Mock => "模拟 Agent",
             Self::Codex => "Codex CLI",
@@ -104,7 +102,7 @@ impl AdapterKind {
         AdapterDescriptor {
             key: self.as_str(),
             label,
-            needs_member_api_key: false, // 当前 7 个 CLI 适配器均由自身 env/auth 文件取密钥
+            needs_member_api_key: false,
             spawnable: !self.candidate_executables().is_empty(),
         }
     }
@@ -172,10 +170,6 @@ impl AdapterKind {
             Self::Cursor => cursor::build_args(prompt, session_id, model),
             Self::Dsh => dsh::build_args(prompt, session_id, model),
         }
-    }
-
-    pub fn parse_line(self, line: &str) -> String {
-        parse_agent_line(line)
     }
 
     pub fn parse_event(self, line: &str) -> ParsedEvent {
@@ -288,6 +282,10 @@ where
 
 /// Run adapter process. `on_delta(channel, text, replace)`. Returns captured CLI session id if any.
 /// `api_key`: when set for Codex, exported as `OPENAI_API_KEY` (DeepSeek OpenAI-compatible auth).
+#[expect(
+    clippy::too_many_arguments,
+    reason = "adapter process boundary inputs remain explicit"
+)]
 pub async fn run_streaming<F, Fut>(
     spec: SpawnSpec,
     executable: &str,
@@ -478,7 +476,8 @@ where
 
 /// Fold adapter stdout/stderr into the user-visible **final** text.
 /// Used by contract tests (and mirrors OpenClaw stderr recovery in `run_streaming`).
-pub fn resolve_adapter_final_text(kind: AdapterKind, stdout: &str, stderr: &str) -> Option<String> {
+#[cfg(test)]
+fn resolve_adapter_final_text(kind: AdapterKind, stdout: &str, stderr: &str) -> Option<String> {
     let mut final_text = String::new();
     let mut got_final = false;
 

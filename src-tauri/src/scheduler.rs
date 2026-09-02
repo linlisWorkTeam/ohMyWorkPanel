@@ -965,6 +965,10 @@ fn extract_root_from_prompt(prompt: &str) -> String {
 
 /// Rolling summary for chatbot: when unsummarized messages exceed `keep_limit`, fold the
 /// overflow into `chat_context_summaries` (LLM, extractive fallback), then accumulate recent lines.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "chatbot context inputs will become a use-case request"
+)]
 async fn build_chatbot_rolling_window(
     state: &SchedulerState,
     group_id: &str,
@@ -1280,11 +1284,13 @@ async fn finish_completed(state: &SchedulerState, context: &ExecutionContext) {
         let members = get_members(&conn, &context.group.id)?;
         let mut reviewer_id = None;
         for m in &members {
-            if m.kind == "agent" && m.is_active && m.id != context.agent.id {
-                if content.contains(&format!("!review @{}", m.display_name)) {
-                    reviewer_id = Some(m.id.clone());
-                    break;
-                }
+            if m.kind == "agent"
+                && m.is_active
+                && m.id != context.agent.id
+                && content.contains(&format!("!review @{}", m.display_name))
+            {
+                reviewer_id = Some(m.id.clone());
+                break;
             }
         }
         if let Some(ref rev_id) = reviewer_id {

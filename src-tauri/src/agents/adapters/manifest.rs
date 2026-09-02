@@ -13,19 +13,14 @@ use std::{
     sync::RwLock,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum StreamDialect {
+    #[default]
     Jsonl,
     Plain,
     #[serde(rename = "cursor-stream-json")]
     CursorStreamJson,
-}
-
-impl Default for StreamDialect {
-    fn default() -> Self {
-        Self::Jsonl
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -84,7 +79,7 @@ fn id_ok(id: &str) -> bool {
             return false;
         }
     }
-    !start && id.chars().all(|ch| ch.is_ascii())
+    !start && id.is_ascii()
 }
 
 fn looks_like_shell(arg: &str) -> bool {
@@ -180,9 +175,9 @@ pub fn expand_args(
         .map(str::trim)
         .filter(|s| !s.is_empty())
     {
-        if model.is_some() && !m.args.iter().any(|a| a == "{model}") {
+        if let Some(model) = model.filter(|_| !m.args.iter().any(|a| a == "{model}")) {
             out.push(flag.to_string());
-            out.push(model.unwrap().to_string());
+            out.push(model.to_string());
         }
     }
     if let Some(flag) = m
@@ -191,9 +186,9 @@ pub fn expand_args(
         .map(str::trim)
         .filter(|s| !s.is_empty())
     {
-        if session.is_some() && !m.args.iter().any(|a| a == "{session}") {
+        if let Some(session) = session.filter(|_| !m.args.iter().any(|a| a == "{session}")) {
             // insert after first arg-ish: prepend flag+session like cursor --resume
-            let sid = session.unwrap().to_string();
+            let sid = session.to_string();
             if !out.iter().any(|x| x == flag) {
                 out.insert(0, flag.to_string());
                 out.insert(1, sid);
@@ -226,7 +221,7 @@ fn scan_roots() -> HashMap<String, AdapterManifest> {
     let mut map = HashMap::new();
     let mut roots: Vec<PathBuf> = Vec::new();
     if let Ok(raw) = std::env::var("OHMYWORKPANEL_ADAPTER_ROOTS") {
-        for part in raw.split(|c| c == ':' || c == ';') {
+        for part in raw.split([':', ';']) {
             let p = part.trim();
             if !p.is_empty() {
                 roots.push(PathBuf::from(p));

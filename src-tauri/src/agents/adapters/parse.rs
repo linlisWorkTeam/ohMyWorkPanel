@@ -14,7 +14,8 @@ pub struct ParsedEvent {
     pub mode: DeltaMode,
 }
 
-pub fn parse_agent_line(line: &str) -> String {
+#[cfg(test)]
+fn parse_agent_line(line: &str) -> String {
     parse_agent_event(line).text
 }
 

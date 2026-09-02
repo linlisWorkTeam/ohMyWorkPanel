@@ -1,6 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { FormEvent, KeyboardEvent, memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type PointerEvent } from "react";
+import { FormEvent, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import { api, getAuthToken, onUnauthorized, requiresAuth, setAuthToken } from "./api";
 import {
   BOTTOM_THRESHOLD_PX,
@@ -12,9 +12,7 @@ import {
 import { currentMentionQuery, findMentionedMemberIds } from "./chat/mentions";
 import {
   appendChannelDelta,
-  hasRenderableContent,
   isLazyMessageChannel,
-  parseMessageContent,
 } from "./chat/messageContent";
 import { defaultModelForAdapter, modelsForAdapter, applyAgentModelsPayload } from "./agents/agentModels";
 import {
@@ -26,9 +24,7 @@ import {
 } from "./agents/adaptersCatalog";
 import { canSubmitUserMember, chatbotSlotTaken, memberRosterAction, type UserAddMode } from "./members/memberForm";
 import { InviteLanding, parseInviteTokenFromPath } from "./accounts/InviteLanding";
-import { markdownToHtml } from "./chat/markdownLite";
 import { detectMemoryPressure, formatHeartbeatLabel } from "./observability/heartbeatPolicy";
-import { agentBusyLabel, queueCounts, runsForAgentActive } from "./members/queueCounts";
 import {
   bumpUnread,
   clearUnread,
@@ -188,7 +184,6 @@ export function App() {
   const [settings, setSettings] = useState<RuntimeSettings | null>(null);
   const [manifestUrl, setManifestUrl] = useState(() => localStorage.getItem("updateManifestUrl") ?? "");
   const [updateMsg, setUpdateMsg] = useState<string | null>(null);
-  const [updateLink, setUpdateLink] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
   const [updatingNow, setUpdatingNow] = useState(false);
   const [updateNotice, setUpdateNotice] = useState<import("./types").UpdateCheckResult | null>(null);
@@ -217,7 +212,6 @@ export function App() {
   const runUpdateCheck = async () => {
     setUpdating(true);
     setUpdateMsg(null);
-    setUpdateLink(null);
     try {
       localStorage.setItem("updateManifestUrl", manifestUrl.trim());
       const r = await api.checkForUpdate(manifestUrl.trim() || undefined);
@@ -227,7 +221,6 @@ export function App() {
         setUpdateMsg(r.error);
       } else if (r.hasUpdate) {
         setUpdateMsg(`发现新版本 ${r.latestVersion}（当前 ${r.currentVersion}）${r.notes ? `：${r.notes}` : ""}`);
-        setUpdateLink(r.downloadUrl ?? null);
         if (localStorage.getItem("updateIgnored") !== r.latestVersion) setUpdateNotice(r);
       } else {
         setUpdateMsg(`已是最新版本（${r.currentVersion}）。`);
@@ -250,7 +243,7 @@ export function App() {
       setError(readError(reason));
     }
   };
-  const [agentCfgImported, setAgentCfgImported] = useState(false);
+  const [, setAgentCfgImported] = useState(false);
   const [wsLink, setWsLink] = useState<{ state: WsLinkState; elapsedMs: number }>({
     state: "connected",
     elapsedMs: 0,
@@ -858,7 +851,6 @@ export function App() {
   const chatbotTaken = chatbotSlotTaken(current?.group, members);
   const isChatGroup = current?.group.groupKind === "chat";
   const isAdmin = authUser?.isAdmin ?? !requiresAuth;
-  const owner = current && members.find((member) => member.id === current.group.ownerMemberId);
   const senderMemberId = current
     ? resolveSenderMemberId(members, current.group.ownerMemberId, authUser?.userId, isAdmin)
     : null;
@@ -1970,7 +1962,7 @@ export function App() {
       <Modal title="发现新版本" onClose={() => setUpdateNotice(null)}>
         <p className="form-hint" style={{ marginBottom: 10 }}>
           {updateNotice.currentVersion} → <strong>{updateNotice.latestVersion}</strong>
-          {updateNotice.notes ? `　${updateNotice.notes}` : ""}
+          {updateNotice.notes ? `\u3000${updateNotice.notes}` : ""}
         </p>
         <ButtonGroup align="stretch">
           <UiButton

@@ -28,7 +28,8 @@ pub fn parse_content_doc(existing: &str) -> Option<ContentDoc> {
     serde_json::from_value(value).ok()
 }
 
-pub fn append_channel_delta(existing: &str, channel: &str, delta: &str) -> String {
+#[cfg(test)]
+fn append_channel_delta(existing: &str, channel: &str, delta: &str) -> String {
     apply_channel_delta(existing, channel, delta, false)
 }
 

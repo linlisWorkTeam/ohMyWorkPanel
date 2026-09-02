@@ -218,7 +218,7 @@ mod tests {
     fn empty_body_omitted_from_ledger() {
         assert!(section("wiki", "wiki", "  \n").is_none());
         let s = section("announcement", "group.announcement", "【群公告】x").unwrap();
-        let json = ledger_json(&[s.clone()]);
+        let json = ledger_json(std::slice::from_ref(&s));
         assert!(json.contains("\"name\":\"announcement\""));
         assert!(json.contains("\"chars\":"));
         assert!(!json.contains("【群公告】"));

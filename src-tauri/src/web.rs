@@ -47,6 +47,10 @@ fn web_emit(
     web_emit_delta(tx, group_id, kind, message_id, run_id, status, error, None);
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "temporary transport helper replaced by typed events"
+)]
 fn web_emit_delta(
     tx: &broadcast::Sender<String>,
     group_id: &str,
@@ -644,9 +648,8 @@ async fn send_message_web(
             if !allowed {
                 continue;
             }
-            match create_task_run(&conn, &input.group_id, &msg.id, &agent_id, None, 0) {
-                Ok(rid) => run_ids.push(rid),
-                Err(_) => {}
+            if let Ok(rid) = create_task_run(&conn, &input.group_id, &msg.id, &agent_id, None, 0) {
+                run_ids.push(rid);
             }
         }
     }

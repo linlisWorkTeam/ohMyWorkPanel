@@ -16,7 +16,7 @@ import {
   type WsLinkState,
 } from "../observability/releasingState";
 
-type WsListener = (event: { payload: any }) => void;
+type WsListener = (event: { payload: unknown }) => void;
 const listeners = new Map<string, Set<WsListener>>();
 let sharedWs: WebSocket | null = null;
 let authToken: string | null = null;
@@ -216,9 +216,9 @@ export async function listen<T>(
   if (!listeners.has(event)) {
     listeners.set(event, new Set());
   }
-  listeners.get(event)!.add(callback as WsListener);
+  listeners.get(event)!.add(callback as unknown as WsListener);
   return () => {
-    listeners.get(event)?.delete(callback as WsListener);
+    listeners.get(event)?.delete(callback as unknown as WsListener);
   };
 }
 

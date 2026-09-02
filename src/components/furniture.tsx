@@ -5,7 +5,7 @@ import { markdownToHtml } from "../chat/markdownLite";
 import { modelsForAdapter } from "../agents/agentModels";
 import { agentBusyLabel, queueCounts, runsForAgentActive } from "../members/queueCounts";
 import { memberRosterAction } from "../members/memberForm";
-import { PHASE_LABEL, time, dayLabel, readError } from "./uiShared";
+import { PHASE_LABEL, time, readError } from "./uiShared";
 import { applySelfDetailsToggle } from "../chat/detailsToggle";
 import type { Group, GroupState, Member, RunPhaseEntry, TaskRun } from "../types";
 import { ContextActionMenu, useLongPress, type ActionItem } from "./ContextActionMenu";
@@ -412,7 +412,6 @@ export function MemberRow({ member, group, runs, detecting, online, askMode, onA
   const activeRuns = queueOpen ? runsForAgentActive(runs, member.id) : [];
   const idleRuntime =
     member.runtimeStatus === "ready" ? "已就绪" : member.runtimeStatus === "unavailable" ? "不可用" : "待检测";
-  const busyOrIdle = detecting ? "检测中…" : busy ?? idleRuntime;
   const statusText = member.kind === "agent"
     ? `${member.adapter}${member.model ? ` · ${member.model}` : ""}`
     : member.kind === "chatbot"

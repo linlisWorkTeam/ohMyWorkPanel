@@ -99,7 +99,7 @@ pub fn build_wiki_query(group_name: &str, root_task: &str, announcement: &str) -
 }
 
 fn run_retrieve(cli: &std::path::Path, query: &str) -> Result<WikiRetrieveResult, String> {
-    let secs = ((timeout_ms() + 999) / 1000).max(1);
+    let secs = timeout_ms().div_ceil(1000).max(1);
     // Prefer GNU timeout so a hung jieba/python cannot stall the scheduler.
     let output = Command::new("timeout")
         .arg(format!("{secs}s"))

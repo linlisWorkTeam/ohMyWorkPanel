@@ -70,7 +70,7 @@ fn main() {
             .unwrap();
         for row in rows {
             let (id, status, err, phase, ts) = row.unwrap();
-            println!("[{ts}] {status} phase={phase} err={}", err = short(&err, 220));
+            println!("[{ts}] {id} {status} phase={phase} err={err}", err = short(&err, 220));
         }
     } else {
         println!("(task_runs 表不存在？)");

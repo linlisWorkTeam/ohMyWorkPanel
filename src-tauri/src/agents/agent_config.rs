@@ -88,7 +88,7 @@ impl Default for CodexConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ClaudeConfig {
     pub enabled: bool,
@@ -96,18 +96,7 @@ pub struct ClaudeConfig {
     pub auth_token: Option<String>,
     pub model: Option<String>,
 }
-impl Default for ClaudeConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            base_url: None,
-            auth_token: None,
-            model: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct CursorConfig {
     pub enabled: bool,
@@ -118,36 +107,14 @@ pub struct CursorConfig {
     /// 原样写入 `~/.cursor/mcp.json`（可选）。
     pub mcp: Option<serde_json::Value>,
 }
-impl Default for CursorConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            executable: None,
-            model: None,
-            cli_config: None,
-            mcp: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct OpenCodeConfig {
     pub enabled: bool,
     pub model: Option<String>,
     pub api_key: Option<String>,
 }
-impl Default for OpenCodeConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            model: None,
-            api_key: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AgentProfilePatch {
     pub adapter: String,
@@ -162,19 +129,6 @@ pub struct AgentProfilePatch {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub executable: Option<String>,
 }
-impl Default for AgentProfilePatch {
-    fn default() -> Self {
-        Self {
-            adapter: String::new(),
-            display_name: None,
-            member_id: None,
-            model: None,
-            api_key: None,
-            executable: None,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentProfileRow {
@@ -655,7 +609,7 @@ fn apply_codex(bundle: &AgentConfigBundle, overwrite: bool) -> Result<String, St
             .as_deref()
             .filter(|s| !s.trim().is_empty())
             .map(|s| s.trim().to_string())
-            .unwrap_or_else(|| crate::adapters::codex::base_url());
+            .unwrap_or_else(crate::adapters::codex::base_url);
         let model = bundle
             .codex
             .model
@@ -865,7 +819,14 @@ fn provision_agents(
     }
 
     // 顶层 enabled 段 → 按 adapter 应用到所有匹配成员（默认值兜底；只有 enabled 段生效）
-    let sections: [(&str, bool, Option<String>, Option<String>, Option<String>); 4] = [
+    type ConfigSection = (
+        &'static str,
+        bool,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    );
+    let sections: [ConfigSection; 4] = [
         (
             "codex",
             bundle.codex.enabled,
@@ -960,7 +921,6 @@ fn apply_patch(conn: &rusqlite::Connection, row: &AgentProfileRow, patch: &Agent
 
 pub(crate) struct InstallSpec {
     name: &'static str,
-    desc: String,
     command: Vec<String>,
 }
 
@@ -1009,27 +969,22 @@ pub(crate) fn install_spec(cli: &str) -> Option<InstallSpec> {
     let spec = match cli.trim() {
         "codex" => InstallSpec {
             name: "codex",
-            desc: "OpenAI Codex CLI".into(),
             command: npm_install_cmd("@openai/codex"),
         },
         "claude" | "claude-code" => InstallSpec {
             name: "claude",
-            desc: "Claude Code CLI".into(),
             command: npm_install_cmd("@anthropic-ai/claude-code"),
         },
         "opencode" => InstallSpec {
             name: "opencode",
-            desc: "OpenCode CLI".into(),
             command: npm_install_cmd("opencode-ai"),
         },
         "dsh" => InstallSpec {
             name: "dsh",
-            desc: "DeepSeek Harness CLI".into(),
             command: npm_install_cmd("@deepseek-ai/dsh"),
         },
         "cursor" => InstallSpec {
             name: "cursor",
-            desc: "Cursor CLI（agent）".into(),
             command: cursor_install_cmd(),
         },
         _ => return None,

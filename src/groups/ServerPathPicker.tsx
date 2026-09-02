@@ -14,7 +14,7 @@ type Crumb = { label: string; path: string };
 /** 按平台切 crumb：Windows 用 `\`、Linux 用 `/`；均带根节点。 */
 function platformCrumbs(path: string | undefined): Crumb[] {
   const current = path ?? "";
-  const parts = current.split(/[\/\\]/).filter(Boolean);
+  const parts = current.split(/[/\\]/).filter(Boolean);
   if (parts.length === 0) return [];
   const win = /^[A-Za-z]:$/.test(parts[0]);
   const crumbs: Crumb[] = [];

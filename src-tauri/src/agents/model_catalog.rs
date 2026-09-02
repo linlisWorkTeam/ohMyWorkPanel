@@ -1,4 +1,4 @@
-//! Live agent model catalogs. Cursor is synced from CLI; others stay static (TODO).
+//! Live agent model catalogs. Cursor is synced from CLI; other adapters currently stay static.
 
 use crate::adapters::{models as static_models, AdapterKind};
 use serde::Serialize;
@@ -230,10 +230,10 @@ pub fn catalog_response() -> AgentModelsResponse {
         cursor_source,
         cursor_synced_at,
         todos: vec![
-            "TODO: live sync Codex model list".into(),
-            "TODO: live sync Claude Code model list".into(),
-            "TODO: live sync OpenClaw / OpenCode model lists".into(),
-            "TODO: persist live catalog to SQLite for cold start".into(),
+            "Backlog: live sync Codex model list".into(),
+            "Backlog: live sync Claude Code model list".into(),
+            "Backlog: live sync OpenClaw / OpenCode model lists".into(),
+            "Backlog: persist live catalog to SQLite for cold start".into(),
         ],
     }
 }
@@ -296,8 +296,8 @@ Tip: use --model <id>
     #[test]
     fn catalog_includes_cursor_and_todos() {
         let resp = catalog_response();
-        assert!(resp.adapters.get("cursor").is_some());
-        assert!(resp.adapters.get("codex").is_some());
+        assert!(resp.adapters.contains_key("cursor"));
+        assert!(resp.adapters.contains_key("codex"));
         assert!(resp.todos.iter().any(|t| t.contains("Codex")));
     }
 }

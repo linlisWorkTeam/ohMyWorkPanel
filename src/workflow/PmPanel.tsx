@@ -33,8 +33,6 @@ function timeAgo(ts: number) {
   return `${Math.floor(h / 24)}天前`;
 }
 
-function id() { return crypto.randomUUID(); }
-
 // ── main panel ──
 
 interface PmPanelProps {

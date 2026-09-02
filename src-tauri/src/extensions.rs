@@ -97,7 +97,7 @@ pub fn panellive_root() -> PathBuf {
 pub fn extension_roots() -> Vec<PathBuf> {
     let mut roots: Vec<PathBuf> = Vec::new();
     if let Ok(raw) = std::env::var("OHMYWORKPANEL_EXTENSION_ROOTS") {
-        for part in raw.split(|c| c == ':' || c == ';') {
+        for part in raw.split([':', ';']) {
             let p = part.trim();
             if !p.is_empty() {
                 roots.push(PathBuf::from(p));
@@ -309,12 +309,6 @@ pub fn sanitize_proxy_path(raw: &str) -> AppResult<String> {
 }
 
 /// Append browser query to sanitized path (needed for `?format=json` TTS etc.).
-
-/// Best-effort discovery for test/dev: mock manifest may omit `runtime`.
-fn discover_mock_or_panellive() -> Vec<DiscoveredExtension> {
-    discover_extensions()
-}
-
 pub fn with_proxy_query(path: &str, query: Option<&str>) -> AppResult<String> {
     let Some(q) = query.map(str::trim).filter(|s| !s.is_empty()) else {
         return Ok(path.to_string());

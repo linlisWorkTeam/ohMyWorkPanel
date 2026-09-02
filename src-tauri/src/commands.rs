@@ -16,14 +16,10 @@ use crate::models::{
     Message, PresetRole, RoadmapItem, RoadmapState, RuntimeSettings, SendResult, TaskRun,
     UpdateFeatureInput, UpdateFeatureTaskInput, UpdateRoadmapItemInput,
 };
-use crate::scheduler::{emit, schedule_group, SchedulerState};
+use crate::scheduler::{schedule_group, SchedulerState};
 use crate::AppState;
 use rusqlite::{params, OptionalExtension};
-use std::{
-    collections::{HashMap, HashSet},
-    sync::{atomic::Ordering, Arc, Mutex},
-    time::Duration,
-};
+use std::{sync::atomic::Ordering, time::Duration};
 use tauri::{AppHandle, Emitter, State};
 use tokio::process::Command;
 
@@ -1694,7 +1690,7 @@ pub async fn check_for_update(
             .map(str::to_string);
         let has_update = crate::models::is_newer_version(&latest, &current);
         if let Ok(conn) = open_db(&state.db_path) {
-            let _ = logger::info(
+            logger::info(
                 &conn,
                 "updater",
                 &format!(
@@ -1716,7 +1712,7 @@ pub async fn check_for_update(
     }
     // 全部候选源失败：静默禁用（不打扰用户），保留首个错误供设置页排查
     if let Ok(conn) = open_db(&state.db_path) {
-        let _ = logger::info(
+        logger::info(
             &conn,
             "updater",
             &format!(
