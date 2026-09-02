@@ -173,6 +173,14 @@ status: active
 | 规范 | 目录作为架构文档；禁止业务文件回流入口目录 | ✅ 参考文档 + 贡献指南 |
 | AI Harness | AI 编码、commit、PR 证据规范 + 可执行结构/提交门禁 | ✅ 脚本、模板、参考文档 |
 
+### 阶段 7.4 — Connecter 远程 Agent Provider（轨道 A）
+
+| 切片 | 内容 | 状态 |
+|---|---|---|
+| Provider | `connecter-remote` 经 Connecter Directory/Federation 调度其他设备 Runner | 最新 `main` 代码 + 本地真实 Codex E2E ✅ |
+| 安全与恢复 | 独立加密 bearer、幂等 dispatch、取消、重启恢复、`writeBack=false` | schema v6 兼容迁移（含已占用 v5 的部署谱系）+ 全量门禁 ✅ |
+| 发版 | WorkPanel 与 Connecter Host 仅部署 ECS `:8081` canary | PR #18 + ECS API 端到端验收 ✅；桌面 UI 直调与生产 promote 未执行 |
+
 ### 阶段 8 — **v2.2.0（待合并）** Self-Marketing MVP（轨道 H）
 
 > 让工作群基于绑定仓库的可追溯证据生成对外内容，先在群聊里审核；本阶段不连接发布平台。Spec：[`specs/2026-09-01-self-marketing-mvp.md`](superpowers/specs/2026-09-01-self-marketing-mvp.md)。
@@ -224,7 +232,8 @@ status: active
 7. **轨道 G 自举运行时（新占位）**：设计 Spec `2026-08-16-dsh-self-bootstrap-runtime.md` + 群聊治理层 `2026-08-16-group-chat-governance-plane.md`；P0（dsh headless 适配器 + DSH Web 嵌入）✅；P1 ACP 会话回放待立项（先立群聊治理层）。**小组件定位**：见 `specs/2026-08-16-widget-capability-placement.md`（widget=页签/能力，不单独建群；仅治理型项目群例外）。
 8. **Agent 配置一键导入（I1，轨道 A / 发布打包）**：代码已落地（阶段 5.1）；下一步 ECS canary `:8081` 部署 + 群公告 →（批）promote 生产；顺带验证「服务器导出 → 新机一键导入」端到端与前端壳冒烟（`release-checklist.md §F`）。
 9. **CLI 适配器 Manifest（轨道 A）**：SSOT accepted — `specs/2026-08-21-cli-adapter-manifest.md`。**P0 已灰度 `:8081`**（查表 + `GET /api/adapters`）；P0.1+ 未开工。
-10. **Self-Marketing MVP（轨道 H）**：v2.2.0 切片 M1–M3 已实现并通过本机真实 Agent、群聊 UI、灰度构建与 Connector 远程 Agent 联合验收；等待 PR 合并。仅生成、校验、群聊审核与导出，自动发布和数据反馈留到后续阶段。
+10. **Connecter 远程 Agent Provider（轨道 A）**：`connecter-remote` 通过 WorkPanel service dispatch API 调度跨设备 Runner；最新 `main` 移植与门禁已完成，仅部署 `:8081` canary，并以 ECS UI 直接 `@Codex-Windows11` 验收。
+11. **Self-Marketing MVP（轨道 H）**：v2.2.0 切片 M1–M3 已实现并通过本机真实 Agent、群聊 UI、灰度构建与 Connecter 远程 Agent 联合验收；等待 PR 合并。仅生成、校验、群聊审核与导出，自动发布和数据反馈留到后续阶段。
 
 ---
 
@@ -251,6 +260,7 @@ status: active
 | [`docs/superpowers/specs/2026-08-06-ohmyworkpanel-v1.3.0-workflow-era-design.md`](superpowers/specs/2026-08-06-ohmyworkpanel-v1.3.0-workflow-era-design.md) | V1.3.0 工作流全量设计 |
 | [`docs/superpowers/specs/2026-08-16-dsh-self-bootstrap-runtime.md`](superpowers/specs/2026-08-16-dsh-self-bootstrap-runtime.md) | 轨道 G：DSH 自举接入总设计（会两级不可改自举 Agent） |
 | [`docs/superpowers/specs/2026-08-21-cli-adapter-manifest.md`](superpowers/specs/2026-08-21-cli-adapter-manifest.md) | 轨道 A：CLI 适配器 Manifest（**accepted** SSOT） |
+| [`docs/superpowers/specs/2026-09-01-connecter-remote-provider-design.md`](superpowers/specs/2026-09-01-connecter-remote-provider-design.md) | 轨道 A：Connecter 远程 Agent Provider 与 ECS canary 验收契约 |
 | [`docs/superpowers/specs/2026-08-16-dsh-ui-language-ohmyworkpanel.md`](superpowers/specs/2026-08-16-dsh-ui-language-ohmyworkpanel.md) | 借鉴 DSH UI 设计语言（三栏：工作区=群聊，右栏=Agent） |
 | [`docs/superpowers/specs/2026-08-16-widget-capability-placement.md`](superpowers/specs/2026-08-16-widget-capability-placement.md) | 小组件形态判定与收敛路线（widget=页签/能力，不单独建群） |
 | [`docs/superpowers/specs/2026-08-22-ohmyworkpanel-v2.1.1-shell-visual-parity-design.md`](superpowers/specs/2026-08-22-ohmyworkpanel-v2.1.1-shell-visual-parity-design.md) | v2.1.1：主壳按 `ui-v2.1-shell.html` 重画 + 全站 token 别名 |

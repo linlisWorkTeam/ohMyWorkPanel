@@ -173,6 +173,11 @@ export const api = {
     chatbotProvider?: "opencode-go" | "deepseek";
     apiKey?: string;
     model?: string;
+    connecterBaseUrl?: string;
+    connecterEnv?: string;
+    connecterGroupRef?: string;
+    connecterTargetSubjectId?: string;
+    connecterBearer?: string;
     loginUsername?: string;
     loginPassword?: string;
     existingAuthUserId?: string;
