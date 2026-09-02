@@ -10,6 +10,7 @@ import type {
   DirListing, Group, ReleaseStatus, OpsJobState, ExtensionStatus, A2aDispatchResult,
   InvitePreview,
 } from "./types";
+import type { CampaignExport, ContentCampaign, CreateCampaignInput } from "./marketing/types";
 
 const API_BASE = "";
 const WS_BASE = `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}`;
@@ -242,6 +243,28 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ groupId, senderMemberId, content, mentionMemberIds }),
     }),
+
+  createMarketingCampaign: (input: CreateCampaignInput) =>
+    apiFetch<ContentCampaign>(`/api/groups/${encodeURIComponent(input.groupId)}/marketing/campaigns`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  listMarketingCampaigns: (groupId: string) =>
+    apiFetch<ContentCampaign[]>(`/api/groups/${encodeURIComponent(groupId)}/marketing/campaigns`),
+  getMarketingCampaign: (campaignId: string) =>
+    apiFetch<ContentCampaign>(`/api/marketing/campaigns/${encodeURIComponent(campaignId)}`),
+  reviseMarketingCampaign: (campaignId: string, actorMemberId: string, feedback: string) =>
+    apiFetch<ContentCampaign>(`/api/marketing/campaigns/${encodeURIComponent(campaignId)}/revise`, {
+      method: "POST",
+      body: JSON.stringify({ actorMemberId, feedback }),
+    }),
+  approveMarketingCampaign: (campaignId: string, actorMemberId: string) =>
+    apiFetch<ContentCampaign>(`/api/marketing/campaigns/${encodeURIComponent(campaignId)}/approve`, {
+      method: "POST",
+      body: JSON.stringify({ actorMemberId }),
+    }),
+  exportMarketingCampaign: (campaignId: string) =>
+    apiFetch<CampaignExport>(`/api/marketing/campaigns/${encodeURIComponent(campaignId)}/export`),
 
   cancelRun: (runId: string) =>
     apiFetch<void>(`/api/runs/${runId}/cancel`, { method: "POST" }),

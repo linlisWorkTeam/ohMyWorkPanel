@@ -179,7 +179,18 @@ status: active
 |---|---|---|
 | Provider | `connecter-remote` 经 Connecter Directory/Federation 调度其他设备 Runner | 最新 `main` 代码 + 本地真实 Codex E2E ✅ |
 | 安全与恢复 | 独立加密 bearer、幂等 dispatch、取消、重启恢复、`writeBack=false` | schema v6 兼容迁移（含已占用 v5 的部署谱系）+ 全量门禁 ✅ |
-| 发版 | WorkPanel 与 Connecter Host 仅部署 ECS `:8081` canary | 待 PR、ECS 自举与 UI 直调；禁止 promote `:8080` |
+| 发版 | WorkPanel 与 Connecter Host 仅部署 ECS `:8081` canary | PR #18 + ECS API 端到端验收 ✅；桌面 UI 直调与生产 promote 未执行 |
+
+### 阶段 8 — **v2.2.0（待合并）** Self-Marketing MVP（轨道 H）
+
+> 让工作群基于绑定仓库的可追溯证据生成对外内容，先在群聊里审核；本阶段不连接发布平台。Spec：[`specs/2026-09-01-self-marketing-mvp.md`](superpowers/specs/2026-09-01-self-marketing-mvp.md)。
+
+| 切片 | 内容 | 状态 |
+|---|---|---|
+| M1 上下文 | README / CHANGELOG / docs / commit / diff 的受限快照与证据引用 | ✅ 已实现并通过隔离数据目录验收 |
+| M2 编排 | Content Brief → 五渠道草稿 → 事实/风格校验，允许 `no_content` | ✅ 真实 Codex Planner/Writer 五渠道抽样通过 |
+| M3 审核 | 群聊发起、查看、要求修改、批准、Markdown 导出 | ✅ revision=1、零阻断项、批准与导出通过；桌面 Web 可视验收零控制台错误 |
+| M4 发布 | 平台 OAuth、自动发布、指标回流 | Backlog；明确不进 MVP |
 
 
 ---
@@ -195,6 +206,7 @@ status: active
 | **E 质量** | 门禁绿 + 策略文档同步 | 纯函数/调度单测；补缺口见 testing-strategy | 用真 CLI smoke 替代门禁 |
 | **F 工作流 V1.3.0** | Git Tag 版本 + Ask + Wave | 见阶段 5 设计文 | 一次做完 S1–S4；自动无审批 promote |
 | **G 自举运行时** | 借 DSH 自举能力：会话可回放/分叉、能力可热载/可回滚、subagent 跨进程委派；**自举只由预制不可改的两级自举 Agent 执行（ohMyWorkPanel 组 `linlis-super-harness` 完整 / 普通群极简 `bootstrap-dsh`）** | 群聊治理层（决策卡/审批）先行；两级 `system_locked` 不可修改；完整自举写回权只挂 `linlis-super-harness`；DSH 进程隔离 + 锁版本；自举动作必须经群聊人类批准 | 把 dsh 内核寄生进 ohMyWorkPanel；agent 自我批准/绕过灰度；普通 Agent 或极简 bootstrap-dsh 拥有面板自举写回权 |
+| **H 项目传播** | 工作群内的证据化 Self-Marketing | 仓库快照、Content Brief、五渠道草稿、确定性校验、人类审核与导出 | 自动发布、增长分析、营销 CRM、无证据卖点、把未提交改动默认当成已发布事实 |
 
 ### 轨道 D — 聊天群（已对齐的方向，待拍板开工）
 
@@ -221,6 +233,7 @@ status: active
 8. **Agent 配置一键导入（I1，轨道 A / 发布打包）**：代码已落地（阶段 5.1）；下一步 ECS canary `:8081` 部署 + 群公告 →（批）promote 生产；顺带验证「服务器导出 → 新机一键导入」端到端与前端壳冒烟（`release-checklist.md §F`）。
 9. **CLI 适配器 Manifest（轨道 A）**：SSOT accepted — `specs/2026-08-21-cli-adapter-manifest.md`。**P0 已灰度 `:8081`**（查表 + `GET /api/adapters`）；P0.1+ 未开工。
 10. **Connecter 远程 Agent Provider（轨道 A）**：`connecter-remote` 通过 WorkPanel service dispatch API 调度跨设备 Runner；最新 `main` 移植与门禁已完成，仅部署 `:8081` canary，并以 ECS UI 直接 `@Codex-Windows11` 验收。
+11. **Self-Marketing MVP（轨道 H）**：v2.2.0 切片 M1–M3 已实现并通过本机真实 Agent、群聊 UI、灰度构建与 Connecter 远程 Agent 联合验收；等待 PR 合并。仅生成、校验、群聊审核与导出，自动发布和数据反馈留到后续阶段。
 
 ---
 

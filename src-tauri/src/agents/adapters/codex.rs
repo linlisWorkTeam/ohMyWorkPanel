@@ -73,13 +73,38 @@ pub(crate) fn read_openai_key_from_auth_path(path: &std::path::Path) -> Option<S
     )
 }
 
-/// Codex CLI args. Force DeepSeek-compatible provider via local Responses proxy (or override URL).
-pub fn build_args(prompt: &str, model: Option<&str>) -> Vec<String> {
-    let base = base_url();
+pub(crate) fn native_auth_enabled() -> bool {
+    std::env::var("OHMYWORKPANEL_CODEX_NATIVE_AUTH")
+        .ok()
+        .map(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
+        .unwrap_or(false)
+}
+
+fn build_args_with_mode(prompt: &str, model: Option<&str>, native_auth: bool) -> Vec<String> {
     let mut args = vec![
         "exec".into(),
         "--json".into(),
         "--skip-git-repo-check".into(),
+    ];
+    if native_auth {
+        if let Some(model) = model
+            .map(str::trim)
+            .filter(|value| !value.is_empty() && *value != "default")
+        {
+            args.push("-m".into());
+            args.push(model.to_string());
+        }
+        args.push(prompt.into());
+        return args;
+    }
+
+    let base = base_url();
+    args.extend([
         "-c".into(),
         "model_provider=\"deepseek\"".into(),
         "-c".into(),
@@ -88,7 +113,7 @@ pub fn build_args(prompt: &str, model: Option<&str>) -> Vec<String> {
         "model_providers.deepseek.env_key=\"OPENAI_API_KEY\"".into(),
         "-c".into(),
         "model_providers.deepseek.name=\"deepseek\"".into(),
-    ];
+    ]);
     let model = model
         .map(str::trim)
         .filter(|s| !s.is_empty() && *s != "default")
@@ -103,6 +128,12 @@ pub fn build_args(prompt: &str, model: Option<&str>) -> Vec<String> {
     // Explicit argv prompt; keep stdin null at spawn so Codex does not block on stdin.
     args.push(prompt.into());
     args
+}
+
+/// Codex CLI args. The default keeps the DeepSeek-compatible Responses proxy. Set
+/// `OHMYWORKPANEL_CODEX_NATIVE_AUTH=1` to reuse the Codex CLI's own signed-in session.
+pub fn build_args(prompt: &str, model: Option<&str>) -> Vec<String> {
+    build_args_with_mode(prompt, model, native_auth_enabled())
 }
 
 #[cfg(test)]
@@ -123,6 +154,17 @@ mod tests {
     fn remaps_legacy_openai_model_ids() {
         let args = build_args("x", Some("gpt-5"));
         assert!(args.windows(2).any(|w| w[0] == "-m" && w[1] == "deepseek-v4-flash"));
+    }
+
+    #[test]
+    fn native_auth_mode_preserves_the_cli_login_provider() {
+        let args = build_args_with_mode("hi", None, true);
+        assert_eq!(args, vec!["exec", "--json", "--skip-git-repo-check", "hi"]);
+        let explicit = build_args_with_mode("hi", Some("gpt-5.6-sol"), true);
+        assert!(explicit
+            .windows(2)
+            .any(|pair| pair[0] == "-m" && pair[1] == "gpt-5.6-sol"));
+        assert!(!explicit.iter().any(|arg| arg.contains("model_provider")));
     }
 
     #[test]

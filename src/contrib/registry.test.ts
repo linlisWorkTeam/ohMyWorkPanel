@@ -47,8 +47,13 @@ describe("contrib registry", () => {
     expect(effectiveMotion(ambient, "cyberpunk", true)).toBe("none");
   });
 
-  it("locks slash commands to board / approve / wave", () => {
-    expect(SLASH_COMMANDS.map((row) => row.cmd)).toEqual(["/board", "/approve", "/wave"]);
+  it("keeps the supported slash command registry explicit", () => {
+    expect(SLASH_COMMANDS.map((row) => row.cmd)).toEqual([
+      "/board",
+      "/approve",
+      "/wave",
+      "/market",
+    ]);
   });
 
   it("parses dock geometry and collapses when the pane is too narrow", () => {

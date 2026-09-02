@@ -3,6 +3,8 @@ import { ContextActionMenu, useLongPress, type ActionItem } from "../components/
 import { MessagePartsBody, TypingIndicator } from "../components/furniture";
 import { PHASE_LABEL, dayLabel, time } from "../components/uiShared";
 import { hasRenderableContent } from "../chat/messageContent";
+import { MarketingMessage } from "../marketing/MarketingMessage";
+import { parseMarketingMarker } from "../marketing/markers";
 import type { GroupState, Member, TaskRun } from "../types";
 
 export type ChatTranscriptProps = {
@@ -15,6 +17,7 @@ export type ChatTranscriptProps = {
   playingMessageId?: string | null;
   onPlayVoice?: (messageId: string, content: string) => void;
   onQuote?: (message: GroupState["messages"][number], senderName: string) => void;
+  onMarketingError?: (message: string) => void;
 };
 
 /** `[语音]`, `[语音 3″]`, `3″`, `🎤 3`. */
@@ -79,6 +82,7 @@ const TranscriptRow = memo(function TranscriptRow({
   playingMessageId,
   onPlayVoice,
   onQuote,
+  onMarketingError,
 }: ChatTranscriptProps & { message: GroupState["messages"][number] }) {
   const sender = members.find((member) => member.id === message.senderMemberId);
   const run = runs.find((candidate) => candidate.outputMessageId === message.id);
@@ -91,6 +95,7 @@ const TranscriptRow = memo(function TranscriptRow({
   const isVoice = Boolean(onPlayVoice) && looksLikeVoicePlaceholder(message.content);
   const playing = playingMessageId === message.id;
   const failed = run?.status === "failed";
+  const marketingMarker = parseMarketingMarker(message.content);
   const senderName = sender?.displayName ?? "已移除成员";
   const showSpeak = Boolean(voiceUxEnabled && hasContent && !responding && onPlayVoice);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -122,7 +127,9 @@ const TranscriptRow = memo(function TranscriptRow({
     isVoice && playing ? "playing" : "",
   ].filter(Boolean).join(" ");
 
-  const body = showParts ? (
+  const body = marketingMarker ? (
+    <MarketingMessage marker={marketingMarker} actorMemberId={viewerMemberId} onError={onMarketingError} />
+  ) : showParts ? (
     <>
       {(message.hasThinking || message.hasArtifact) && (
         <div className="wp-think">

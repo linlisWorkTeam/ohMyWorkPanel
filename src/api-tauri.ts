@@ -8,6 +8,7 @@ import type {
   Experience, SaveExperienceInput, LogEntry, LogLevel, LogQueryFilter,
   DirListing, Group, ReleaseStatus, OpsJobState,
 } from "./types";
+import type { CampaignExport, ContentCampaign, CreateCampaignInput } from "./marketing/types";
 
 export const api = {
   bootstrap: () => invoke<{ groups: GroupState["group"][] }>("bootstrap"),
@@ -48,6 +49,18 @@ export const api = {
   setAdmin: (groupId: string, memberId: string | null) => invoke<GroupState>("set_admin", { groupId, memberId }),
   sendMessage: (groupId: string, senderMemberId: string, content: string, mentionMemberIds: string[]) =>
     invoke("send_message", { groupId, senderMemberId, content, mentionMemberIds }),
+  createMarketingCampaign: (input: CreateCampaignInput) =>
+    invoke<ContentCampaign>("create_marketing_campaign", { input }),
+  listMarketingCampaigns: (groupId: string) =>
+    invoke<ContentCampaign[]>("list_marketing_campaigns", { groupId }),
+  getMarketingCampaign: (campaignId: string) =>
+    invoke<ContentCampaign>("get_marketing_campaign", { campaignId }),
+  reviseMarketingCampaign: (campaignId: string, actorMemberId: string, feedback: string) =>
+    invoke<ContentCampaign>("revise_marketing_campaign", { campaignId, input: { actorMemberId, feedback } }),
+  approveMarketingCampaign: (campaignId: string, actorMemberId: string) =>
+    invoke<ContentCampaign>("approve_marketing_campaign", { campaignId, input: { actorMemberId } }),
+  exportMarketingCampaign: (campaignId: string) =>
+    invoke<CampaignExport>("export_marketing_campaign", { campaignId }),
   cancelRun: (runId: string) => invoke<void>("cancel_run", { runId }),
   retryRun: (runId: string) => invoke<string>("retry_run", { runId }),
   detectAgent: (memberId: string) => invoke<string>("detect_agent", { memberId }),

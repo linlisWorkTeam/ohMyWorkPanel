@@ -26,4 +26,17 @@
 
 不同适配器的参数由仓库中的适配器实现决定，不建议仅凭本文猜测命令行参数。
 
+### Codex 认证模式
+
+`codex` 默认通过本机 Responses 代理使用项目配置的 API Key。若运行服务的系统账号已经通过 Codex CLI 登录，可在启动 ohMyWorkPanel 前设置 `OHMYWORKPANEL_CODEX_NATIVE_AUTH=1`，让适配器保留 CLI 自身的登录 provider：
+
+```powershell
+$env:OHMYWORKPANEL_CODEX_NATIVE_AUTH = "1"
+pnpm tauri dev
+```
+
+Web 服务部署时应把该变量设置在服务进程环境中。两种模式都不会把凭据写入项目仓库；启用前先在同一系统账号下运行一次 `codex exec` 验证登录态。
+
+Windows 上如果成员配置解析到 `codex.cmd` / `codex.bat`，较长的结构化 prompt 仍可能受到 `cmd.exe` 的命令行解析限制。此模式建议把成员的可执行文件显式设置为已安装的原生 `codex.exe` 路径；启动日志和成员检测应显示该 `.exe`，再执行内容活动。
+
 <!-- TODO: 根据项目实际补充每个适配器的版本要求、最小验证命令和参数映射。 -->

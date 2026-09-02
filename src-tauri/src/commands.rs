@@ -1437,6 +1437,69 @@ pub async fn release_version(
     crate::workflow::mark_released(&conn, &version_id, git_tag)
 }
 
+// ============================================================================
+// Self-Marketing（Desktop 桥——与 Web API 同一 domain service）
+// ============================================================================
+
+#[tauri::command]
+pub async fn create_marketing_campaign(
+    input: crate::marketing::CreateCampaignInput,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<crate::marketing::ContentCampaign> {
+    let app_state = state.inner().clone();
+    crate::marketing::create_campaign(&app_state.db_path, to_scheduler(&app_state, &app), input)
+}
+
+#[tauri::command]
+pub fn list_marketing_campaigns(
+    group_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<crate::marketing::ContentCampaign>> {
+    crate::marketing::list_campaigns(&open_db(&state.db_path)?, &group_id)
+}
+
+#[tauri::command]
+pub fn get_marketing_campaign(
+    campaign_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<crate::marketing::ContentCampaign> {
+    crate::marketing::get_campaign(&open_db(&state.db_path)?, &campaign_id)
+}
+
+#[tauri::command]
+pub async fn revise_marketing_campaign(
+    campaign_id: String,
+    input: crate::marketing::ReviseCampaignInput,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<crate::marketing::ContentCampaign> {
+    let app_state = state.inner().clone();
+    crate::marketing::revise_campaign(
+        &app_state.db_path,
+        to_scheduler(&app_state, &app),
+        &campaign_id,
+        input,
+    )
+}
+
+#[tauri::command]
+pub fn approve_marketing_campaign(
+    campaign_id: String,
+    input: crate::marketing::ApproveCampaignInput,
+    state: State<'_, AppState>,
+) -> AppResult<crate::marketing::ContentCampaign> {
+    crate::marketing::approve_campaign(&state.db_path, &campaign_id, input)
+}
+
+#[tauri::command]
+pub fn export_marketing_campaign(
+    campaign_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<crate::marketing::CampaignExport> {
+    crate::marketing::export_campaign(&open_db(&state.db_path)?, &campaign_id)
+}
+
 /// 解析 "x.y.z" / "x.y.z-beta" / "x.y.z+build" → 数值三元组（忽略预发布/构建后缀）。
 /// （比较逻辑与单测见 models::parse_version / models::is_newer_version，双特性共同编译。）
 #[derive(serde::Serialize)]

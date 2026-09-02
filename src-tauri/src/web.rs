@@ -2704,6 +2704,127 @@ async fn list_orchestrations_web(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
 }
 
+// === Self-Marketing ===
+
+fn require_claims_actor(
+    conn: &rusqlite::Connection,
+    claims: &Claims,
+    group_id: &str,
+    member_id: &str,
+) -> Result<(), (StatusCode, String)> {
+    require_group_access(conn, &claims.sub, group_id).map_err(map_acl_err)?;
+    let active: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM members WHERE id=?1 AND group_id=?2 AND is_active=1",
+            params![member_id, group_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if active != 1 {
+        return Err((StatusCode::FORBIDDEN, "actor not in group".into()));
+    }
+    if !is_admin_user(conn, &claims.sub).unwrap_or(false) {
+        let owned: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM members WHERE id=?1 AND group_id=?2 AND auth_user_id=?3 AND is_active=1",
+                params![member_id, group_id, claims.sub],
+                |row| row.get(0),
+            )
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        if owned != 1 {
+            return Err((StatusCode::FORBIDDEN, "只能以本人成员身份操作 Campaign".into()));
+        }
+    }
+    Ok(())
+}
+
+async fn create_marketing_campaign_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(group_id): Path<String>,
+    Json(input): Json<crate::marketing::CreateCampaignInput>,
+) -> Result<Json<crate::marketing::ContentCampaign>, (StatusCode, String)> {
+    if input.group_id != group_id {
+        return Err((StatusCode::BAD_REQUEST, "groupId 与路由不一致".into()));
+    }
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_claims_actor(&conn, &claims, &input.group_id, &input.requested_by)?;
+    drop(conn);
+    crate::marketing::create_campaign(&state.db_path, state.sched.clone(), input)
+        .map(Json)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+}
+
+async fn list_marketing_campaigns_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(group_id): Path<String>,
+) -> Result<Json<Vec<crate::marketing::ContentCampaign>>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
+    crate::marketing::list_campaigns(&conn, &group_id)
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
+
+async fn get_marketing_campaign_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(campaign_id): Path<String>,
+) -> Result<Json<crate::marketing::ContentCampaign>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let campaign = crate::marketing::get_campaign(&conn, &campaign_id)
+        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    require_group_access(&conn, &claims.sub, &campaign.group_id).map_err(map_acl_err)?;
+    Ok(Json(campaign))
+}
+
+async fn revise_marketing_campaign_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(campaign_id): Path<String>,
+    Json(input): Json<crate::marketing::ReviseCampaignInput>,
+) -> Result<Json<crate::marketing::ContentCampaign>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let campaign = crate::marketing::get_campaign(&conn, &campaign_id)
+        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    require_claims_actor(&conn, &claims, &campaign.group_id, &input.actor_member_id)?;
+    drop(conn);
+    crate::marketing::revise_campaign(&state.db_path, state.sched.clone(), &campaign_id, input)
+        .map(Json)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+}
+
+async fn approve_marketing_campaign_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(campaign_id): Path<String>,
+    Json(input): Json<crate::marketing::ApproveCampaignInput>,
+) -> Result<Json<crate::marketing::ContentCampaign>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let campaign = crate::marketing::get_campaign(&conn, &campaign_id)
+        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    require_claims_actor(&conn, &claims, &campaign.group_id, &input.actor_member_id)?;
+    drop(conn);
+    crate::marketing::approve_campaign(&state.db_path, &campaign_id, input)
+        .map(Json)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+}
+
+async fn export_marketing_campaign_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(campaign_id): Path<String>,
+) -> Result<Json<crate::marketing::CampaignExport>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let campaign = crate::marketing::get_campaign(&conn, &campaign_id)
+        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    require_group_access(&conn, &claims.sub, &campaign.group_id).map_err(map_acl_err)?;
+    crate::marketing::export_campaign(&conn, &campaign_id)
+        .map(Json)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+}
+
 pub fn build_router(state: Arc<AppState>) -> Router {
     let auth_routes = Router::new()
         .route("/api/auth/register", post(register))
@@ -2810,6 +2931,12 @@ pub fn build_router(state: Arc<AppState>) -> Router {
          .route("/api/feature-tasks/{id}", delete(delete_feature_task_web))
          // PM: Aggregated State
          .route("/api/groups/{group_id}/roadmap-state", get(get_roadmap_state_web))
+         // Self-Marketing
+         .route("/api/groups/{group_id}/marketing/campaigns", get(list_marketing_campaigns_web).post(create_marketing_campaign_web))
+         .route("/api/marketing/campaigns/{campaign_id}", get(get_marketing_campaign_web))
+         .route("/api/marketing/campaigns/{campaign_id}/revise", post(revise_marketing_campaign_web))
+         .route("/api/marketing/campaigns/{campaign_id}/approve", post(approve_marketing_campaign_web))
+         .route("/api/marketing/campaigns/{campaign_id}/export", get(export_marketing_campaign_web))
          // V1.3.0 Version / Wave workflow
          .route("/api/groups/{group_id}/version-board", get(version_board_web))
          .route("/api/project-versions", post(create_version_web))
@@ -2939,6 +3066,17 @@ mod acl_tests {
         .await;
         // 非管理员只能以本人成员身份发言 → FORBIDDEN
         assert!(matches!(res, Err((StatusCode::FORBIDDEN, _))));
+    }
+
+    #[tokio::test]
+    async fn scoped_user_cannot_impersonate_marketing_actor() {
+        let (_file, state) = test_state().await;
+        let conn = crate::db::open_db(&state.db_path).unwrap();
+        assert!(matches!(
+            require_claims_actor(&conn, &claims("u-scoped", "bob").0, "g", "am"),
+            Err((StatusCode::FORBIDDEN, _))
+        ));
+        assert!(require_claims_actor(&conn, &claims("u-scoped", "bob").0, "g", "sm").is_ok());
     }
 
     #[tokio::test]
