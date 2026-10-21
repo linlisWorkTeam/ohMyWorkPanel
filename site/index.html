@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ohMyWorkPanel · 多 Agent 协作平台</title>
+<meta name="description" content="本地优先的多 Agent 协作平台：把群聊、工作区与 Agent 任务收进同一个界面，支持 Codex / Claude Code / Cursor 等多种 CLI 执行器。" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧩</text></svg>" />
+<style>
+  :root{
+    --bg:#080D18; --bg2:#0C1424; --panel:#101A2E; --panel2:#0D1626;
+    --line:#1D2B45; --line2:#26374F;
+    --text:#E8EFFA; --muted:#93A3BC; --dim:#67788F;
+    --accent:#4F8CFF; --accent2:#8B5CF6; --ok:#31D08A; --warn:#F5A524;
+    --radius:16px;
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+    --sans:"PingFang SC","Microsoft YaHei",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth;overflow-x:hidden}
+  body{overflow-x:hidden;max-width:100%}
+  body{
+    background:
+      radial-gradient(1100px 600px at 78% -8%, rgba(79,140,255,.20), transparent 60%),
+      radial-gradient(900px 520px at 8% 4%, rgba(139,92,246,.16), transparent 62%),
+      var(--bg);
+    color:var(--text); font-family:var(--sans); line-height:1.68;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+
+  header{position:sticky;top:0;z-index:50;backdrop-filter:blur(14px);
+    background:rgba(8,13,24,.72);border-bottom:1px solid rgba(29,43,69,.7)}
+  nav{display:flex;align-items:center;gap:22px;height:66px}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.2px}
+  .logo .mark{width:28px;height:28px;border-radius:8px;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    display:grid;place-items:center;font-size:15px}
+  nav .sp{flex:1}
+  nav a.link{color:var(--muted);font-size:14.5px}
+  nav a.link:hover{color:var(--text)}
+  .btn{display:inline-flex;align-items:center;gap:8px;border-radius:10px;padding:9px 16px;
+    font-size:14.5px;font-weight:600;border:1px solid var(--line2);transition:.18s}
+  .btn:hover{border-color:var(--accent);transform:translateY(-1px)}
+  .btn.primary{background:linear-gradient(135deg,var(--accent),#3E6FE0);border-color:transparent;color:#fff}
+
+  .hero{padding:76px 0 40px;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:52px;align-items:center}
+  .hero>*{min-width:0}
+  .badges{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+  .badge{font-size:12.5px;color:var(--muted);border:1px solid var(--line2);border-radius:999px;
+    padding:4px 11px;background:rgba(16,26,46,.6)}
+  .badge b{color:var(--text);font-weight:600}
+  h1{font-size:47px;line-height:1.18;letter-spacing:-.5px;font-weight:800;margin-bottom:18px}
+  h1 .grad{background:linear-gradient(100deg,#8FB6FF,#8B5CF6 60%,#4F8CFF);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .lead{color:var(--muted);font-size:17px;max-width:33em}
+  .cta{display:flex;gap:12px;margin-top:28px;flex-wrap:wrap}
+
+  .mock{border:1px solid var(--line2);border-radius:18px;overflow:hidden;
+    background:linear-gradient(180deg,#0E1729,#0A1220);
+    box-shadow:0 30px 80px -30px rgba(0,0,0,.9), 0 0 0 1px rgba(79,140,255,.08)}
+  .mock .bar{display:flex;align-items:center;gap:7px;padding:11px 14px;border-bottom:1px solid var(--line);
+    background:#0B1424}
+  .dot{width:10px;height:10px;border-radius:50%;background:#2C3B55}
+  .dot.r{background:#F2606A}.dot.y{background:#F5BE4F}.dot.g{background:#3ED598}
+  .bar .title{margin-left:10px;font-size:12px;color:var(--dim);font-family:var(--mono)}
+  .mock{max-width:100%}
+  .mock .body{display:grid;grid-template-columns:minmax(0,132px) minmax(0,1fr) minmax(0,122px);min-height:322px}
+  .col{padding:12px 10px;font-size:12px}
+  .col.side{border-right:1px solid var(--line);background:#0A1322}
+  .col.tasks{border-left:1px solid var(--line);background:#0A1322}
+  .gh{font-size:10.5px;color:var(--dim);letter-spacing:.8px;margin:4px 0 8px;font-weight:700}
+  .gitem{display:flex;align-items:center;gap:7px;color:var(--muted);padding:5px 6px;border-radius:7px}
+  .gitem.on{background:rgba(79,140,255,.13);color:#CDE0FF}
+  .gitem i{width:6px;height:6px;border-radius:2px;background:#31425E;font-style:normal}
+  .gitem.on i{background:var(--accent)}
+  .msg{display:flex;gap:8px;margin-bottom:11px}
+  .av{width:22px;height:22px;border-radius:7px;flex:none;display:grid;place-items:center;
+    font-size:10px;font-weight:700;color:#08101F;background:#5B7BA8}
+  .av.u{background:#8B5CF6}.av.a{background:#31D08A}.av.b{background:#4F8CFF}
+  .bubble{background:#111D33;border:1px solid var(--line);border-radius:10px;
+    padding:7px 10px;color:#C6D5EA;font-size:11.8px;max-width:100%;overflow-wrap:anywhere}
+  .bubble b{color:#8FB6FF;font-weight:700}
+  .who{font-size:10.5px;color:var(--dim);margin-bottom:3px}
+  .task{border:1px solid var(--line);border-radius:8px;padding:6px 7px;margin-bottom:7px;background:#0F1A2D}
+  .task .t{font-size:11px;color:#C6D5EA}
+  .task .s{font-size:10px;margin-top:3px;display:flex;align-items:center;gap:5px}
+  .s.ok{color:var(--ok)}.s.run{color:var(--warn)}.s.wait{color:var(--dim)}
+  .s i{width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block}
+
+  section{padding:66px 0}
+  .eyebrow{color:var(--accent);font-size:13px;font-weight:700;letter-spacing:1.4px;margin-bottom:10px}
+  h2{font-size:31px;letter-spacing:-.3px;margin-bottom:12px}
+  .sub{color:var(--muted);max-width:44em;margin-bottom:34px}
+
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .card{border:1px solid var(--line);border-radius:var(--radius);padding:22px 20px;
+    background:linear-gradient(180deg,rgba(16,26,46,.92),rgba(11,20,36,.92));transition:.2s}
+  .card:hover{border-color:var(--line2);transform:translateY(-2px);
+    box-shadow:0 18px 40px -26px rgba(79,140,255,.55)}
+  .card .ico{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;color:#7FB0FF;
+    background:rgba(79,140,255,.12);border:1px solid rgba(79,140,255,.28);margin-bottom:14px}
+  .card .ico svg{width:19px;height:19px}
+  .card h3{font-size:16.5px;margin-bottom:8px}
+  .card p{color:var(--muted);font-size:14px}
+  .card .tag{display:inline-block;margin-top:12px;font-family:var(--mono);font-size:11.5px;
+    color:#9FB6D6;border:1px dashed var(--line2);border-radius:7px;padding:3px 8px}
+
+  .flow{display:flex;align-items:stretch;gap:10px;flex-wrap:wrap}
+  .step{flex:1 1 150px;border:1px solid var(--line);border-radius:12px;padding:14px 15px;
+    background:rgba(13,22,38,.85);position:relative}
+  .step .n{font-family:var(--mono);font-size:11px;color:var(--accent);margin-bottom:5px}
+  .step .h{font-size:14.5px;font-weight:600}
+  .step .d{font-size:12.5px;color:var(--dim);margin-top:4px}
+
+  .arch{display:grid;gap:12px}
+  .layer{border:1px solid var(--line);border-radius:12px;padding:15px 18px;
+    display:flex;align-items:center;gap:16px;background:rgba(13,22,38,.85)}
+  .layer .ln{font-family:var(--mono);font-size:11.5px;color:var(--accent);width:74px;flex:none}
+  .layer .lc{font-size:14.5px;color:var(--text)}
+  .layer .lr{margin-left:auto;display:flex;gap:7px;flex-wrap:wrap}
+  .chip{font-size:11.5px;color:#A9BDD8;border:1px solid var(--line2);border-radius:7px;padding:2px 8px;
+    background:#0E1A2C}
+
+  .codebox{border:1px solid var(--line2);border-radius:14px;overflow:hidden;background:#070E1A}
+  .codebox .tbar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);
+    background:#0A1424;font-size:12px;color:var(--dim);font-family:var(--mono)}
+  pre{padding:16px 18px;overflow:auto;font-family:var(--mono);font-size:13px;line-height:1.85;color:#BBD0EA}
+  pre .c{color:#5B718F}
+  pre .k{color:#8FB6FF}
+
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .panelbox{border:1px solid var(--line);border-radius:var(--radius);padding:22px;background:rgba(13,22,38,.85)}
+  .panelbox h3{font-size:17px;margin-bottom:10px}
+  .panelbox ul{list-style:none;display:grid;gap:9px}
+  .panelbox li{color:var(--muted);font-size:14px;padding-left:20px;position:relative}
+  .panelbox li::before{content:"";position:absolute;left:0;top:9px;width:7px;height:7px;
+    border-radius:2px;background:linear-gradient(135deg,var(--accent),var(--accent2))}
+
+  footer{border-top:1px solid var(--line);padding:34px 0 46px;color:var(--dim);font-size:13.5px}
+  footer .row{display:flex;gap:18px;flex-wrap:wrap;align-items:center}
+  footer a{color:var(--muted)} footer a:hover{color:var(--text)}
+
+  @media (max-width:960px){
+    .hero{grid-template-columns:1fr;gap:34px;padding-top:52px}
+    h1{font-size:38px}
+    .grid{grid-template-columns:1fr 1fr}
+    .split{grid-template-columns:1fr}
+    .mock .body{grid-template-columns:110px 1fr}
+    .col.tasks{display:none}
+  }
+  @media (max-width:640px){
+    .grid{grid-template-columns:1fr}
+    h2{font-size:25px}
+    nav a.link{display:none}
+    .wrap{padding:0 16px}
+    h1{font-size:31px}
+    .lead{font-size:15px}
+    .mock .body{grid-template-columns:minmax(0,96px) minmax(0,1fr)}
+    .col{padding:10px 7px}
+    nav a.btn{padding:7px 11px;font-size:13px}
+    .hero{padding-top:38px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <nav>
+      <a class="logo" href="#top"><span class="mark">🧩</span> ohMyWorkPanel</a>
+      <span class="sp"></span>
+      <a class="link" href="#features">能力</a>
+      <a class="link" href="#flow">流程</a>
+      <a class="link" href="#arch">架构</a>
+      <a class="link" href="#start">快速开始</a>
+      <a class="btn" href="https://github.com/linlisWorkTeam/ohMyWorkPanel" target="_blank" rel="noopener">GitHub ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <div class="wrap">
+    <div class="hero">
+      <div>
+        <div class="badges">
+          <span class="badge">MIT License</span>
+          <span class="badge"><b>Tauri 2</b> + Rust</span>
+          <span class="badge"><b>React 19</b></span>
+          <span class="badge">SQLite 本地存储</span>
+        </div>
+        <h1>把多个 Agent<br /><span class="grad">收进一个协作工作台</span></h1>
+        <p class="lead">
+          本地优先的多 Agent 协作平台：以「项目群」组织成员、工作区与任务状态，
+          在群聊里 @ 一下就把任务派给本机已登录的 Agent CLI。
+          统一任务派发、状态回流与人工介入，数据全部落在本地。
+        </p>
+        <div class="cta">
+          <a class="btn primary" href="https://github.com/linlisWorkTeam/ohMyWorkPanel" target="_blank" rel="noopener">查看源码</a>
+          <a class="btn" href="#start">快速开始</a>
+        </div>
+      </div>
+
+      <div class="mock">
+        <div class="bar"><i class="dot r"></i><i class="dot y"></i><i class="dot g"></i>
+          <span class="title">ohMyWorkPanel · 研发协作群</span></div>
+        <div class="body">
+          <div class="col side">
+            <div class="gh">项目群</div>
+            <div class="gitem on"><i></i>研发协作群</div>
+            <div class="gitem"><i></i>知识库建设</div>
+            <div class="gitem"><i></i>测试收敛</div>
+            <div class="gitem"><i></i>文档收尾</div>
+            <div class="gh" style="margin-top:14px">成员</div>
+            <div class="gitem"><i></i>你</div>
+            <div class="gitem"><i></i>Codex</div>
+            <div class="gitem"><i></i>Claude Code</div>
+            <div class="gitem"><i></i>Cursor</div>
+          </div>
+          <div class="col">
+            <div class="msg"><div class="av u">你</div><div>
+              <div class="who">你 · 10:24</div>
+              <div class="bubble">@Codex 按 spec 重构 <b>计划模块</b> 的校验链路，跑通单测后 @Claude 复核</div></div></div>
+            <div class="msg"><div class="av a">C</div><div>
+              <div class="who">Codex · 10:25</div>
+              <div class="bubble">已定位 3 处重复校验，改动 6 个文件，单测 <b>42/42 通过</b>。</div></div></div>
+            <div class="msg"><div class="av b">Cl</div><div>
+              <div class="who">Claude Code · 10:31</div>
+              <div class="bubble">评审发现边界条件缺失：空集合入参会抛异常，建议补 <b>幂等校验</b>。</div></div></div>
+            <div class="msg"><div class="av a">C</div><div>
+              <div class="who">Codex · 10:34</div>
+              <div class="bubble">已补充幂等键并回归，等待人工确认后合并。</div></div></div>
+          </div>
+          <div class="col tasks">
+            <div class="gh">任务</div>
+            <div class="task"><div class="t">重构校验链路</div><div class="s ok"><i></i>已完成</div></div>
+            <div class="task"><div class="t">用例设计</div><div class="s run"><i></i>运行中</div></div>
+            <div class="task"><div class="t">权限预检</div><div class="s wait"><i></i>待人工确认</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <section id="features">
+    <div class="wrap">
+      <div class="eyebrow">CAPABILITIES</div>
+      <h2>五项核心机制</h2>
+      <p class="sub">不是把几个 CLI 拼在一起，而是把「谁来做、做到什么程度、出错怎么办、谁能动什么」这些工程问题在平台层解决。</p>
+
+      <div class="grid">
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg></div>
+          <h3>多 Agent 协作机制</h3>
+          <p>按研发阶段拆分专职 Agent，以 Orchestrator + 状态机统一任务派发与状态流转，支持并行分支、失败重试与补偿。</p>
+          <span class="tag">Orchestrator · 状态机</span>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17.5" cy="9.5" r="2.3"/><path d="M15.6 20a5 5 0 0 1 5.4-4.6"/></svg></div>
+          <h3>人机协作边界</h3>
+          <p>编译、文件操作等常规动作由 Agent 自动执行，仅在需求冲突、编译失败超阈值等关键场景请求人工介入。</p>
+          <span class="tag">Human-in-the-loop</span>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M12 3v18M5 7h14"/><path d="M5 7l-3 6a3 3 0 0 0 6 0L5 7zM19 7l-3 6a3 3 0 0 0 6 0l-3-6z"/></svg></div>
+          <h3>双 Agent 结对评审</h3>
+          <p>稳健派负责方案边界与风险，创新派负责替代路径，产出对比后进入设计定稿，降低单点盲区。</p>
+          <span class="tag">Adversarial Review</span>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg></div>
+          <h3>权限预检与确认</h3>
+          <p>Agent 执行敏感操作前自动校验权限，破坏性动作强制二次确认，工具调用全程可审计。</p>
+          <span class="tag">Guardrail + RBAC</span>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="6" cy="6" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="12" cy="18" r="2.4"/><path d="M8.4 6h7.2M7.2 8.2l3.6 7.6M16.8 8.2l-3.6 7.6"/></svg></div>
+          <h3>Agent 能力接入</h3>
+          <p>把 MCP 工具与 Skill 注册为标准化能力，通过 Adapter 适配多执行器，新增执行器无需改动核心链路。</p>
+          <span class="tag">Tool Gateway · Adapter</span>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><ellipse cx="12" cy="5.6" rx="7" ry="2.8"/><path d="M5 5.6v12.8c0 1.6 3.1 2.8 7 2.8s7-1.2 7-2.8V5.6"/><path d="M5 12c0 1.6 3.1 2.8 7 2.8s7-1.2 7-2.8"/></svg></div>
+          <h3>本地优先架构</h3>
+          <p>SQLite 落本地、Tauri 桌面与 Web 服务复用同一套数据模型与 API，进程内零云依赖，密钥不出本机。</p>
+          <span class="tag">Tauri 2 · SQLite</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="flow">
+    <div class="wrap">
+      <div class="eyebrow">WORKFLOW</div>
+      <h2>覆盖软件全生命周期的 6 个阶段</h2>
+      <p class="sub">每个阶段都是一个可独立派发、可回看轨迹的任务，由对应专职 Agent 承接，人只在关键节点介入。</p>
+      <div class="flow">
+        <div class="step"><div class="n">01</div><div class="h">需求确认</div><div class="d">澄清边界与验收标准</div></div>
+        <div class="step"><div class="n">02</div><div class="h">设计生成</div><div class="d">方案与替代路径对比</div></div>
+        <div class="step"><div class="n">03</div><div class="h">编码走读</div><div class="d">实现 + 代码走读</div></div>
+        <div class="step"><div class="n">04</div><div class="h">用例设计</div><div class="d">覆盖正常与异常路径</div></div>
+        <div class="step"><div class="n">05</div><div class="h">测试收敛</div><div class="d">失败定位 → 修复 → 回归</div></div>
+        <div class="step"><div class="n">06</div><div class="h">文档收尾</div><div class="d">变更说明与知识沉淀</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="arch">
+    <div class="wrap">
+      <div class="eyebrow">ARCHITECTURE</div>
+      <h2>四层架构，职责清晰</h2>
+      <p class="sub">接入层只负责「怎么进来」，编排层负责「谁来做」，能力层负责「能做什么」，存储层负责「记在哪里」。</p>
+      <div class="arch">
+        <div class="layer"><span class="ln">接入层</span><span class="lc">CLI · HTTP API · GUI</span>
+          <span class="lr"><span class="chip">Web</span><span class="chip">Tauri 桌面</span></span></div>
+        <div class="layer"><span class="ln">编排层</span><span class="lc">LangGraph 状态机，统一调度专职 Agent</span>
+          <span class="lr"><span class="chip">并行分支</span><span class="chip">重试</span><span class="chip">补偿</span></span></div>
+        <div class="layer"><span class="ln">能力层</span><span class="lc">知识抽取 · 检索 · 评审 · Gate · 评测</span>
+          <span class="lr"><span class="chip">MCP</span><span class="chip">Skill</span><span class="chip">Adapter</span></span></div>
+        <div class="layer"><span class="ln">存储层</span><span class="lc">SQLite Registry + 内容寻址 CAS</span>
+          <span class="lr"><span class="chip">版本</span><span class="chip">回滚</span><span class="chip">追溯</span></span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="split">
+        <div class="panelbox">
+          <h3>支持的 Agent 执行器</h3>
+          <ul>
+            <li><b>Mock</b> — 不依赖外部 CLI，用于验证界面与任务流</li>
+            <li><b>Codex CLI</b> — 任务派发与结果回流</li>
+            <li><b>Claude Code</b> — 复杂重构与评审</li>
+            <li><b>OpenCode / OpenClaw</b> — 可插拔的执行器</li>
+            <li><b>Cursor CLI</b> — 编辑器内工作流衔接</li>
+          </ul>
+        </div>
+        <div class="panelbox">
+          <h3>安全与边界</h3>
+          <ul>
+            <li>Agent 继承本机 CLI 的登录态与系统权限</li>
+            <li>破坏性操作执行前强制人工确认</li>
+            <li>API 密钥与登录文件不出本机</li>
+            <li>工作区路径绑定服务端绝对路径，避免误操作</li>
+            <li>敏感动作全程留痕，可回看、可审计</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="start">
+    <div class="wrap">
+      <div class="eyebrow">QUICK START</div>
+      <h2>三条命令跑起来</h2>
+      <p class="sub">需要 Node.js 20+、pnpm；桌面模式另需 Rust stable 与 WebView2。</p>
+      <div class="codebox">
+        <div class="tbar">bash</div>
+<pre><span class="c"># 1. 克隆</span>
+<span class="k">git</span> clone https://github.com/linlisWorkTeam/ohMyWorkPanel.git
+<span class="k">cd</span> ohMyWorkPanel
+
+<span class="c"># 2. 安装依赖</span>
+<span class="k">pnpm</span> install
+
+<span class="c"># 3-A. 完整 Web 服务（浏览器访问 http://127.0.0.1:8080）</span>
+<span class="k">pnpm</span> run build:web
+<span class="k">cd</span> src-tauri
+<span class="k">cargo</span> run --no-default-features --bin ohmyworkpanel-server
+
+<span class="c"># 3-B. 或直接启动 Tauri 桌面应用</span>
+<span class="k">pnpm</span> tauri dev</pre>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <div class="row">
+        <span>© 2026 linlisWorkTeam</span>
+        <span>·</span>
+        <a href="https://github.com/linlisWorkTeam/ohMyWorkPanel" target="_blank" rel="noopener">GitHub</a>
+        <span>·</span>
+        <a href="https://github.com/linlisWorkTeam/ohMyWorkPanel/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+        <span>·</span>
+        <span>数据本地优先，无云端依赖</span>
+      </div>
+    </div>
+  </footer>
+
+</main>
+</body>
+</html>
