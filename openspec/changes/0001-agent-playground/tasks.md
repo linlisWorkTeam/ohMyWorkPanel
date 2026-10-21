@@ -53,9 +53,8 @@
 - [x] 3.4 人类闸门：每轮确认（`AwaitingApproval` → `approve`）
 - [x] 3.5 证据账本：`goal_rounds.summary`（schema v9）+ Goal 条展示最近一轮
 - [x] 3.6a 自动推进扫描：目标级开关（schema v10）+ 冷却 + 失败隔离 + 创建表单勾选（4 个单测）
-- [ ] 3.6b 后台循环接线：启动时 spawn 扫描，进程重启后接管 active 目标
+- [x] 3.6b 后台循环接线：Tauri / Web 启动时 spawn 扫描（10s），重启后自动接管 active+auto 目标
 - [ ] 3.7 验证：一个真实 goal 端到端跑完并停止（需真实 Agent）
-- [ ] 3.6b 后台循环接线：启动时 spawn 扫描，进程重启后接管 active 目标
 
 ## P4 全量插拔
 

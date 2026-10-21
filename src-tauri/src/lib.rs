@@ -71,12 +71,26 @@ pub fn run() {
             fs::create_dir_all(&dir)?;
             let db_path = dir.join("ohmyworkpanel.sqlite3");
             init_db(&db_path).map_err(std::io::Error::other)?;
-            app.manage(AppState {
+            let state = AppState {
                 db_path,
                 cancellations: Arc::new(Mutex::new(HashMap::new())),
                 scheduling_groups: Arc::new(Mutex::new(HashSet::new())),
                 live_sessions: Arc::new(Mutex::new(HashMap::new())),
-            });
+            };
+            // Goal 自动推进：扫描 active + auto_advance 的目标，默认无目标时为空转。
+            let sched = crate::scheduler::SchedulerState {
+                db_path: state.db_path.clone(),
+                event_sender: crate::event_sender::EventSender::Tauri(app.handle().clone()),
+                cancellations: state.cancellations.clone(),
+                scheduling_groups: state.scheduling_groups.clone(),
+                live_sessions: state.live_sessions.clone(),
+            };
+            tauri::async_runtime::spawn(crate::goals::autopilot_loop::run_forever(
+                state.db_path.clone(),
+                sched,
+                std::time::Duration::from_secs(10),
+            ));
+            app.manage(state);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

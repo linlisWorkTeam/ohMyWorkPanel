@@ -121,6 +121,22 @@
 - THEN 输出完全一致
 - AND 包含目标、轮次序号与上一轮判定
 
+### Requirement: 后台循环与重启恢复
+两个运行时 MUST 在启动后周期扫描（默认 10 秒）并推进符合条件的目标；由于状态持久化在 SQLite，进程重启后 MUST 自动接管 `active + auto_advance` 的目标，无需人工重新开启。
+
+扫描失败 MUST 只记录日志，不终止循环。
+
+#### Scenario: 启动即恢复
+- GIVEN 数据库里存在 `active + auto_advance` 的目标
+- WHEN 进程重启
+- THEN 下一次扫描会继续推进它
+
+#### Scenario: 扫描出错
+- GIVEN 一次扫描整体失败
+- WHEN 循环继续
+- THEN 记录错误
+- AND 下一轮仍然执行
+
 ### Requirement: 自动推进
 自动推进 MUST 默认关闭，只有显式开启且处于 `active` 的目标才会被扫描；两轮之间 MUST 满足冷却时间。
 

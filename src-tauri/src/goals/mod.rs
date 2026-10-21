@@ -5,6 +5,7 @@
 //! 这个模块不碰数据库、不调度 Agent，纯粹决定「该不该继续」。
 
 pub mod autopilot;
+pub mod autopilot_loop;
 pub mod dispatch;
 pub mod driver;
 pub mod runtime;
