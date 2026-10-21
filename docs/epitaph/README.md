@@ -8,6 +8,7 @@ Active handoff notes for future agents.
 
 | Date | Topic | Status |
 |------|-------|--------|
+| 2026-10-22 | [Agent 游乐园程序（插件内核 / Goal 自治 / 像素前台）](./2026-10-22-agent-playground-program.md) | active（P4 未开始，25 提交未推送） |
 | 2026-09-02 | [v2.2.0 Self-Marketing 联合验收](./2026-09-02-v2.2.0-self-marketing-acceptance.md) | ready-to-merge |
 | 2026-09-01 | [Connecter 远程 Provider + 本机 Codex 端到端](./2026-09-01-connecter-remote-provider.md) | active |
 | 2026-09-01 | [v2.2.0 Self-Marketing MVP](./2026-09-01-v2.2.0-self-marketing-mvp.md) | superseded |
