@@ -536,4 +536,5 @@ export interface CreateGoalInput {
   objective: string;
   budget?: GoalBudget;
   requireApprovalEachRound?: boolean;
+  autoAdvance?: boolean;
 }

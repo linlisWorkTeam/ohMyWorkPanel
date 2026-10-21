@@ -589,4 +589,6 @@
 .gs-error { color:var(--lp-error); }
 .gs-stop { color:var(--lp-warn); }
 .gs-last { max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--lp-text-secondary); font-size:11px; }
+.gs-auto { display:inline-flex; align-items:center; gap:4px; font-size:11px; color:var(--lp-text-secondary); cursor:pointer; }
+.gs-auto input { accent-color:var(--lp-accent); }
 

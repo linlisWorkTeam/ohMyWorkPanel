@@ -10,7 +10,7 @@ use rusqlite::Connection;
 
 use crate::db::AppResult;
 
-pub const SCHEMA_VERSION: i64 = 9;
+pub const SCHEMA_VERSION: i64 = 10;
 
 /// 运行所有未执行的迁移，并把 `user_version` 升到 `SCHEMA_VERSION`。
 /// 幂等：已是最新版本时直接返回。
@@ -32,6 +32,7 @@ pub fn migrate(connection: &Connection) -> AppResult<()> {
             7 => migrate_v7(connection)?,
             8 => migrate_v8(connection)?,
             9 => migrate_v9(connection)?,
+            10 => migrate_v10(connection)?,
             _ => unreachable!("invalid schema version {}", version),
         }
     }
@@ -284,6 +285,15 @@ CREATE TABLE IF NOT EXISTS goal_rounds (
 fn migrate_v9(connection: &Connection) -> AppResult<()> {
     let _ = connection.execute(
         "ALTER TABLE goal_rounds ADD COLUMN summary TEXT NOT NULL DEFAULT ''",
+        [],
+    );
+    Ok(())
+}
+
+/// v10：Goal 自动推进开关。默认关闭，必须由人显式打开。
+fn migrate_v10(connection: &Connection) -> AppResult<()> {
+    let _ = connection.execute(
+        "ALTER TABLE goals ADD COLUMN auto_advance INTEGER NOT NULL DEFAULT 0",
         [],
     );
     Ok(())
@@ -572,6 +582,7 @@ mod tests {
             assert_eq!(count, 1, "缺少表 {table}");
         }
         assert!(column_names(&conn, "goals").contains(&"budget_json".to_string()));
+        assert!(column_names(&conn, "goals").contains(&"auto_advance".to_string()));
         assert!(column_names(&conn, "goal_rounds").contains(&"verdict".to_string()));
         assert!(column_names(&conn, "goal_rounds").contains(&"summary".to_string()));
 

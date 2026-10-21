@@ -162,6 +162,14 @@ pub fn abort_goal(db_path: &Path, goal_id: &str) -> AppResult<Goal> {
     store::update_goal(db_path, goal_id, |goal| Ok(goal.abort_by_human()?))
 }
 
+/// 打开或关闭自动推进。默认关闭，必须显式开启。
+pub fn set_auto_advance(db_path: &Path, goal_id: &str, enabled: bool) -> AppResult<Goal> {
+    store::update_goal(db_path, goal_id, |goal| {
+        goal.auto_advance = enabled;
+        Ok(())
+    })
+}
+
 /// 记录一轮并返回目标的最新快照与引擎决策。轮次与状态在同一事务内落库。
 pub fn record_round(
     db_path: &Path,

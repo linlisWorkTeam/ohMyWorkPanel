@@ -4,6 +4,7 @@
 //! 之后，只要触碰轮次、时长、token、无进展、连续失败中的任意一条，就必须停。
 //! 这个模块不碰数据库、不调度 Agent，纯粹决定「该不该继续」。
 
+pub mod autopilot;
 pub mod dispatch;
 pub mod driver;
 pub mod runtime;
@@ -134,6 +135,9 @@ pub struct CreateGoalInput {
     pub budget: Option<GoalBudget>,
     #[serde(default)]
     pub require_approval_each_round: bool,
+    /// 创建后是否立即开启自动推进。
+    #[serde(default)]
+    pub auto_advance: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -150,6 +154,9 @@ pub struct Goal {
     pub stop_reason: Option<StopReason>,
     /// 每轮结束后是否需要人类确认才能继续。
     pub require_approval_each_round: bool,
+    /// 是否允许后台自动推进（默认关闭，必须显式打开）。
+    #[serde(default)]
+    pub auto_advance: bool,
 }
 
 impl Goal {
@@ -171,7 +178,13 @@ impl Goal {
             rounds: Vec::new(),
             stop_reason: None,
             require_approval_each_round: false,
+            auto_advance: false,
         }
+    }
+
+    pub fn with_auto_advance(mut self) -> Self {
+        self.auto_advance = true;
+        self
     }
 
     pub fn with_round_approval(mut self) -> Self {

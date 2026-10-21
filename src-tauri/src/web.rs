@@ -3415,15 +3415,22 @@ async fn create_goal_web(
     drop(conn);
     crate::goals::service::require_manage(&state.db_path, &claims.sub, &input.group_id)
         .map_err(|error| (StatusCode::FORBIDDEN, error))?;
-    crate::goals::service::create_goal(
+    let auto_advance = input.auto_advance;
+    let goal = crate::goals::service::create_goal(
         &state.db_path,
         &input.group_id,
         &input.objective,
         input.budget.unwrap_or_default(),
         input.require_approval_each_round,
     )
-    .map(Json)
-    .map_err(|error| (StatusCode::BAD_REQUEST, error))
+    .map_err(|error| (StatusCode::BAD_REQUEST, error))?;
+    let goal = if auto_advance {
+        crate::goals::service::set_auto_advance(&state.db_path, &goal.id, true)
+            .map_err(|error| (StatusCode::BAD_REQUEST, error))?
+    } else {
+        goal
+    };
+    Ok(Json(goal))
 }
 
 fn mutate_goal(

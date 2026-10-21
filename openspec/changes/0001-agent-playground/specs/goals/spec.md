@@ -121,6 +121,33 @@
 - THEN 输出完全一致
 - AND 包含目标、轮次序号与上一轮判定
 
+### Requirement: 自动推进
+自动推进 MUST 默认关闭，只有显式开启且处于 `active` 的目标才会被扫描；两轮之间 MUST 满足冷却时间。
+
+单个目标推进失败 MUST NOT 中断其他目标；暂停或终态目标 MUST NOT 被扫描。
+
+#### Scenario: 只推进已开启的目标
+- GIVEN 同群一个开启自动推进、一个未开启
+- WHEN 扫描
+- THEN 只推进已开启的那个
+
+#### Scenario: 冷却期
+- GIVEN 上一轮结束时间距今小于冷却
+- WHEN 扫描
+- THEN 跳过该目标
+- AND 冷却过后再次扫描会推进
+
+#### Scenario: 失败隔离
+- GIVEN 两个目标都会推进，其中一个失败
+- WHEN 扫描
+- THEN 另一个仍然推进
+- AND 失败原因被记录
+
+#### Scenario: 暂停不扫描
+- GIVEN 目标已暂停
+- WHEN 扫描
+- THEN 不推进也不计入跳过
+
 ### Requirement: 驱动入口
 系统 MUST 提供「推进一步」入口：仅 `active` 目标可推进；推进 MUST 在后台阻塞任务中执行，不阻塞交互线程。
 

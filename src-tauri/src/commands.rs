@@ -1622,13 +1622,18 @@ pub fn create_goal(
     input: crate::goals::CreateGoalInput,
     state: State<'_, AppState>,
 ) -> AppResult<crate::goals::Goal> {
-    crate::goals::service::create_goal(
+    let auto_advance = input.auto_advance;
+    let goal = crate::goals::service::create_goal(
         &state.db_path,
         &input.group_id,
         &input.objective,
         input.budget.unwrap_or_default(),
         input.require_approval_each_round,
-    )
+    )?;
+    if auto_advance {
+        return crate::goals::service::set_auto_advance(&state.db_path, &goal.id, true);
+    }
+    Ok(goal)
 }
 
 #[tauri::command]

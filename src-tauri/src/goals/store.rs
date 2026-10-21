@@ -85,8 +85,8 @@ pub fn create_goal(db_path: &Path, goal: &Goal) -> AppResult<()> {
     conn.execute(
         r#"INSERT INTO goals
            (id, group_id, objective, status, budget_json, require_approval_each_round,
-            created_at, started_at, stop_reason)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"#,
+            created_at, started_at, stop_reason, auto_advance)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)"#,
         params![
             goal.id,
             goal.group_id,
@@ -97,6 +97,7 @@ pub fn create_goal(db_path: &Path, goal: &Goal) -> AppResult<()> {
             goal.created_at,
             goal.started_at,
             goal.stop_reason.map(stop_reason_to_str),
+            goal.auto_advance as i64,
         ],
     )
     .map_err(|error| error.to_string())?;
@@ -115,7 +116,8 @@ fn save_goal_conn(conn: &rusqlite::Connection, goal: &Goal) -> AppResult<()> {
         .execute(
             r#"UPDATE goals SET
                  objective = ?2, status = ?3, budget_json = ?4,
-                 require_approval_each_round = ?5, started_at = ?6, stop_reason = ?7
+                 require_approval_each_round = ?5, started_at = ?6, stop_reason = ?7,
+                 auto_advance = ?8
                WHERE id = ?1"#,
             params![
                 goal.id,
@@ -125,6 +127,7 @@ fn save_goal_conn(conn: &rusqlite::Connection, goal: &Goal) -> AppResult<()> {
                 goal.require_approval_each_round as i64,
                 goal.started_at,
                 goal.stop_reason.map(stop_reason_to_str),
+                goal.auto_advance as i64,
             ],
         )
         .map_err(|error| error.to_string())?;
@@ -203,7 +206,8 @@ fn load_goal_conn(conn: &rusqlite::Connection, goal_id: &str) -> AppResult<Optio
     let row = conn
         .query_row(
             r#"SELECT id, group_id, objective, status, budget_json,
-                      require_approval_each_round, created_at, started_at, stop_reason
+                      require_approval_each_round, created_at, started_at, stop_reason,
+                      COALESCE(auto_advance, 0)
                FROM goals WHERE id = ?1"#,
             [goal_id],
             |row| {
@@ -217,14 +221,25 @@ fn load_goal_conn(conn: &rusqlite::Connection, goal_id: &str) -> AppResult<Optio
                     row.get::<_, i64>(6)?,
                     row.get::<_, Option<i64>>(7)?,
                     row.get::<_, Option<String>>(8)?,
+                    row.get::<_, i64>(9)?,
                 ))
             },
         )
         .optional()
         .map_err(|error| error.to_string())?;
 
-    let Some((id, group_id, objective, status, budget, approval, created_at, started_at, stop)) =
-        row
+    let Some((
+        id,
+        group_id,
+        objective,
+        status,
+        budget,
+        approval,
+        created_at,
+        started_at,
+        stop,
+        auto_advance,
+    )) = row
     else {
         return Ok(None);
     };
@@ -271,6 +286,7 @@ fn load_goal_conn(conn: &rusqlite::Connection, goal_id: &str) -> AppResult<Optio
         rounds,
         stop_reason: stop.as_deref().map(stop_reason_from_str).transpose()?,
         require_approval_each_round: approval != 0,
+        auto_advance: auto_advance != 0,
     }))
 }
 
@@ -292,6 +308,29 @@ pub fn list_goal_ids(db_path: &Path, group_id: &str) -> AppResult<Vec<String>> {
 pub fn list_goals(db_path: &Path, group_id: &str) -> AppResult<Vec<Goal>> {
     let mut goals = Vec::new();
     for id in list_goal_ids(db_path, group_id)? {
+        if let Some(goal) = load_goal(db_path, &id)? {
+            goals.push(goal);
+        }
+    }
+    Ok(goals)
+}
+
+/// 列出所有处于 `active` 的目标（跨群），供后台自动推进扫描。
+pub fn list_active_goals(db_path: &Path) -> AppResult<Vec<Goal>> {
+    let conn = open_db(db_path)?;
+    let mut stmt = conn
+        .prepare("SELECT id FROM goals WHERE status = 'active' ORDER BY created_at ASC")
+        .map_err(|error| error.to_string())?;
+    let ids = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+    drop(stmt);
+    drop(conn);
+
+    let mut goals = Vec::new();
+    for id in ids {
         if let Some(goal) = load_goal(db_path, &id)? {
             goals.push(goal);
         }

@@ -36,6 +36,7 @@ function totalTokens(goal: Goal): number {
 export function GoalStrip({ group }: { group: { id: string } }) {
   const [goal, setGoal] = useState<Goal | null>(null);
   const [draft, setDraft] = useState("");
+  const [autoAdvance, setAutoAdvance] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,12 +82,24 @@ export function GoalStrip({ group }: { group: { id: string } }) {
           placeholder="给这个群一个目标，Agent 会自己推进"
           aria-label="新目标"
         />
+        <label className="gs-auto">
+          <input
+            type="checkbox"
+            checked={autoAdvance}
+            onChange={(event) => setAutoAdvance(event.target.checked)}
+          />
+          自动推进
+        </label>
         <button
           type="button"
           disabled={busy || !draft.trim()}
           onClick={() =>
             void run(async () => {
-              await api.createGoal({ groupId: group.id, objective: draft.trim() });
+              await api.createGoal({
+                groupId: group.id,
+                objective: draft.trim(),
+                autoAdvance,
+              });
               setDraft("");
             })
           }
