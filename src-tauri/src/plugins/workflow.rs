@@ -9,8 +9,8 @@ use crate::db::{open_db, AppResult};
 use crate::kernel::{Context, PluginManifest, PluginRegistry};
 use crate::models::Group;
 use crate::workflow::{
-    board_for_group, create_version, update_roadmap, CreateVersionInput, ProjectVersion,
-    UpdateRoadmapInput, VersionBoard,
+    board_for_group, create_version, pause_wave, play_wave, update_roadmap, CreateVersionInput,
+    ProjectVersion, UpdateRoadmapInput, VersionBoard, Wave,
 };
 
 pub const ENTRY: &str = "builtin:workflow";
@@ -47,6 +47,18 @@ impl WorkflowService {
     ) -> AppResult<ProjectVersion> {
         let conn = open_db(db_path)?;
         update_roadmap(&conn, version_id, input)
+    }
+
+    /// 播放 Wave（状态机写操作）。
+    pub fn play_wave(&self, db_path: &Path, wave_id: &str) -> AppResult<Wave> {
+        let conn = open_db(db_path)?;
+        play_wave(&conn, wave_id)
+    }
+
+    /// 暂停 Wave。
+    pub fn pause_wave(&self, db_path: &Path, wave_id: &str) -> AppResult<Wave> {
+        let conn = open_db(db_path)?;
+        pause_wave(&conn, wave_id)
     }
 }
 
@@ -208,6 +220,50 @@ mod tests {
             .find(|version| version.id == created.id)
             .unwrap();
         assert_eq!(reloaded.what, "做版本页");
+    }
+
+    #[test]
+    fn service_plays_and_pauses_a_wave() {
+        let (file, mut group) = group_db();
+        group.admin_member_id = Some("m-agent".into());
+        let mut registry = PluginRegistry::new();
+        register(&mut registry);
+        let ctx = Context::new();
+        start_plugins(&ctx, &registry, vec![manifest()]).unwrap();
+        let service = from_context(&ctx).unwrap();
+        let version = service
+            .create_version(
+                file.path(),
+                &group,
+                &CreateVersionInput {
+                    group_id: "g".into(),
+                    name: Some("v-wave".into()),
+                    what: None,
+                    who: None,
+                    how: None,
+                    one_liner: None,
+                    requester_member_id: None,
+                    mode: Some("create".into()),
+                },
+            )
+            .unwrap();
+        {
+            let conn = open_db(file.path()).unwrap();
+            conn.execute(
+                "INSERT INTO waves (id, version_id, group_id, idx, title, status, phase, phase_cursor, play_state, summary, created_at, updated_at)
+                 VALUES ('w1', ?1, 'g', 0, 'Wave1', 'idle', 'assign', 'assign', 'idle', '', 1, 1)",
+                [&version.id],
+            )
+            .unwrap();
+        }
+
+        let playing = service.play_wave(file.path(), "w1").unwrap();
+        assert_eq!(playing.status, "running");
+        assert_eq!(playing.play_state, "playing");
+
+        let paused = service.pause_wave(file.path(), "w1").unwrap();
+        assert_eq!(paused.status, "paused");
+        assert_eq!(paused.play_state, "paused");
     }
 
     #[test]

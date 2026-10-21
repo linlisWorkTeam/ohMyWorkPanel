@@ -2787,8 +2787,11 @@ async fn play_wave_web(
     require_group_access(&conn, &claims.sub, &w0.group_id).map_err(map_acl_err)?;
     let group = db_get_group(&conn, &w0.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_version_manager(&conn, &claims.sub, &group)?;
-    let w =
-        crate::workflow::play_wave(&conn, &wave_id).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    let w = match crate::plugins::workflow_service() {
+        Some(service) => service.play_wave(&state.db_path, &wave_id),
+        None => crate::workflow::play_wave(&conn, &wave_id),
+    }
+    .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
     let v = crate::workflow::get_version(&conn, &w.version_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     let prompt = crate::workflow::build_wave_kickoff_prompt(&v, &w);
@@ -2824,9 +2827,11 @@ async fn pause_wave_web(
     require_group_access(&conn, &claims.sub, &w0.group_id).map_err(map_acl_err)?;
     let group = db_get_group(&conn, &w0.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_version_manager(&conn, &claims.sub, &group)?;
-    crate::workflow::pause_wave(&conn, &wave_id)
-        .map(Json)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+    let paused = match crate::plugins::workflow_service() {
+        Some(service) => service.pause_wave(&state.db_path, &wave_id),
+        None => crate::workflow::pause_wave(&conn, &wave_id),
+    };
+    paused.map(Json).map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
 
 async fn advance_wave_web(
