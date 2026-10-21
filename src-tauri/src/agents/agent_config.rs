@@ -1000,8 +1000,17 @@ pub fn cli_present(cli: &str) -> bool {
 }
 
 pub fn cursor_executable_found() -> Option<String> {
-    crate::adapters::AdapterKind::Cursor
-        .candidate_executables()
+    // 优先走内核服务；未装载时回退内置候选表。
+    let candidates = crate::plugins::adapter_catalog_service()
+        .and_then(|catalog| catalog.candidates("cursor").ok())
+        .unwrap_or_else(|| {
+            crate::adapters::AdapterKind::Cursor
+                .candidate_executables()
+                .iter()
+                .map(|name| (*name).to_string())
+                .collect()
+        });
+    candidates
         .iter()
         .find_map(|name| crate::adapters::find_executable_on_path(name))
 }

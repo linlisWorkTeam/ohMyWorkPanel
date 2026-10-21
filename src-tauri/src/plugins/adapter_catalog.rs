@@ -5,7 +5,9 @@
 
 use std::sync::Arc;
 
-use crate::agents::adapters::manifest::{catalog, resolve_adapter, AdapterCatalogItem, SpawnSpec};
+use crate::agents::adapters::manifest::{
+    candidates, catalog, resolve_adapter, AdapterCatalogItem, SpawnSpec,
+};
 use crate::kernel::{Context, PluginManifest, PluginRegistry};
 
 pub const ENTRY: &str = "builtin:adapter-catalog";
@@ -25,6 +27,11 @@ impl AdapterCatalog {
     /// 解析一个适配器名，返回启动规格。
     pub fn resolve(&self, name: &str) -> Result<SpawnSpec, String> {
         resolve_adapter(name)
+    }
+
+    /// 候选可执行文件名（清单优先，其次内置）。
+    pub fn candidates(&self, name: &str) -> Result<Vec<String>, String> {
+        candidates(name)
     }
 }
 
@@ -100,5 +107,20 @@ mod tests {
         assert_eq!(via_service, via_function);
 
         assert!(service.resolve("no-such-adapter").is_err());
+    }
+
+    #[test]
+    fn candidates_match_the_builtin_table() {
+        let mut registry = PluginRegistry::new();
+        register(&mut registry);
+        let ctx = Context::new();
+        start_plugins(&ctx, &registry, vec![manifest()]).unwrap();
+        let service = from_context(&ctx).unwrap();
+
+        let via_service = service.candidates("cursor").unwrap();
+        let via_function = crate::agents::adapters::manifest::candidates("cursor").unwrap();
+        assert_eq!(via_service, via_function);
+        assert!(!via_service.is_empty());
+        assert!(service.candidates("no-such-adapter").is_err());
     }
 }

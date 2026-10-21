@@ -269,6 +269,20 @@ pub fn resolve_adapter(name: &str) -> Result<SpawnSpec, String> {
     resolve_adapter_with(&manifest_table(), name)
 }
 
+/// 某适配器的候选可执行文件名（清单优先，其次内置）。
+pub fn candidates(name: &str) -> Result<Vec<String>, String> {
+    let name = name.trim();
+    if let Some(manifest) = manifest_table().get(name) {
+        return Ok(manifest.executables.clone());
+    }
+    AdapterKind::parse(name).map(|kind| {
+        kind.candidate_executables()
+            .iter()
+            .map(|candidate| (*candidate).to_string())
+            .collect()
+    })
+}
+
 pub fn resolve_adapter_with(
     table: &HashMap<String, AdapterManifest>,
     name: &str,

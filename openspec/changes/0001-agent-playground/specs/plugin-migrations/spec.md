@@ -31,6 +31,20 @@
 - THEN 返回错误
 - AND 执行路径不会启动任何进程
 
+### Requirement: 候选可执行文件
+适配器目录服务 MUST 提供 `candidates(name)`：清单适配器返回清单里的 `executables`，内置适配器返回内置候选表；Agent 自检 MUST 优先使用该服务。
+
+#### Scenario: 内置候选
+- GIVEN 适配器 `cursor`
+- WHEN 通过服务取候选
+- THEN 与内置候选表一致
+- AND 非空
+
+#### Scenario: 未知适配器
+- GIVEN 不存在的名字
+- WHEN 取候选
+- THEN 返回错误
+
 ### Requirement: 插件清单一致
 每个内置插件 MUST 声明 `id`、`entry`、`provides`，且 `entry` 必须能在注册表中解析。
 
