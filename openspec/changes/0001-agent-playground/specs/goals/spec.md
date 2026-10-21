@@ -121,6 +121,26 @@
 - THEN 输出完全一致
 - AND 包含目标、轮次序号与上一轮判定
 
+### Requirement: 单驱动与事务边界
+同一个目标同一时刻 MUST 只允许一个驱动器；驱动一轮与轮次落库 MUST 在同一事务内完成，失败 MUST 回滚。
+
+#### Scenario: 并发驱动
+- GIVEN 目标已有驱动器持有锁
+- WHEN 第二个驱动器尝试启动
+- THEN 返回「正在被驱动」
+- AND 不执行任何轮次
+
+#### Scenario: 失败回滚
+- GIVEN runner 执行失败
+- WHEN 驱动一轮
+- THEN 轮次不落库
+- AND 目标状态保持 `active`
+
+#### Scenario: 释放后重试
+- GIVEN 一次驱动已完成
+- WHEN 再次申请驱动权
+- THEN 申请成功
+
 ### Requirement: 创建校验
 创建目标 MUST 校验群存在、目标非空且不超过 2000 字；不满足时 MUST 拒绝并给出原因。
 
