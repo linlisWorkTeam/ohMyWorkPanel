@@ -121,6 +121,27 @@
 - THEN 输出完全一致
 - AND 包含目标、轮次序号与上一轮判定
 
+### Requirement: 驱动入口
+系统 MUST 提供「推进一步」入口：仅 `active` 目标可推进；推进 MUST 在后台阻塞任务中执行，不阻塞交互线程。
+
+驱动角色选择 MUST 遵循：群 admin 成员若为活跃 Agent 则优先，否则取最早的活跃 Agent；发送者优先群主，其次最早的活跃用户成员。没有可用 Agent 时 MUST 返回明确错误。
+
+#### Scenario: 推进一步
+- GIVEN 目标为 `active` 且群里有可用 Agent
+- WHEN 调用推进
+- THEN 写入一轮并返回最新目标快照
+
+#### Scenario: 非运行态
+- GIVEN 目标是 `paused` 或终态
+- WHEN 调用推进
+- THEN 返回「目标未处于运行中」
+
+#### Scenario: 无可用 Agent
+- GIVEN 群里只有用户成员
+- WHEN 推进
+- THEN 返回「群里没有可用的 Agent」
+- AND 不写消息、不建 run
+
 ### Requirement: 调度适配
 派发 MUST 在群里写入一条消息并为指定 Agent 创建 run，然后触发调度；发送者 MUST 属于该群。
 

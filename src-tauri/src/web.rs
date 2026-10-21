@@ -3298,6 +3298,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/api/goals/{goal_id}/pause", post(pause_goal_web))
         .route("/api/goals/{goal_id}/approve", post(approve_goal_web))
         .route("/api/goals/{goal_id}/abort", post(abort_goal_web))
+        .route("/api/goals/{goal_id}/advance", post(advance_goal_web))
         // V1.3.0 Version / Wave workflow
         .route(
             "/api/groups/{group_id}/version-board",
@@ -3477,6 +3478,52 @@ async fn abort_goal_web(
     Path(goal_id): Path<String>,
 ) -> Result<Json<crate::goals::Goal>, (StatusCode, String)> {
     mutate_goal(&state, &claims, &goal_id, crate::goals::service::abort_goal)
+}
+
+async fn advance_goal_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(goal_id): Path<String>,
+) -> Result<Json<crate::goals::Goal>, (StatusCode, String)> {
+    let group_id = goal_group_id(&state, &goal_id)?;
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
+    drop(conn);
+    crate::goals::service::require_manage(&state.db_path, &claims.sub, &group_id)
+        .map_err(|error| (StatusCode::FORBIDDEN, error))?;
+
+    let goal = crate::goals::service::get_goal(&state.db_path, &goal_id)
+        .map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error))?
+        .ok_or((StatusCode::NOT_FOUND, "goal 不存在".to_string()))?;
+    if goal.status != crate::goals::GoalStatus::Active {
+        return Err((StatusCode::BAD_REQUEST, "目标未处于运行中".into()));
+    }
+    let actor = crate::goals::service::pick_goal_actor(&state.db_path, &goal.group_id)
+        .map_err(|error| (StatusCode::BAD_REQUEST, error))?;
+
+    let schedulers = state.sched.clone();
+    let dispatcher = crate::goals::scheduler_adapter::SchedulerDispatcher::new(
+        state.db_path.clone(),
+        goal.group_id.clone(),
+        actor.driver_member_id,
+        actor.sender_member_id,
+        Box::new(move |group_id_ref| {
+            crate::scheduler::schedule_group(schedulers.clone(), group_id_ref.to_string());
+        }),
+    );
+    let db_path = state.db_path.clone();
+    let report = tokio::task::spawn_blocking(move || {
+        crate::goals::scheduler_adapter::tick(
+            &db_path,
+            &goal_id,
+            dispatcher,
+            crate::goals::scheduler_adapter::DEFAULT_MAX_POLLS,
+        )
+    })
+    .await
+    .map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))?
+    .map_err(|error| (StatusCode::BAD_REQUEST, error))?;
+    Ok(Json(report.goal))
 }
 
 #[cfg(test)]

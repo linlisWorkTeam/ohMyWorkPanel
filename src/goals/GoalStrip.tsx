@@ -122,6 +122,16 @@ export function GoalStrip({ group }: { group: { id: string } }) {
         </button>
       )}
       {!terminal && goal.status === "active" && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void run(() => api.advanceGoal(goal.id))}
+          title="派发一轮给驱动 Agent，等待 run 结束后记录"
+        >
+          {busy ? "推进中…" : "推进一步"}
+        </button>
+      )}
+      {!terminal && goal.status === "active" && (
         <button type="button" disabled={busy} onClick={() => void run(() => api.pauseGoal(goal.id))}>
           暂停
         </button>

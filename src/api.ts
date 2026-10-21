@@ -237,4 +237,5 @@ export const api = {
   pauseGoal: (goalId: string) => invoke<Goal>("pause_goal", { goalId }),
   approveGoal: (goalId: string) => invoke<Goal>("approve_goal", { goalId }),
   abortGoal: (goalId: string) => invoke<Goal>("abort_goal", { goalId }),
+  advanceGoal: (goalId: string) => invoke<Goal>("advance_goal", { goalId }),
 };

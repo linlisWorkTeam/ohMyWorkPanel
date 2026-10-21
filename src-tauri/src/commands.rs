@@ -1651,6 +1651,48 @@ pub fn abort_goal(goal_id: String, state: State<'_, AppState>) -> AppResult<crat
     crate::goals::service::abort_goal(&state.db_path, &goal_id)
 }
 
+/// 推进一步：派发一轮给驱动 Agent，轮询 run 完成后记录。
+///
+/// 这一步会阻塞到 run 结束或超时（默认约 1 分钟），因此放到阻塞线程池执行。
+#[tauri::command]
+pub async fn advance_goal(
+    goal_id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<crate::goals::Goal> {
+    let state = state.inner().clone();
+    let goal = crate::goals::service::get_goal(&state.db_path, &goal_id)?
+        .ok_or_else(|| format!("goal 不存在：{goal_id}"))?;
+    if goal.status != crate::goals::GoalStatus::Active {
+        return Err("目标未处于运行中".into());
+    }
+    let actor = crate::goals::service::pick_goal_actor(&state.db_path, &goal.group_id)?;
+
+    let kick_state = state.clone();
+    let kick_app = app.clone();
+    let dispatcher = crate::goals::scheduler_adapter::SchedulerDispatcher::new(
+        state.db_path.clone(),
+        goal.group_id.clone(),
+        actor.driver_member_id,
+        actor.sender_member_id,
+        Box::new(move |group_id| {
+            schedule_group(to_scheduler(&kick_state, &kick_app), group_id.to_string());
+        }),
+    );
+    let db_path = state.db_path.clone();
+    let report = tokio::task::spawn_blocking(move || {
+        crate::goals::scheduler_adapter::tick(
+            &db_path,
+            &goal_id,
+            dispatcher,
+            crate::goals::scheduler_adapter::DEFAULT_MAX_POLLS,
+        )
+    })
+    .await
+    .map_err(|error| error.to_string())??;
+    Ok(report.goal)
+}
+
 /// 解析 "x.y.z" / "x.y.z-beta" / "x.y.z+build" → 数值三元组（忽略预发布/构建后缀）。
 /// （比较逻辑与单测见 models::parse_version / models::is_newer_version，双特性共同编译。）
 #[derive(serde::Serialize)]

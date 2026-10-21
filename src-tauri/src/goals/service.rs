@@ -6,7 +6,7 @@
 use std::cell::Cell;
 use std::path::Path;
 
-use rusqlite::params;
+use rusqlite::{params, OptionalExtension};
 
 use crate::db::{id, now, open_db, AppResult};
 
@@ -46,6 +46,62 @@ pub fn require_manage(db_path: &Path, user_id: &str, group_id: &str) -> AppResul
     } else {
         Err("只有群主或平台管理员可以操作目标".into())
     }
+}
+
+/// 驱动一轮所需的两个角色。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GoalActor {
+    /// 执行这一轮的 Agent。
+    pub driver_member_id: String,
+    /// 消息发送者（调度器要求成员存在且活跃）。
+    pub sender_member_id: String,
+}
+
+/// 选择驱动 Agent 与消息发送者。
+///
+/// 优先级：群 admin 成员（若为 agent）→ 最早的活跃 agent；
+/// 发送者优先群主，其次最早的活跃用户成员。
+pub fn pick_goal_actor(db_path: &Path, group_id: &str) -> AppResult<GoalActor> {
+    let conn = open_db(db_path)?;
+    let group = crate::db::get_group(&conn, group_id)?;
+
+    let owner_active: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM members WHERE id=?1 AND group_id=?2 AND is_active=1",
+            params![group.owner_member_id, group_id],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
+    let sender_member_id = if owner_active == 1 {
+        group.owner_member_id.clone()
+    } else {
+        conn.query_row(
+            "SELECT id FROM members WHERE group_id=?1 AND kind='user' AND is_active=1 \
+             ORDER BY created_at ASC LIMIT 1",
+            [group_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "群里没有可用的用户成员".to_string())?
+    };
+
+    let preferred = group.admin_member_id.clone().unwrap_or_default();
+    let driver_member_id = conn
+        .query_row(
+            "SELECT id FROM members WHERE group_id=?1 AND kind='agent' AND is_active=1 \
+             ORDER BY CASE WHEN id=?2 THEN 0 ELSE 1 END, created_at ASC LIMIT 1",
+            params![group_id, preferred],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "群里没有可用的 Agent".to_string())?;
+
+    Ok(GoalActor {
+        driver_member_id,
+        sender_member_id,
+    })
 }
 
 pub fn create_goal(
@@ -188,6 +244,75 @@ mod tests {
 
     fn budget() -> GoalBudget {
         GoalBudget::default()
+    }
+
+    fn db_with_agents(admin_member: Option<&str>) -> NamedTempFile {
+        let file = NamedTempFile::new().unwrap();
+        init_db(file.path()).unwrap();
+        let conn = open_db(file.path()).unwrap();
+        conn.execute(
+            "INSERT INTO groups (id, name, workspace_path, owner_member_id, admin_member_id, created_at)
+             VALUES ('grp-1', '测试群', '/tmp', 'm-owner', ?1, 1)",
+            rusqlite::params![admin_member],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO members (id, group_id, kind, display_name, avatar_color, role_description, is_active, created_at)
+             VALUES ('m-owner', 'grp-1', 'user', 'Owner', 'c', 'owner', 1, 1)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO members (id, group_id, kind, display_name, avatar_color, role_description, is_active, created_at)
+             VALUES ('m-agent', 'grp-1', 'agent', 'Agent', 'c', '', 1, 2)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO members (id, group_id, kind, display_name, avatar_color, role_description, is_active, created_at)
+             VALUES ('m-agent2', 'grp-1', 'agent', 'Agent2', 'c', '', 1, 3)",
+            [],
+        )
+        .unwrap();
+        file
+    }
+
+    #[test]
+    fn picks_admin_agent_as_driver() {
+        let file = db_with_agents(Some("m-agent2"));
+        let actor = pick_goal_actor(file.path(), "grp-1").unwrap();
+        assert_eq!(actor.driver_member_id, "m-agent2");
+        assert_eq!(actor.sender_member_id, "m-owner");
+    }
+
+    #[test]
+    fn falls_back_to_first_agent() {
+        let file = db_with_agents(None);
+        let actor = pick_goal_actor(file.path(), "grp-1").unwrap();
+        assert_eq!(actor.driver_member_id, "m-agent");
+    }
+
+    #[test]
+    fn errors_when_group_has_no_agent() {
+        let file = NamedTempFile::new().unwrap();
+        init_db(file.path()).unwrap();
+        let conn = open_db(file.path()).unwrap();
+        conn.execute(
+            "INSERT INTO groups (id, name, workspace_path, owner_member_id, created_at)
+             VALUES ('grp-x', '测试群', '/tmp', 'm-owner', 1)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO members (id, group_id, kind, display_name, avatar_color, role_description, is_active, created_at)
+             VALUES ('m-owner', 'grp-x', 'user', 'Owner', 'c', '', 1, 1)",
+            [],
+        )
+        .unwrap();
+
+        let error = pick_goal_actor(file.path(), "grp-x").err().unwrap();
+
+        assert!(error.contains("没有可用的 Agent"));
     }
 
     #[test]

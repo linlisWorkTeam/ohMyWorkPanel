@@ -586,6 +586,8 @@ export const api = {
     apiFetch<Goal>(`/api/goals/${encodeURIComponent(goalId)}/approve`, { method: "POST" }),
   abortGoal: (goalId: string) =>
     apiFetch<Goal>(`/api/goals/${encodeURIComponent(goalId)}/abort`, { method: "POST" }),
+  advanceGoal: (goalId: string) =>
+    apiFetch<Goal>(`/api/goals/${encodeURIComponent(goalId)}/advance`, { method: "POST" }),
 
   // WebSocket - replaces Tauri listen()
   connectWS: (onMessage: (data: string) => void) => {
