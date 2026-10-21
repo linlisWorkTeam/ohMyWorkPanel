@@ -90,6 +90,7 @@ function drawAgent(
   agent: SceneAgent,
   palette: Palette,
   time: number,
+  selected: boolean,
 ) {
   const color = stateColor(agent, palette);
   const bob =
@@ -131,6 +132,11 @@ function drawAgent(
     ctx.fillStyle = palette.acc;
     ctx.fillRect(agent.x + 7, y - 9, 3, 3);
   }
+  if (selected) {
+    ctx.strokeStyle = palette.acc;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(agent.x - 9, y - 21, 18, 36);
+  }
   ctx.restore();
 }
 
@@ -143,18 +149,24 @@ function drawLabel(ctx: CanvasRenderingContext2D, agent: SceneAgent, palette: Pa
 
 interface PixelSceneProps {
   agents: SceneAgent[];
+  selectedId?: string | null;
   onSelectAgent?: (agentId: string) => void;
 }
 
-export function PixelScene({ agents, onSelectAgent }: PixelSceneProps) {
+export function PixelScene({ agents, selectedId, onSelectAgent }: PixelSceneProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const agentsRef = useRef<SceneAgent[]>(agents);
+  const selectedRef = useRef<string | null>(selectedId ?? null);
   const viewRef = useRef({ scale: 1, offsetX: 0, offsetY: 0 });
 
   useEffect(() => {
     agentsRef.current = agents;
   }, [agents]);
+
+  useEffect(() => {
+    selectedRef.current = selectedId ?? null;
+  }, [selectedId]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -165,6 +177,15 @@ export function PixelScene({ agents, onSelectAgent }: PixelSceneProps) {
 
     let frame = 0;
     let palette = readPalette(wrap);
+
+    // 静态地板只画一次，后续每帧直接 blit，减少重复绘制。
+    const floor = document.createElement("canvas");
+    floor.width = VIEW_WIDTH;
+    floor.height = VIEW_HEIGHT;
+    const floorCtx = floor.getContext("2d");
+    const renderFloor = () => {
+      if (floorCtx) drawFloor(floorCtx, palette);
+    };
 
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
@@ -179,23 +200,33 @@ export function PixelScene({ agents, onSelectAgent }: PixelSceneProps) {
         offsetY: (height - VIEW_HEIGHT * scale) / 2,
       };
       palette = readPalette(wrap);
+      renderFloor();
     };
 
+    const frameInterval = 1000 / 30;
+    let lastPaint = 0;
     const draw = (time: number) => {
+      frame = requestAnimationFrame(draw);
+      if (time - lastPaint < frameInterval) return;
+      lastPaint = time;
+
       const dpr = window.devicePixelRatio || 1;
       const { scale, offsetX, offsetY } = viewRef.current;
       ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * offsetX, dpr * offsetY);
-      drawFloor(ctx, palette);
+      if (floorCtx) {
+        ctx.drawImage(floor, 0, 0);
+      } else {
+        drawFloor(ctx, palette);
+      }
       const agentsNow = agentsRef.current;
       for (const agent of agentsNow) {
         if (agent.state !== "idle") drawDesk(ctx, agent, palette);
       }
       const ordered = [...agentsNow].sort((a, b) => a.y - b.y);
       for (const agent of ordered) {
-        drawAgent(ctx, agent, palette, time);
+        drawAgent(ctx, agent, palette, time, selectedRef.current === agent.id);
         drawLabel(ctx, agent, palette);
       }
-      frame = requestAnimationFrame(draw);
     };
 
     resize();
@@ -203,6 +234,7 @@ export function PixelScene({ agents, onSelectAgent }: PixelSceneProps) {
     observer.observe(wrap);
     const themeObserver = new MutationObserver(() => {
       palette = readPalette(wrap);
+      renderFloor();
     });
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 

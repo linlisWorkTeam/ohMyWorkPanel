@@ -41,6 +41,8 @@ export interface SceneLayout {
   /** 空闲角色的候场区起始 y。 */
   loungeY: number;
   loungeGapX: number;
+  /** 候场区每行人数，超出后换行，避免挤出画布。 */
+  loungeColumns: number;
 }
 
 export const DEFAULT_SCENE_LAYOUT: SceneLayout = {
@@ -51,6 +53,7 @@ export const DEFAULT_SCENE_LAYOUT: SceneLayout = {
   seatGapY: 88,
   loungeY: 384,
   loungeGapX: 56,
+  loungeColumns: 8,
 };
 
 /**
@@ -100,8 +103,10 @@ export function projectSceneAgents(
     const seat = index;
 
     if (state === "idle") {
-      const x = layout.originX + loungeIndex * layout.loungeGapX;
-      const y = layout.loungeY;
+      const column = loungeIndex % layout.loungeColumns;
+      const row = Math.floor(loungeIndex / layout.loungeColumns);
+      const x = layout.originX + column * layout.loungeGapX;
+      const y = layout.loungeY + row * 40;
       loungeIndex += 1;
       return {
         id: member.id,

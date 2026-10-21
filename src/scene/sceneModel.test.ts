@@ -73,8 +73,36 @@ describe("projectSceneAgents", () => {
   });
 });
 
-describe("summarizeScene", () => {
-  it("统计各状态数量", () => {
+describe("大场景", () => {
+  it("20 个成员的位置互不重叠", () => {
+    const crowd = Array.from({ length: 20 }, (_, index) => ({
+      id: `c${index}`,
+      name: `成员${index}`,
+    }));
+    const agents = projectSceneAgents(
+      crowd,
+      crowd.map((member) => ({ memberId: member.id, status: "running" })),
+    );
+    const positions = new Set(agents.map((agent) => `${agent.x},${agent.y}`));
+    expect(positions.size).toBe(20);
+  });
+
+  it("20 个空闲成员在候场区换行且不越界", () => {
+    const crowd = Array.from({ length: 20 }, (_, index) => ({
+      id: `c${index}`,
+      name: `成员${index}`,
+    }));
+    const agents = projectSceneAgents(crowd, []);
+    const positions = new Set(agents.map((agent) => `${agent.x},${agent.y}`));
+    expect(positions.size).toBe(20);
+    for (const agent of agents) {
+      expect(agent.x).toBeLessThanOrEqual(720);
+      expect(agent.y).toBeLessThanOrEqual(520);
+    }
+  });
+});
+
+describe("summarizeScene", () => {  it("统计各状态数量", () => {
     const agents = projectSceneAgents(members, [
       { memberId: "m1", status: "running" },
       { memberId: "m2", status: "failed" },

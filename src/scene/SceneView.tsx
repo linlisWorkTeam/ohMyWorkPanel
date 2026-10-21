@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { Member, TaskRun } from "../types";
 import { PixelScene } from "./PixelScene";
 import {
@@ -20,6 +20,7 @@ interface SceneViewProps {
  * 进入方式由主壳的 `mainView` 决定；退出即回到聊天，不改变任何业务状态。
  */
 export function SceneView({ members, runs, onExit, onSelectAgent }: SceneViewProps) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const agents = useMemo(() => {
     const memberInputs: SceneMemberInput[] = members.map((member) => ({
       id: member.id,
@@ -52,7 +53,14 @@ export function SceneView({ members, runs, onExit, onSelectAgent }: SceneViewPro
       {agents.length === 0 ? (
         <div className="scene-empty">还没有成员。添加 Agent 后，它们会出现在这里。</div>
       ) : (
-        <PixelScene agents={agents} onSelectAgent={onSelectAgent} />
+        <PixelScene
+          agents={agents}
+          selectedId={selectedId}
+          onSelectAgent={(agentId) => {
+            setSelectedId(agentId);
+            onSelectAgent?.(agentId);
+          }}
+        />
       )}
     </div>
   );
