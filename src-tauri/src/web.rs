@@ -3059,7 +3059,12 @@ async fn list_marketing_campaigns_web(
 ) -> Result<Json<Vec<crate::marketing::ContentCampaign>>, (StatusCode, String)> {
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
-    crate::marketing::list_campaigns(&conn, &group_id)
+    // 优先走内核服务；未装载时回退自由函数。
+    let campaigns = match crate::plugins::marketing_service() {
+        Some(service) => service.list(&state.db_path, &group_id),
+        None => crate::marketing::list_campaigns(&conn, &group_id),
+    };
+    campaigns
         .map(Json)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
 }
@@ -3070,8 +3075,11 @@ async fn get_marketing_campaign_web(
     Path(campaign_id): Path<String>,
 ) -> Result<Json<crate::marketing::ContentCampaign>, (StatusCode, String)> {
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-    let campaign = crate::marketing::get_campaign(&conn, &campaign_id)
-        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    let campaign = match crate::plugins::marketing_service() {
+        Some(service) => service.get(&state.db_path, &campaign_id),
+        None => crate::marketing::get_campaign(&conn, &campaign_id),
+    }
+    .map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_group_access(&conn, &claims.sub, &campaign.group_id).map_err(map_acl_err)?;
     Ok(Json(campaign))
 }

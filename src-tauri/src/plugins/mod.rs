@@ -2,6 +2,7 @@
 
 pub mod adapter_catalog;
 pub mod extension_host;
+pub mod marketing;
 pub mod workflow;
 
 use std::sync::{Arc, OnceLock};
@@ -16,6 +17,7 @@ pub fn registry() -> PluginRegistry {
     extension_host::register(&mut registry);
     adapter_catalog::register(&mut registry);
     workflow::register(&mut registry);
+    marketing::register(&mut registry);
     registry
 }
 
@@ -25,6 +27,7 @@ pub fn builtin_manifests() -> Vec<PluginManifest> {
         extension_host::manifest(),
         adapter_catalog::manifest(),
         workflow::manifest(),
+        marketing::manifest(),
     ]
 }
 
@@ -66,6 +69,11 @@ pub fn workflow_service() -> Option<Arc<workflow::WorkflowService>> {
     kernel().require(workflow::SERVICE_KEY).ok()
 }
 
+/// Marketing 查询服务；未装载时返回 `None`，调用方可退回自由函数实现。
+pub fn marketing_service() -> Option<Arc<marketing::MarketingService>> {
+    kernel().require(marketing::SERVICE_KEY).ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -78,7 +86,8 @@ mod tests {
             vec![
                 extension_host::PLUGIN_ID,
                 adapter_catalog::PLUGIN_ID,
-                workflow::PLUGIN_ID
+                workflow::PLUGIN_ID,
+                marketing::PLUGIN_ID
             ]
         );
         assert!(ctx

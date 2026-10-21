@@ -16,7 +16,7 @@
 | messages | 消息发送、提及、流式增量、历史窗口 | `src-tauri/src/db.rs`、`src/chat/` | todo |
 | runs | 任务调度、串行约束、取消/重试、重启恢复 | `src-tauri/src/scheduler.rs` | todo |
 | [workflow](workflow/spec.md) | 版本、Roadmap、Ask、Wave、发布标记、版本板 | `src-tauri/src/workflow.rs`、`src/workflow/` | seeded |
-| marketing | 内容 campaign 生成、校验、审核、导出 | `src-tauri/src/marketing/`、`src/marketing/` | todo |
+| [marketing](marketing/spec.md) | 证据快照、Brief、五渠道草稿、校验、审核、导出 | `src-tauri/src/marketing/`、`src/marketing/` | seeded |
 | operations | 日志、指标、发布 drain、保活 | `src-tauri/src/operations/`、`src/observability/` | todo |
 | agent-runtime | CLI 适配器、模型目录、Connecter 远程 provider | `src-tauri/src/agents/` | todo |
 
