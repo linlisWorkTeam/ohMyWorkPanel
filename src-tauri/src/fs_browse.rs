@@ -171,14 +171,16 @@ mod tests {
         fs::write(dir.path().join("a.txt"), b"x").unwrap();
         let listing = list_server_dir(dir.path().to_str().unwrap()).unwrap();
         assert!(listing.entries.iter().any(|e| e.name == "sub" && e.is_dir));
-        assert!(listing.entries.iter().any(|e| e.name == "a.txt" && !e.is_dir));
+        assert!(listing
+            .entries
+            .iter()
+            .any(|e| e.name == "a.txt" && !e.is_dir));
     }
 
     #[test]
     fn create_server_dir_makes_folder() {
         let dir = tempfile::tempdir().unwrap();
-        let created =
-            create_server_dir(dir.path().to_str().unwrap(), "new-workspace").unwrap();
+        let created = create_server_dir(dir.path().to_str().unwrap(), "new-workspace").unwrap();
         assert!(created.is_dir());
         assert!(created.ends_with("new-workspace"));
         let err = create_server_dir(dir.path().to_str().unwrap(), "new-workspace").unwrap_err();

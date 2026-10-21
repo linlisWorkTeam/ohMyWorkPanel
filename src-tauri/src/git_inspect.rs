@@ -139,8 +139,14 @@ pub fn inspect_uncached(path: &Path) -> GitSnapshot {
             let mut parts = line.splitn(4, '\t');
             let name = parts.next().unwrap_or("").to_string();
             let sha = parts.next().unwrap_or("").to_string();
-            let date = parts.next().map(|s| s.to_string()).filter(|s| !s.is_empty());
-            let subject = parts.next().map(|s| s.to_string()).filter(|s| !s.is_empty());
+            let date = parts
+                .next()
+                .map(|s| s.to_string())
+                .filter(|s| !s.is_empty());
+            let subject = parts
+                .next()
+                .map(|s| s.to_string())
+                .filter(|s| !s.is_empty());
             if !name.is_empty() {
                 tags.push(GitTagInfo {
                     name,
@@ -300,7 +306,10 @@ mod tests {
             .unwrap()
             .success());
         let snap = inspect_uncached(dir.path());
-        assert!(snap.tags.iter().any(|t| t.name == "v1.0.0" && !t.is_virtual));
+        assert!(snap
+            .tags
+            .iter()
+            .any(|t| t.name == "v1.0.0" && !t.is_virtual));
         assert!(snap.head_matches_latest_tag);
         assert!(snap.finish_last_round);
     }

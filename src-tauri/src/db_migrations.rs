@@ -122,7 +122,9 @@ fn migrate_v4(connection: &Connection) -> AppResult<()> {
 
 /// v5：Self-Marketing campaign 运行态。业务 payload 使用版本化 JSON，避免 MVP 过早拆表。
 fn migrate_v5(connection: &Connection) -> AppResult<()> {
-    connection.execute_batch(r#"
+    connection
+        .execute_batch(
+            r#"
 CREATE TABLE IF NOT EXISTS content_campaigns (
   id TEXT PRIMARY KEY,
   group_id TEXT NOT NULL,
@@ -153,7 +155,9 @@ CREATE INDEX IF NOT EXISTS idx_content_campaigns_planner_run
   ON content_campaigns(planner_run_id);
 CREATE INDEX IF NOT EXISTS idx_content_campaigns_writer_run
   ON content_campaigns(writer_run_id);
-"#).map_err(|e| e.to_string())?;
+"#,
+        )
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -259,7 +263,8 @@ mod tests {
     }
 
     fn user_version(conn: &Connection) -> i64 {
-        conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap()
+        conn.query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap()
     }
 
     #[test]
@@ -274,7 +279,8 @@ mod tests {
         assert!(column_names(&conn, "task_runs").contains(&"wave_id".to_string()));
         assert!(column_names(&conn, "task_runs").contains(&"version_id".to_string()));
         assert!(column_names(&conn, "task_runs").contains(&"provider_dispatch_id".to_string()));
-        assert!(column_names(&conn, "connecter_provider_profiles").contains(&"bearer_token".to_string()));
+        assert!(column_names(&conn, "connecter_provider_profiles")
+            .contains(&"bearer_token".to_string()));
         assert!(column_names(&conn, "agent_profiles").contains(&"api_key".to_string()));
         assert!(column_names(&conn, "agent_profiles").contains(&"api_url".to_string()));
         assert!(column_names(&conn, "groups").contains(&"group_kind".to_string()));
@@ -282,13 +288,21 @@ mod tests {
         assert!(column_names(&conn, "content_campaigns").contains(&"snapshot_json".to_string()));
         assert!(column_names(&conn, "content_campaigns").contains(&"feedback_by".to_string()));
         let rpl: i64 = conn
-            .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='run_phase_log'", [], |r| r.get(0))
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='run_phase_log'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(rpl, 0, "run_phase_log 应已被迁移 v3 删除");
 
         // members DDL 允许 chatbot
         let ddl: String = conn
-            .query_row("SELECT sql FROM sqlite_master WHERE type='table' AND name='members'", [], |r| r.get(0))
+            .query_row(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='members'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert!(ddl.contains("chatbot"));
     }
@@ -338,24 +352,35 @@ mod tests {
         assert!(column_names(&conn, "task_runs").contains(&"wave_id".to_string()));
         assert!(column_names(&conn, "task_runs").contains(&"version_id".to_string()));
         assert!(column_names(&conn, "task_runs").contains(&"provider_dispatch_id".to_string()));
-        assert!(column_names(&conn, "connecter_provider_profiles").contains(&"target_subject_id".to_string()));
+        assert!(column_names(&conn, "connecter_provider_profiles")
+            .contains(&"target_subject_id".to_string()));
         assert!(column_names(&conn, "agent_profiles").contains(&"api_key".to_string()));
         assert!(column_names(&conn, "agent_profiles").contains(&"api_url".to_string()));
         assert!(column_names(&conn, "groups").contains(&"group_kind".to_string()));
         assert!(column_names(&conn, "run_events").contains(&"seq".to_string()));
         assert!(column_names(&conn, "content_campaigns").contains(&"validation_json".to_string()));
         let rpl_legacy: i64 = conn
-            .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='run_phase_log'", [], |r| r.get(0))
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='run_phase_log'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(rpl_legacy, 0, "老库迁移后 run_phase_log 应被删除");
 
         // members 重建后允许 chatbot 且数据保留
         let ddl: String = conn
-            .query_row("SELECT sql FROM sqlite_master WHERE type='table' AND name='members'", [], |r| r.get(0))
+            .query_row(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='members'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert!(ddl.contains("chatbot"));
         let names: String = conn
-            .query_row("SELECT display_name FROM members WHERE id='m'", [], |r| r.get(0))
+            .query_row("SELECT display_name FROM members WHERE id='m'", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(names, "olo");
         let group: String = conn
@@ -373,7 +398,11 @@ mod tests {
         let conn = open_db(file.path()).unwrap();
         assert_eq!(user_version(&conn), SCHEMA_VERSION);
         let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='members'", [], |r| r.get(0))
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='members'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(count, 1);
     }

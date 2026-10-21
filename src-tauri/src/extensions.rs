@@ -168,7 +168,11 @@ pub fn ensure_extensions_table(conn: &Connection) -> AppResult<()> {
     .map_err(|e| e.to_string())
 }
 
-pub fn is_extension_enabled(conn: &Connection, group_id: &str, extension_id: &str) -> AppResult<bool> {
+pub fn is_extension_enabled(
+    conn: &Connection,
+    group_id: &str,
+    extension_id: &str,
+) -> AppResult<bool> {
     let flag: Option<i64> = conn
         .query_row(
             "SELECT enabled FROM group_extensions WHERE group_id=?1 AND extension_id=?2",
@@ -221,16 +225,24 @@ pub fn http_exchange_local(
     stream
         .set_write_timeout(Some(Duration::from_secs(5)))
         .map_err(|e| e.to_string())?;
-    let mut req = format!("{method} {path} HTTP/1.0\r\nHost: {host}:{port}\r\nConnection: close\r\n");
+    let mut req =
+        format!("{method} {path} HTTP/1.0\r\nHost: {host}:{port}\r\nConnection: close\r\n");
     if let Some(bytes) = body {
         let ct = content_type.unwrap_or("application/octet-stream");
-        req.push_str(&format!("Content-Type: {ct}\r\nContent-Length: {}\r\n", bytes.len()));
+        req.push_str(&format!(
+            "Content-Type: {ct}\r\nContent-Length: {}\r\n",
+            bytes.len()
+        ));
         req.push_str("\r\n");
-        stream.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
+        stream
+            .write_all(req.as_bytes())
+            .map_err(|e| e.to_string())?;
         stream.write_all(bytes).map_err(|e| e.to_string())?;
     } else {
         req.push_str("\r\n");
-        stream.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
+        stream
+            .write_all(req.as_bytes())
+            .map_err(|e| e.to_string())?;
     }
     let mut buf = Vec::new();
     stream.read_to_end(&mut buf).map_err(|e| e.to_string())?;
@@ -265,13 +277,15 @@ pub fn http_exchange_local(
 
 pub fn http_get_local(host: &str, port: u16, path: &str) -> AppResult<(u16, String)> {
     let ex = http_exchange_local("GET", host, port, path, None, None)?;
-    Ok((
-        ex.status,
-        String::from_utf8_lossy(&ex.body).into_owned(),
-    ))
+    Ok((ex.status, String::from_utf8_lossy(&ex.body).into_owned()))
 }
 
-pub fn http_post_json_local(host: &str, port: u16, path: &str, json_body: &str) -> AppResult<(u16, String)> {
+pub fn http_post_json_local(
+    host: &str,
+    port: u16,
+    path: &str,
+    json_body: &str,
+) -> AppResult<(u16, String)> {
     let ex = http_exchange_local(
         "POST",
         host,
@@ -280,10 +294,7 @@ pub fn http_post_json_local(host: &str, port: u16, path: &str, json_body: &str) 
         Some(json_body.as_bytes()),
         Some("application/json"),
     )?;
-    Ok((
-        ex.status,
-        String::from_utf8_lossy(&ex.body).into_owned(),
-    ))
+    Ok((ex.status, String::from_utf8_lossy(&ex.body).into_owned()))
 }
 
 pub fn sanitize_proxy_path(raw: &str) -> AppResult<String> {
@@ -331,7 +342,13 @@ pub fn check_extension_health(manifest: &ExtensionManifest) -> (bool, String) {
     };
     match http_get_local("127.0.0.1", manifest.runtime.default_port, &path) {
         Ok((200, body)) => (true, body.chars().take(200).collect()),
-        Ok((code, body)) => (false, format!("HTTP {code}: {}", body.chars().take(120).collect::<String>())),
+        Ok((code, body)) => (
+            false,
+            format!(
+                "HTTP {code}: {}",
+                body.chars().take(120).collect::<String>()
+            ),
+        ),
         Err(e) => (false, e),
     }
 }
@@ -414,7 +431,11 @@ pub fn set_group_extension_enabled(
 }
 
 /// Enable = load (require health); disable = unload.
-pub fn set_panellive_enabled(conn: &Connection, group_id: &str, enabled: bool) -> AppResult<ExtensionStatus> {
+pub fn set_panellive_enabled(
+    conn: &Connection,
+    group_id: &str,
+    enabled: bool,
+) -> AppResult<ExtensionStatus> {
     set_group_extension_enabled(conn, group_id, PANELLIVE_ID, enabled)
 }
 
@@ -442,7 +463,11 @@ mod tests {
         }
         let m = load_panellive_manifest(&root).unwrap();
         assert_eq!(m.id, "panellive");
-        assert!(m.contributes.a2a_skills.iter().any(|s| s == "live.session.start"));
+        assert!(m
+            .contributes
+            .a2a_skills
+            .iter()
+            .any(|s| s == "live.session.start"));
         assert!(m.contributes.tabs.iter().any(|t| t.route == "tab://live"));
     }
 
@@ -451,7 +476,10 @@ mod tests {
         assert!(sanitize_proxy_path("../etc/passwd").is_err());
         assert_eq!(sanitize_proxy_path("").unwrap(), "/");
         assert_eq!(sanitize_proxy_path("live.html").unwrap(), "/live.html");
-        assert_eq!(sanitize_proxy_path("v1/session/start").unwrap(), "/v1/session/start");
+        assert_eq!(
+            sanitize_proxy_path("v1/session/start").unwrap(),
+            "/v1/session/start"
+        );
         assert_eq!(
             with_proxy_query("/v1/tts", Some("format=json")).unwrap(),
             "/v1/tts?format=json"
@@ -471,7 +499,9 @@ mod tests {
     #[test]
     fn extension_roots_includes_panellive() {
         let roots = extension_roots();
-        assert!(roots.iter().any(|r| r.ends_with("WorkPanelLive") || r == &panellive_root()));
+        assert!(roots
+            .iter()
+            .any(|r| r.ends_with("WorkPanelLive") || r == &panellive_root()));
     }
 
     #[test]
@@ -550,5 +580,4 @@ mod tests {
         assert_eq!(count, 1, "panellive root must not be duplicated");
         std::env::remove_var("OHMYWORKPANEL_EXTENSION_ROOTS");
     }
-
 }

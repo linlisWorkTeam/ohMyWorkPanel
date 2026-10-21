@@ -5,38 +5,38 @@ pub mod operations;
 // Compatibility re-exports preserve existing Rust paths while the filesystem is
 // organized by product domain. New code should use the domain paths.
 pub use accounts::{auth, presence};
-pub use agents::{agent_config, model_catalog};
 pub(crate) use agents::adapters;
+pub use agents::{agent_config, model_catalog};
 pub use operations::{keepalive, logger, metrics, ops, release_drain};
 
 pub mod a2a;
 
+pub mod codex_proxy;
 #[cfg(feature = "gui")]
 mod commands;
-mod ocr;
-pub mod codex_proxy;
 mod context_policy;
 mod context_seams;
 pub mod db;
+pub mod db_migrations;
+pub mod event_sender;
 pub mod extensions;
+pub mod fs_browse;
+pub mod git_inspect;
 pub mod live_prompt;
 pub mod marketing;
-pub mod fs_browse;
 pub mod memory;
-pub mod wiki_context;
 mod message_content;
 mod models;
-pub mod event_sender;
+mod ocr;
 pub mod orchestrator;
 pub mod scheduler;
-pub mod git_inspect;
-pub mod workflow;
 pub mod web;
-pub mod db_migrations;
+pub mod wiki_context;
+pub mod workflow;
 
+pub use adapters::manifest::reload_manifests as reload_cli_adapter_manifests;
 #[cfg(feature = "gui")]
 use db::init_db;
-pub use adapters::manifest::reload_manifests as reload_cli_adapter_manifests;
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
@@ -44,9 +44,9 @@ use std::{
 };
 
 #[cfg(feature = "gui")]
-use tauri::Manager;
-#[cfg(feature = "gui")]
 use std::fs;
+#[cfg(feature = "gui")]
+use tauri::Manager;
 
 #[derive(Clone)]
 pub struct AppState {

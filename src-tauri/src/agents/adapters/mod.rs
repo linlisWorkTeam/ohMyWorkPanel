@@ -1,15 +1,15 @@
 pub mod chatbot;
-pub mod connecter_remote;
 mod claude;
 pub(crate) mod codex;
+pub mod connecter_remote;
 mod cursor;
 mod dsh;
+pub mod manifest;
 mod mock;
 pub mod models;
 mod openclaw;
 mod opencode;
 pub mod parse;
-pub mod manifest;
 
 use crate::db::AppResult;
 use manifest::SpawnSpec;
@@ -217,17 +217,16 @@ pub(crate) fn find_executable_path(name: &str) -> Option<String> {
 /// Public wrapper for agent-config / provisioning: whether a CLI executable (or a Windows
 /// shim extension of it) is findable on PATH (incl. npm global on Windows).
 pub fn find_executable_on_path(name: &str) -> Option<String> {
-    find_executable_path(name)
-        .or_else(|| {
-            #[cfg(windows)]
-            {
-                find_in_npm(name)
-            }
-            #[cfg(not(windows))]
-            {
-                None
-            }
-        })
+    find_executable_path(name).or_else(|| {
+        #[cfg(windows)]
+        {
+            find_in_npm(name)
+        }
+        #[cfg(not(windows))]
+        {
+            None
+        }
+    })
 }
 
 #[cfg(windows)]
@@ -250,7 +249,10 @@ fn prepare_command(executable: &str) -> Command {
     let lower = executable.to_lowercase();
     if lower.ends_with(".ps1") {
         let mut cmd = Command::new("powershell.exe");
-        cmd.arg("-ExecutionPolicy").arg("Bypass").arg("-File").arg(executable);
+        cmd.arg("-ExecutionPolicy")
+            .arg("Bypass")
+            .arg("-File")
+            .arg(executable);
         cmd
     } else if lower.ends_with(".cmd") || lower.ends_with(".bat") {
         let mut cmd = Command::new("cmd.exe");
@@ -266,7 +268,10 @@ fn prepare_command(executable: &str) -> Command {
     Command::new(executable)
 }
 
-pub async fn run_mock_stream<F, Fut>(token: &Arc<AtomicBool>, mut on_delta: F) -> AppResult<Option<String>>
+pub async fn run_mock_stream<F, Fut>(
+    token: &Arc<AtomicBool>,
+    mut on_delta: F,
+) -> AppResult<Option<String>>
 where
     F: FnMut(String, String, bool) -> Fut,
     Fut: std::future::Future<Output = AppResult<()>>,
@@ -455,7 +460,12 @@ where
         if kind == Some(AdapterKind::OpenClaw) && openclaw_got_final {
             return Ok(captured_session);
         }
-        return Err(format_cli_failure(&adapter, &status.to_string(), &stderr, last_failure_hint.as_deref()));
+        return Err(format_cli_failure(
+            &adapter,
+            &status.to_string(),
+            &stderr,
+            last_failure_hint.as_deref(),
+        ));
     }
     if kind == Some(AdapterKind::OpenClaw) && !openclaw_got_final {
         return Err(format!(
@@ -609,12 +619,7 @@ mod tests {
                 "",
                 "PONG_OPENCODE",
             ),
-            (
-                AdapterKind::Dsh,
-                "PONG_DSH\n",
-                "",
-                "PONG_DSH",
-            ),
+            (AdapterKind::Dsh, "PONG_DSH\n", "", "PONG_DSH"),
         ];
 
         for (kind, stdout, stderr, expected) in cases {
@@ -634,7 +639,10 @@ mod tests {
 
     #[test]
     fn openclaw_empty_streams_yield_no_final() {
-        assert!(resolve_adapter_final_text(AdapterKind::OpenClaw, "", "gateway only, no json").is_none());
+        assert!(
+            resolve_adapter_final_text(AdapterKind::OpenClaw, "", "gateway only, no json")
+                .is_none()
+        );
     }
 
     #[test]
@@ -659,7 +667,8 @@ mod tests {
             ]
         );
         assert_eq!(
-            AdapterKind::Codex.build_args("do work", None, Some("o3"))
+            AdapterKind::Codex
+                .build_args("do work", None, Some("o3"))
                 .into_iter()
                 .skip_while(|a| a != "-m")
                 .take(2)
@@ -668,7 +677,13 @@ mod tests {
         );
         assert_eq!(
             AdapterKind::ClaudeCode.build_args("do work", None, None),
-            vec!["-p", "--output-format", "stream-json", "--verbose", "do work"]
+            vec![
+                "-p",
+                "--output-format",
+                "stream-json",
+                "--verbose",
+                "do work"
+            ]
         );
         assert_eq!(
             AdapterKind::OpenCode.build_args("do work", None, None),
@@ -702,14 +717,7 @@ mod tests {
         );
         assert_eq!(
             AdapterKind::OpenClaw.build_args("do work", None, None),
-            vec![
-                "agent",
-                "--agent",
-                "main",
-                "--message",
-                "do work",
-                "--json"
-            ]
+            vec!["agent", "--agent", "main", "--message", "do work", "--json"]
         );
         assert_eq!(
             AdapterKind::OpenClaw.build_args("do work", Some("sess-1"), None),
@@ -790,7 +798,11 @@ mod tests {
     #[test]
     fn adapter_registry_all_parse_back_and_describe() {
         // 轻量注册表：ALL 全量、parse/as_str 双射、descriptor 非空。
-        assert_eq!(AdapterKind::ALL.len(), 7, "新增适配器需同步 ALL/parse/descriptor");
+        assert_eq!(
+            AdapterKind::ALL.len(),
+            7,
+            "新增适配器需同步 ALL/parse/descriptor"
+        );
         let mut seen = std::collections::HashSet::new();
         for kind in AdapterKind::ALL {
             let d = kind.descriptor();
@@ -799,7 +811,11 @@ mod tests {
             assert!(seen.insert(d.key), "注册表 key 重复: {}", d.key);
             assert_eq!(AdapterKind::parse(d.key).unwrap(), kind);
             assert_eq!(d.spawnable, !kind.candidate_executables().is_empty());
-            assert!(!d.needs_member_api_key, "{} 不应需要成员级 key（当前 CLI 适配器均自取密钥）", d.key);
+            assert!(
+                !d.needs_member_api_key,
+                "{} 不应需要成员级 key（当前 CLI 适配器均自取密钥）",
+                d.key
+            );
         }
     }
 }

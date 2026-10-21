@@ -73,7 +73,10 @@ pub fn epitaph_handoff_block(workspace: &Path, max_chars: usize) -> String {
     if rows.is_empty() {
         return String::new();
     }
-    let mut lines = vec!["【交接 / 墓志铭 — 调度已注入】".to_string(), "Active:".to_string()];
+    let mut lines = vec![
+        "【交接 / 墓志铭 — 调度已注入】".to_string(),
+        "Active:".to_string(),
+    ];
     for row in rows.iter().take(5) {
         lines.push(format!("- {} {}", row.date, row.title));
     }
@@ -101,12 +104,21 @@ fn parse_active_rows(readme: &str) -> Vec<ActiveRow> {
         if !line.starts_with('|') || line.contains("------") || line.contains("Date") {
             continue;
         }
-        let cols: Vec<&str> = line.split('|').map(str::trim).filter(|c| !c.is_empty()).collect();
+        let cols: Vec<&str> = line
+            .split('|')
+            .map(str::trim)
+            .filter(|c| !c.is_empty())
+            .collect();
         if cols.len() < 2 {
             continue;
         }
         let date = cols[0].to_string();
-        if !date.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+        if !date
+            .chars()
+            .next()
+            .map(|c| c.is_ascii_digit())
+            .unwrap_or(false)
+        {
             continue;
         }
         let (title, href) = parse_md_link(cols[1]);
@@ -260,7 +272,11 @@ mod tests {
 "#,
         )
         .unwrap();
-        fs::write(epi.join("old.md"), "# archived\n## Do not regress\n- should not appear\n").unwrap();
+        fs::write(
+            epi.join("old.md"),
+            "# archived\n## Do not regress\n- should not appear\n",
+        )
+        .unwrap();
 
         let block = epitaph_handoff_block(dir.path(), 1200);
         assert!(block.contains("【交接 / 墓志铭"));
@@ -290,7 +306,11 @@ mod tests {
             "## Active\n\n| Date | Topic | Status |\n|------|-------|--------|\n| 2026-08-15 | [x](./x.md) | active |\n",
         )
         .unwrap();
-        fs::write(epi.join("x.md"), format!("# T\n\n## Do not regress\n- {}\n", "禁".repeat(2000))).unwrap();
+        fs::write(
+            epi.join("x.md"),
+            format!("# T\n\n## Do not regress\n- {}\n", "禁".repeat(2000)),
+        )
+        .unwrap();
         let block = epitaph_handoff_block(dir.path(), 400);
         assert!(block.chars().count() <= 400);
         assert!(block.ends_with('…') || block.chars().count() < 400);

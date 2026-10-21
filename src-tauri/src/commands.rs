@@ -1,24 +1,22 @@
 use crate::adapters::AdapterKind;
 use crate::db::{
-    create_task_run, get_group, get_groups, get_preset_roles, get_settings_from,
-    group_state, id, insert_run_event, member_from_row, now, open_db, resolve_target_agent_ids, run_from_row, AppResult,
-    create_roadmap_item_db, get_roadmap_items, update_roadmap_item_db, delete_roadmap_item_db,
-    create_feature_db, get_features, update_feature_db, delete_feature_db,
-    create_feature_task_db, get_feature_tasks, update_feature_task_db, delete_feature_task_db,
-    get_roadmap_state_db,
-    save_experience as save_experience_db, query_experiences as query_experiences_db,
-    delete_experience as delete_experience_db,
+    create_feature_db, create_feature_task_db, create_roadmap_item_db, create_task_run,
+    delete_experience as delete_experience_db, delete_feature_db, delete_feature_task_db,
+    delete_roadmap_item_db, get_feature_tasks, get_features, get_group, get_groups,
+    get_preset_roles, get_roadmap_items, get_roadmap_state_db, get_settings_from, group_state, id,
+    insert_run_event, member_from_row, now, open_db, query_experiences as query_experiences_db,
+    resolve_target_agent_ids, run_from_row, save_experience as save_experience_db,
+    update_feature_db, update_feature_task_db, update_roadmap_item_db, AppResult,
 };
+use crate::event_sender::EventSender;
 use crate::logger::{self, LogEntry, LogQuery};
 use crate::models::{
-    AddMemberInput, Bootstrap, ChatEvent, CreateGroupInput, GroupState, Member, Message, PresetRole,
-    RuntimeSettings, SendResult, TaskRun,
-    RoadmapItem, Feature, FeatureTask, CreateRoadmapItemInput, UpdateRoadmapItemInput,
-    CreateFeatureInput, UpdateFeatureInput, CreateFeatureTaskInput, UpdateFeatureTaskInput,
-    RoadmapState, Experience,
+    AddMemberInput, Bootstrap, ChatEvent, CreateFeatureInput, CreateFeatureTaskInput,
+    CreateGroupInput, CreateRoadmapItemInput, Experience, Feature, FeatureTask, GroupState, Member,
+    Message, PresetRole, RoadmapItem, RoadmapState, RuntimeSettings, SendResult, TaskRun,
+    UpdateFeatureInput, UpdateFeatureTaskInput, UpdateRoadmapItemInput,
 };
 use crate::scheduler::{emit, schedule_group, SchedulerState};
-use crate::event_sender::EventSender;
 use crate::AppState;
 use rusqlite::{params, OptionalExtension};
 use std::{
@@ -50,11 +48,12 @@ fn assert_member_mutable(conn: &rusqlite::Connection, member_id: &str) -> AppRes
         )
         .unwrap_or(0);
     if locked != 0 {
-        return Err("平台锁定的自举 Agent（bootstrap-dsh / linlis-super-harness）不可修改或移除。".into());
+        return Err(
+            "平台锁定的自举 Agent（bootstrap-dsh / linlis-super-harness）不可修改或移除。".into(),
+        );
     }
     Ok(())
 }
-
 
 #[tauri::command]
 pub fn bootstrap(state: State<'_, AppState>) -> AppResult<Bootstrap> {
@@ -188,7 +187,9 @@ pub fn create_group(input: CreateGroupInput, state: State<'_, AppState>) -> AppR
     if let Some(role_names) = &input.preset_roles {
         let all_roles = get_preset_roles(&conn)?;
         for role in all_roles {
-            if !role_names.contains(&role.name) { continue; }
+            if !role_names.contains(&role.name) {
+                continue;
+            }
             let mid = id();
             conn.execute(
                 "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at) VALUES(?1,?2,'agent',?3,?4,?5,1,?6)",
@@ -207,7 +208,9 @@ pub fn create_group(input: CreateGroupInput, state: State<'_, AppState>) -> AppR
 
 #[tauri::command]
 pub fn add_member(input: AddMemberInput, state: State<'_, AppState>) -> AppResult<Member> {
-    if !matches!(input.kind.as_str(), "user" | "agent" | "chatbot") || input.display_name.trim().is_empty() {
+    if !matches!(input.kind.as_str(), "user" | "agent" | "chatbot")
+        || input.display_name.trim().is_empty()
+    {
         return Err("成员类型或名称无效。".into());
     }
     let invite_mode = input.invite.unwrap_or(false);
@@ -246,11 +249,13 @@ pub fn add_member(input: AddMemberInput, state: State<'_, AppState>) -> AppResul
     }
     let member_id = id();
     let created_at = now();
-    let color = input.avatar_color.unwrap_or_else(|| match input.kind.as_str() {
-        "agent" => "#17a673".into(),
-        "chatbot" => "#0ea5a0".into(),
-        _ => "#5167f6".into(),
-    });
+    let color = input
+        .avatar_color
+        .unwrap_or_else(|| match input.kind.as_str() {
+            "agent" => "#17a673".into(),
+            "chatbot" => "#0ea5a0".into(),
+            _ => "#5167f6".into(),
+        });
     let mut auth_user_id: Option<String> = None;
     if input.kind == "user" && !invite_mode {
         auth_user_id = Some(crate::db::resolve_user_member_auth_id(
@@ -361,7 +366,10 @@ pub fn add_member(input: AddMemberInput, state: State<'_, AppState>) -> AppResul
 }
 
 #[tauri::command]
-pub fn list_joinable_users(group_id: String, state: State<'_, AppState>) -> AppResult<Vec<crate::models::JoinableUser>> {
+pub fn list_joinable_users(
+    group_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<crate::models::JoinableUser>> {
     let conn = open_db(&state.db_path)?;
     get_group(&conn, &group_id)?;
     crate::db::list_joinable_users(&conn, &group_id)
@@ -427,7 +435,9 @@ pub async fn remove_member(
         )
         .map_err(|e| e.to_string())?;
     }
-    let _ = app.emit("chat-event", ChatEvent {
+    let _ = app.emit(
+        "chat-event",
+        ChatEvent {
             kind: "member_removed".into(),
             group_id,
             run_id: None,
@@ -437,9 +447,9 @@ pub async fn remove_member(
             error: None,
             channel: None,
             replace: None,
-                        phase: None,
-                        elapsed_ms: None,
-                        total_ms: None,
+            phase: None,
+            elapsed_ms: None,
+            total_ms: None,
             seq: None,
             delta_count: None,
             rss_mib: None,
@@ -474,11 +484,9 @@ pub fn set_admin(
     );
     if let Some(id) = &member_id {
         let kind: String = conn
-            .query_row(
-                "SELECT kind FROM members WHERE id=?1",
-                params![id],
-                |r| r.get(0),
-            )
+            .query_row("SELECT kind FROM members WHERE id=?1", params![id], |r| {
+                r.get(0)
+            })
             .unwrap_or_default();
         if kind == "agent" {
             let _ = conn.execute(
@@ -547,16 +555,33 @@ pub async fn send_message(
     }
     let mut slash_reply: Option<(String, crate::models::Message)> = None;
     let group_kind: String = conn
-        .query_row("SELECT group_kind FROM groups WHERE id=?1", params![&group_id], |r| r.get(0))
+        .query_row(
+            "SELECT group_kind FROM groups WHERE id=?1",
+            params![&group_id],
+            |r| r.get(0),
+        )
         .map_err(|e| e.to_string())?;
     let sender_kind: String = conn
-        .query_row("SELECT kind FROM members WHERE id=?1 AND group_id=?2", params![&sender_member_id, &group_id], |r| r.get(0))
+        .query_row(
+            "SELECT kind FROM members WHERE id=?1 AND group_id=?2",
+            params![&sender_member_id, &group_id],
+            |r| r.get(0),
+        )
         .map_err(|e| e.to_string())?;
-    if let Some(reply_text) = crate::workflow::try_slash_command(&conn, &group_id, &group_kind, &sender_kind, &message.content)? {
+    if let Some(reply_text) = crate::workflow::try_slash_command(
+        &conn,
+        &group_id,
+        &group_kind,
+        &sender_kind,
+        &message.content,
+    )? {
         let reply = crate::models::Message {
             id: id(),
             group_id: group_id.clone(),
-            sender_member_id: group.admin_member_id.clone().unwrap_or_else(|| sender_member_id.clone()),
+            sender_member_id: group
+                .admin_member_id
+                .clone()
+                .unwrap_or_else(|| sender_member_id.clone()),
             parent_run_id: None,
             content: reply_text,
             status: "completed".into(),
@@ -593,30 +618,13 @@ pub async fn send_message(
         )?);
     }
     drop(conn);
-    let _ = app.emit("chat-event", ChatEvent {
+    let _ = app.emit(
+        "chat-event",
+        ChatEvent {
             kind: "message_created".into(),
             group_id: group_id.clone(),
             run_id: None,
             message_id: Some(message.id.clone()),
-            delta: None,
-            status: Some("completed".into()),
-            error: None,
-            channel: None,
-            replace: None,
-                        phase: None,
-                        elapsed_ms: None,
-                        total_ms: None,
-            seq: None,
-            delta_count: None,
-            rss_mib: None,
-        },
-    );
-    if let Some((reply_id, _)) = slash_reply {
-        let _ = app.emit("chat-event", ChatEvent {
-            kind: "message_created".into(),
-            group_id: group_id.clone(),
-            run_id: None,
-            message_id: Some(reply_id),
             delta: None,
             status: Some("completed".into()),
             error: None,
@@ -628,7 +636,29 @@ pub async fn send_message(
             seq: None,
             delta_count: None,
             rss_mib: None,
-        });
+        },
+    );
+    if let Some((reply_id, _)) = slash_reply {
+        let _ = app.emit(
+            "chat-event",
+            ChatEvent {
+                kind: "message_created".into(),
+                group_id: group_id.clone(),
+                run_id: None,
+                message_id: Some(reply_id),
+                delta: None,
+                status: Some("completed".into()),
+                error: None,
+                channel: None,
+                replace: None,
+                phase: None,
+                elapsed_ms: None,
+                total_ms: None,
+                seq: None,
+                delta_count: None,
+                rss_mib: None,
+            },
+        );
     }
     schedule_group(to_scheduler(&state, &app), group_id.clone());
     Ok(SendResult { message, run_ids })
@@ -662,14 +692,14 @@ pub async fn cancel_run(
     drop(conn);
     if !live_worker {
         if let Some((profile, dispatch_id)) = remote_cancel {
-            let _ = crate::agents::adapters::connecter_remote::cancel_dispatch(
-                &profile,
-                &dispatch_id,
-            )
-            .await;
+            let _ =
+                crate::agents::adapters::connecter_remote::cancel_dispatch(&profile, &dispatch_id)
+                    .await;
         }
     }
-    let _ = app.emit("chat-event", ChatEvent {
+    let _ = app.emit(
+        "chat-event",
+        ChatEvent {
             kind: "run_status".into(),
             group_id: info.group_id,
             run_id: Some(run_id),
@@ -679,9 +709,9 @@ pub async fn cancel_run(
             error: None,
             channel: None,
             replace: None,
-                        phase: None,
-                        elapsed_ms: None,
-                        total_ms: None,
+            phase: None,
+            elapsed_ms: None,
+            total_ms: None,
             seq: None,
             delta_count: None,
             rss_mib: None,
@@ -765,8 +795,8 @@ pub async fn detect_agent(member_id: String, state: State<'_, AppState>) -> AppR
     .map_err(|e| e.to_string())?;
     Ok(status.into())
 }
- 
- #[tauri::command]
+
+#[tauri::command]
 pub fn ocr_image(image_path: String) -> AppResult<String> {
     crate::ocr::ocr_image(&image_path)
 }
@@ -781,73 +811,97 @@ pub fn ocr_image_base64(base64_data: String) -> AppResult<String> {
 pub fn get_preset_roles_command(state: State<'_, AppState>) -> AppResult<Vec<PresetRole>> {
     get_preset_roles(&open_db(&state.db_path)?)
 }
- 
- // === PM: Roadmap Items ===
- 
- #[tauri::command]
- pub fn list_roadmap_items(group_id: String, state: State<'_, AppState>) -> AppResult<Vec<RoadmapItem>> {
-     get_roadmap_items(&open_db(&state.db_path)?, &group_id)
- }
- 
- #[tauri::command]
- pub fn create_roadmap_item(input: CreateRoadmapItemInput, state: State<'_, AppState>) -> AppResult<RoadmapItem> {
-     create_roadmap_item_db(&open_db(&state.db_path)?, &input)
- }
- 
- #[tauri::command]
- pub fn update_roadmap_item(id: String, input: UpdateRoadmapItemInput, state: State<'_, AppState>) -> AppResult<RoadmapItem> {
-     update_roadmap_item_db(&open_db(&state.db_path)?, &id, &input)
- }
- 
- #[tauri::command]
- pub fn delete_roadmap_item(id: String, state: State<'_, AppState>) -> AppResult<()> {
-     delete_roadmap_item_db(&open_db(&state.db_path)?, &id)
- }
- 
- // === PM: Features ===
- 
- #[tauri::command]
- pub fn list_features(group_id: String, state: State<'_, AppState>) -> AppResult<Vec<Feature>> {
-     get_features(&open_db(&state.db_path)?, &group_id)
- }
- 
- #[tauri::command]
- pub fn create_feature(input: CreateFeatureInput, state: State<'_, AppState>) -> AppResult<Feature> {
-     create_feature_db(&open_db(&state.db_path)?, &input)
- }
- 
- #[tauri::command]
- pub fn update_feature(id: String, input: UpdateFeatureInput, state: State<'_, AppState>) -> AppResult<Feature> {
-     update_feature_db(&open_db(&state.db_path)?, &id, &input)
- }
- 
- #[tauri::command]
- pub fn delete_feature(id: String, state: State<'_, AppState>) -> AppResult<()> {
-     delete_feature_db(&open_db(&state.db_path)?, &id)
- }
- 
- // === PM: Feature Tasks ===
- 
- #[tauri::command]
- pub fn list_feature_tasks(feature_id: String, state: State<'_, AppState>) -> AppResult<Vec<FeatureTask>> {
-     get_feature_tasks(&open_db(&state.db_path)?, &feature_id)
- }
- 
- #[tauri::command]
- pub fn create_feature_task(input: CreateFeatureTaskInput, state: State<'_, AppState>) -> AppResult<FeatureTask> {
-     create_feature_task_db(&open_db(&state.db_path)?, &input)
- }
- 
- #[tauri::command]
- pub fn update_feature_task(id: String, input: UpdateFeatureTaskInput, state: State<'_, AppState>) -> AppResult<FeatureTask> {
-     update_feature_task_db(&open_db(&state.db_path)?, &id, &input)
- }
- 
- #[tauri::command]
- pub fn delete_feature_task(id: String, state: State<'_, AppState>) -> AppResult<()> {
-     delete_feature_task_db(&open_db(&state.db_path)?, &id)
- }
- 
+
+// === PM: Roadmap Items ===
+
+#[tauri::command]
+pub fn list_roadmap_items(
+    group_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<RoadmapItem>> {
+    get_roadmap_items(&open_db(&state.db_path)?, &group_id)
+}
+
+#[tauri::command]
+pub fn create_roadmap_item(
+    input: CreateRoadmapItemInput,
+    state: State<'_, AppState>,
+) -> AppResult<RoadmapItem> {
+    create_roadmap_item_db(&open_db(&state.db_path)?, &input)
+}
+
+#[tauri::command]
+pub fn update_roadmap_item(
+    id: String,
+    input: UpdateRoadmapItemInput,
+    state: State<'_, AppState>,
+) -> AppResult<RoadmapItem> {
+    update_roadmap_item_db(&open_db(&state.db_path)?, &id, &input)
+}
+
+#[tauri::command]
+pub fn delete_roadmap_item(id: String, state: State<'_, AppState>) -> AppResult<()> {
+    delete_roadmap_item_db(&open_db(&state.db_path)?, &id)
+}
+
+// === PM: Features ===
+
+#[tauri::command]
+pub fn list_features(group_id: String, state: State<'_, AppState>) -> AppResult<Vec<Feature>> {
+    get_features(&open_db(&state.db_path)?, &group_id)
+}
+
+#[tauri::command]
+pub fn create_feature(input: CreateFeatureInput, state: State<'_, AppState>) -> AppResult<Feature> {
+    create_feature_db(&open_db(&state.db_path)?, &input)
+}
+
+#[tauri::command]
+pub fn update_feature(
+    id: String,
+    input: UpdateFeatureInput,
+    state: State<'_, AppState>,
+) -> AppResult<Feature> {
+    update_feature_db(&open_db(&state.db_path)?, &id, &input)
+}
+
+#[tauri::command]
+pub fn delete_feature(id: String, state: State<'_, AppState>) -> AppResult<()> {
+    delete_feature_db(&open_db(&state.db_path)?, &id)
+}
+
+// === PM: Feature Tasks ===
+
+#[tauri::command]
+pub fn list_feature_tasks(
+    feature_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<FeatureTask>> {
+    get_feature_tasks(&open_db(&state.db_path)?, &feature_id)
+}
+
+#[tauri::command]
+pub fn create_feature_task(
+    input: CreateFeatureTaskInput,
+    state: State<'_, AppState>,
+) -> AppResult<FeatureTask> {
+    create_feature_task_db(&open_db(&state.db_path)?, &input)
+}
+
+#[tauri::command]
+pub fn update_feature_task(
+    id: String,
+    input: UpdateFeatureTaskInput,
+    state: State<'_, AppState>,
+) -> AppResult<FeatureTask> {
+    update_feature_task_db(&open_db(&state.db_path)?, &id, &input)
+}
+
+#[tauri::command]
+pub fn delete_feature_task(id: String, state: State<'_, AppState>) -> AppResult<()> {
+    delete_feature_task_db(&open_db(&state.db_path)?, &id)
+}
+
 // === PM: Aggregated State ===
 
 #[tauri::command]
@@ -907,7 +961,16 @@ pub fn list_logs(
     since: Option<i64>,
     state: State<'_, AppState>,
 ) -> AppResult<Vec<LogEntry>> {
-    logger::query_logs(&open_db(&state.db_path)?, &LogQuery { limit, offset, level, source, since })
+    logger::query_logs(
+        &open_db(&state.db_path)?,
+        &LogQuery {
+            limit,
+            offset,
+            level,
+            source,
+            since,
+        },
+    )
 }
 
 #[tauri::command]
@@ -930,8 +993,7 @@ pub fn list_server_dir(path: String) -> AppResult<crate::fs_browse::DirListing> 
 
 #[tauri::command]
 pub fn create_server_dir(parent: String, name: String) -> AppResult<String> {
-    crate::fs_browse::create_server_dir(&parent, &name)
-        .map(|p| p.to_string_lossy().into_owned())
+    crate::fs_browse::create_server_dir(&parent, &name).map(|p| p.to_string_lossy().into_owned())
 }
 
 #[tauri::command]
@@ -1067,7 +1129,11 @@ pub async fn set_run_review(
         "approved" | "rejected" => decision.as_str(),
         _ => return Err("decision 仅支持 approved / rejected".to_string()),
     };
-    let status = if review == "approved" { "completed" } else { "changes_requested" };
+    let status = if review == "approved" {
+        "completed"
+    } else {
+        "changes_requested"
+    };
     let state = state.inner().clone();
     let conn = open_db(&state.db_path)?;
     let run: TaskRun = conn
@@ -1080,34 +1146,49 @@ pub async fn set_run_review(
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "找不到任务。".to_string())?;
     if run.status != "awaiting_review" {
-        return Err(format!("任务 {} 当前状态 {}，不在待审批状态", run_id, run.status));
+        return Err(format!(
+            "任务 {} 当前状态 {}，不在待审批状态",
+            run_id, run.status
+        ));
     }
     if !crate::db::set_run_review(&conn, &run_id, review, status)? {
         return Err("该任务不在待审批状态（可能已被处理）".to_string());
     }
-    insert_run_event(&conn, &run_id, &format!("review_{}", review), &format!(r#"{{"reviewer":"human","decision":"{}"}}"#, review))?;
-    let _ = app.emit("chat-event", ChatEvent {
-        kind: "run_status".into(),
-        group_id: run.group_id,
-        run_id: Some(run_id),
-        message_id: run.output_message_id,
-        delta: None,
-        status: Some(status.into()),
-        error: None,
-        channel: None,
-        replace: None,
-        phase: None,
-        elapsed_ms: None,
-        total_ms: None,
-        seq: None,
-        delta_count: None,
-        rss_mib: None,
-    });
+    insert_run_event(
+        &conn,
+        &run_id,
+        &format!("review_{}", review),
+        &format!(r#"{{"reviewer":"human","decision":"{}"}}"#, review),
+    )?;
+    let _ = app.emit(
+        "chat-event",
+        ChatEvent {
+            kind: "run_status".into(),
+            group_id: run.group_id,
+            run_id: Some(run_id),
+            message_id: run.output_message_id,
+            delta: None,
+            status: Some(status.into()),
+            error: None,
+            channel: None,
+            replace: None,
+            phase: None,
+            elapsed_ms: None,
+            total_ms: None,
+            seq: None,
+            delta_count: None,
+            rss_mib: None,
+        },
+    );
     Ok(())
 }
 
 fn build_feedback(res: (i64, i64, Option<String>)) -> crate::models::MessageFeedback {
-    crate::models::MessageFeedback { up: res.0, down: res.1, my_vote: res.2 }
+    crate::models::MessageFeedback {
+        up: res.0,
+        down: res.1,
+        my_vote: res.2,
+    }
 }
 
 /// 消息反馈：vote 为 "up"/"down" 时覆盖当前成员表决，为 None 时清除；返回聚合计数。
@@ -1210,23 +1291,26 @@ fn kickoff_admin_run_desktop(
         params![msg.id, admin],
     );
     let rid = create_task_run(conn, &group.id, &msg.id, &admin, None, 0)?;
-    let _ = app.emit("chat-event", ChatEvent {
-        kind: "message_created".into(),
-        group_id: group.id.clone(),
-        run_id: None,
-        message_id: Some(msg.id),
-        delta: None,
-        status: Some("completed".into()),
-        error: None,
-        channel: None,
-        replace: None,
-        phase: None,
-        elapsed_ms: None,
-        total_ms: None,
-        seq: None,
-        delta_count: None,
-        rss_mib: None,
-    });
+    let _ = app.emit(
+        "chat-event",
+        ChatEvent {
+            kind: "message_created".into(),
+            group_id: group.id.clone(),
+            run_id: None,
+            message_id: Some(msg.id),
+            delta: None,
+            status: Some("completed".into()),
+            error: None,
+            channel: None,
+            replace: None,
+            phase: None,
+            elapsed_ms: None,
+            total_ms: None,
+            seq: None,
+            delta_count: None,
+            rss_mib: None,
+        },
+    );
     schedule_group(to_scheduler(state, app), group.id.clone());
     Ok(rid)
 }
@@ -1236,14 +1320,21 @@ fn admin_display_name(conn: &rusqlite::Connection, group: &crate::models::Group)
         .admin_member_id
         .as_ref()
         .and_then(|aid| {
-            conn.query_row("SELECT display_name FROM members WHERE id=?1", params![aid], |r| r.get::<_, String>(0))
-                .ok()
+            conn.query_row(
+                "SELECT display_name FROM members WHERE id=?1",
+                params![aid],
+                |r| r.get::<_, String>(0),
+            )
+            .ok()
         })
         .unwrap_or_else(|| "管理员".into())
 }
 
 #[tauri::command]
-pub async fn get_version_board(group_id: String, state: State<'_, AppState>) -> AppResult<crate::workflow::VersionBoard> {
+pub async fn get_version_board(
+    group_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<crate::workflow::VersionBoard> {
     let state = state.inner().clone();
     let conn = open_db(&state.db_path)?;
     let group = get_group(&conn, &group_id)?;
@@ -1293,7 +1384,8 @@ pub async fn start_version_ask(
     let v = crate::workflow::start_ask(&conn, &group, &version_id)?;
     let prompt = crate::workflow::build_ask_kickoff_prompt(&v);
     let content = format!("@{} {}", admin_display_name(&conn, &group), prompt);
-    let run_id = kickoff_admin_run_desktop(&conn, &state, &app, &group, &sender_member_id, content)?;
+    let run_id =
+        kickoff_admin_run_desktop(&conn, &state, &app, &group, &sender_member_id, content)?;
     Ok(serde_json::json!({ "version": v, "runId": run_id }))
 }
 
@@ -1331,7 +1423,9 @@ pub async fn approve_version_waves(
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| group.owner_member_id.clone());
     require_desktop_version_manager(&conn, &group, &sender)?;
-    let mut input = crate::workflow::ApproveWavesInput { waves: waves.unwrap_or_default() };
+    let mut input = crate::workflow::ApproveWavesInput {
+        waves: waves.unwrap_or_default(),
+    };
     if input.waves.is_empty() {
         input.waves = crate::workflow::default_waves_from_roadmap(&v);
     }
@@ -1366,14 +1460,20 @@ pub async fn play_wave(
 }
 
 #[tauri::command]
-pub async fn pause_wave(wave_id: String, state: State<'_, AppState>) -> AppResult<crate::workflow::Wave> {
+pub async fn pause_wave(
+    wave_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<crate::workflow::Wave> {
     let state = state.inner().clone();
     let conn = open_db(&state.db_path)?;
     crate::workflow::pause_wave(&conn, &wave_id)
 }
 
 #[tauri::command]
-pub async fn advance_wave(wave_id: String, state: State<'_, AppState>) -> AppResult<crate::workflow::Wave> {
+pub async fn advance_wave(
+    wave_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<crate::workflow::Wave> {
     let state = state.inner().clone();
     let conn = open_db(&state.db_path)?;
     crate::workflow::advance_wave_phase(&conn, &wave_id)
@@ -1409,7 +1509,10 @@ pub async fn play_version(
 }
 
 #[tauri::command]
-pub async fn pause_version(version_id: String, state: State<'_, AppState>) -> AppResult<serde_json::Value> {
+pub async fn pause_version(
+    version_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<serde_json::Value> {
     let state = state.inner().clone();
     let conn = open_db(&state.db_path)?;
     let v = crate::workflow::get_version(&conn, &version_id)?;
@@ -1537,7 +1640,10 @@ pub async fn check_for_update(
     let candidates: Vec<String> = match &pinned {
         Some(url) => vec![url.clone()],
         // 未配置：自动发现（依次尝试默认源，静默跳过失败源）
-        None => DEFAULT_MANIFEST_CANDIDATES.iter().map(|s| s.to_string()).collect(),
+        None => DEFAULT_MANIFEST_CANDIDATES
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
     };
     let mut last_error: Option<String> = None;
     for url in &candidates {
@@ -1574,15 +1680,26 @@ pub async fn check_for_update(
             last_error = Some(format!("清单缺少 version 字段（{url}）"));
             continue;
         };
-        let notes = value.get("notes").and_then(|v| v.as_str()).map(str::to_string);
-        let download_url = value.get("url").and_then(|v| v.as_str()).map(str::to_string);
-        let sha256 = value.get("sha256").and_then(|v| v.as_str()).map(str::to_string);
+        let notes = value
+            .get("notes")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        let download_url = value
+            .get("url")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        let sha256 = value
+            .get("sha256")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
         let has_update = crate::models::is_newer_version(&latest, &current);
         if let Ok(conn) = open_db(&state.db_path) {
             let _ = logger::info(
                 &conn,
                 "updater",
-                &format!("check: source={url} current={current} latest={latest} has_update={has_update}"),
+                &format!(
+                    "check: source={url} current={current} latest={latest} has_update={has_update}"
+                ),
                 None,
             );
         }
@@ -1604,7 +1721,10 @@ pub async fn check_for_update(
             "updater",
             &format!(
                 "check: all sources failed{}",
-                last_error.as_ref().map(|e| format!(" -> {e}")).unwrap_or_default()
+                last_error
+                    .as_ref()
+                    .map(|e| format!(" -> {e}"))
+                    .unwrap_or_default()
             ),
             None,
         );
@@ -1628,7 +1748,14 @@ pub async fn download_update(url: String, expected_sha256: Option<String>) -> Ap
     std::fs::create_dir_all(&dir).map_err(|e| format!("无法创建下载目录：{e}"))?;
     let path = dir.join(format!("ohMyWorkPanel-{}.exe", id()));
     let out = tokio::process::Command::new("curl")
-        .args(["-sSL", "--max-time", "600", "-o", path.to_str().unwrap_or(""), &url])
+        .args([
+            "-sSL",
+            "--max-time",
+            "600",
+            "-o",
+            path.to_str().unwrap_or(""),
+            &url,
+        ])
         .output()
         .await
         .map_err(|e| format!("下载启动失败：{e}"))?;
@@ -1644,11 +1771,16 @@ pub async fn download_update(url: String, expected_sha256: Option<String>) -> Ap
         let _ = std::fs::remove_file(&path);
         return Err("下载文件异常（过小）".into());
     }
-    if let Some(expected) = expected_sha256.map(|s| s.trim().to_ascii_lowercase()).filter(|s| !s.is_empty()) {
+    if let Some(expected) = expected_sha256
+        .map(|s| s.trim().to_ascii_lowercase())
+        .filter(|s| !s.is_empty())
+    {
         let got = sha256_of_file(&path)?;
         if got != expected {
             let _ = std::fs::remove_file(&path);
-            return Err(format!("下载校验失败：哈希不匹配（期望 {expected}，实际 {got}）"));
+            return Err(format!(
+                "下载校验失败：哈希不匹配（期望 {expected}，实际 {got}）"
+            ));
         }
     }
     Ok(path.to_string_lossy().into_owned())
@@ -1667,7 +1799,10 @@ fn sha256_of_file(path: &std::path::Path) -> Result<String, String> {
             return Ok(t.to_ascii_lowercase());
         }
     }
-    Err(format!("certutil 输出无法解析：{}", text.chars().take(120).collect::<String>()))
+    Err(format!(
+        "certutil 输出无法解析：{}",
+        text.chars().take(120).collect::<String>()
+    ))
 }
 
 /// 退出应用并静默安装：以独立进程启动安装器（/S + 显式 /D= 安装位），随后本进程退出。

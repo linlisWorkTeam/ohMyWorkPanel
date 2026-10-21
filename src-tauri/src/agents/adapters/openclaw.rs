@@ -16,7 +16,10 @@ pub fn build_args(prompt: &str, session_id: Option<&str>, model: Option<&str>) -
             args.push("main".into());
         }
     }
-    if let Some(m) = model.map(str::trim).filter(|s| !s.is_empty() && *s != "default") {
+    if let Some(m) = model
+        .map(str::trim)
+        .filter(|s| !s.is_empty() && *s != "default")
+    {
         args.push("--model".into());
         args.push(m.to_string());
     }
@@ -34,14 +37,7 @@ mod tests {
     fn build_args_defaults_to_main_agent() {
         assert_eq!(
             build_args("do work", None, None),
-            vec![
-                "agent",
-                "--agent",
-                "main",
-                "--message",
-                "do work",
-                "--json"
-            ]
+            vec!["agent", "--agent", "main", "--message", "do work", "--json"]
         );
     }
 

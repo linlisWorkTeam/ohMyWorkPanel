@@ -80,7 +80,11 @@ pub fn build_fold_summary_prompt(existing_summary: &str, folded_lines: &str) -> 
 }
 
 /// Offline fallback when LLM fold fails: keep old summary + first lines truncated.
-pub fn extractive_fold_summary(existing_summary: &str, folded_lines: &str, max_chars: usize) -> String {
+pub fn extractive_fold_summary(
+    existing_summary: &str,
+    folded_lines: &str,
+    max_chars: usize,
+) -> String {
     let mut parts = Vec::new();
     let existing = existing_summary.trim();
     if !existing.is_empty() {
@@ -122,10 +126,7 @@ mod tests {
 
     #[test]
     fn chat_group_uses_chat_limit() {
-        assert_eq!(
-            effective_context_message_limit("chat", "agent", 40, 12),
-            12
-        );
+        assert_eq!(effective_context_message_limit("chat", "agent", 40, 12), 12);
     }
 
     #[test]

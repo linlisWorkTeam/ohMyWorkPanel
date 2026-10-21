@@ -407,7 +407,8 @@ pub fn build_bundle(db_path: &Path, include_secrets: bool) -> Result<AgentConfig
             if let Some(conn2) = conn2 {
                 if let Ok(rows) = crate::db::list_agent_profiles(&conn2) {
                     if let Some(first_codex) = rows.iter().find(|r| r.adapter == "codex") {
-                        if let Ok(Some(k)) = crate::db::get_agent_api_key(&conn2, &first_codex.member_id)
+                        if let Ok(Some(k)) =
+                            crate::db::get_agent_api_key(&conn2, &first_codex.member_id)
                         {
                             if !k.trim().is_empty() {
                                 bundle.codex.api_key = Some(k);
@@ -459,17 +460,28 @@ pub async fn import(
     match crate::adapters::find_executable_on_path("node") {
         Some(p) => steps.push(step_ok("Node.js", &format!("已找到：{p}"))),
         None => {
-            steps.push(step_err("Node.js", "未找到 node。Codex shim 与 CLI 自动安装都依赖 node。"));
-            warnings.push("未检测到 Node.js：无法自动安装 CLI，请先安装 Node 或在服务器上手动配置。".into());
+            steps.push(step_err(
+                "Node.js",
+                "未找到 node。Codex shim 与 CLI 自动安装都依赖 node。",
+            ));
+            warnings.push(
+                "未检测到 Node.js：无法自动安装 CLI，请先安装 Node 或在服务器上手动配置。".into(),
+            );
         }
     }
 
     // 2) 写 home 配置（尽力而为，逐文件记录）
     for (name, res) in [
         ("Codex 配置".to_string(), apply_codex(&bundle, overwrite)),
-        ("Claude Code 配置".to_string(), apply_claude(&bundle, overwrite)),
+        (
+            "Claude Code 配置".to_string(),
+            apply_claude(&bundle, overwrite),
+        ),
         ("Cursor 配置".to_string(), apply_cursor(&bundle, overwrite)),
-        ("通用配置(files)".to_string(), apply_files(&bundle, overwrite)),
+        (
+            "通用配置(files)".to_string(),
+            apply_files(&bundle, overwrite),
+        ),
     ] {
         match res {
             Ok(detail) if detail.trim().is_empty() => {}
@@ -555,7 +567,10 @@ pub async fn import(
             &if missing.is_empty() {
                 "所有勾选 CLI 就绪。".into()
             } else {
-                format!("仍缺：{}；可稍后再点「自动安装」或手动处理。", missing.join(", "))
+                format!(
+                    "仍缺：{}；可稍后再点「自动安装」或手动处理。",
+                    missing.join(", ")
+                )
             },
         ));
     }
@@ -565,7 +580,11 @@ pub async fn import(
         ok,
         steps,
         installed,
-        missing: if missing.is_empty() { Vec::new() } else { missing },
+        missing: if missing.is_empty() {
+            Vec::new()
+        } else {
+            missing
+        },
         warnings,
     }
 }
@@ -600,7 +619,14 @@ fn step_err(name: &str, detail: &str) -> ImportStep {
 }
 
 fn apply_codex(bundle: &AgentConfigBundle, overwrite: bool) -> Result<String, String> {
-    if !bundle.codex.enabled || bundle.codex.api_key.as_deref().map(str::trim).unwrap_or("").is_empty()
+    if !bundle.codex.enabled
+        || bundle
+            .codex
+            .api_key
+            .as_deref()
+            .map(str::trim)
+            .unwrap_or("")
+            .is_empty()
     {
         return Ok(String::new());
     }
@@ -696,7 +722,9 @@ fn apply_claude(bundle: &AgentConfigBundle, overwrite: bool) -> Result<String, S
         .ok_or_else(|| "settings.json 结构异常".to_string())?;
     let wrote = write_with_backup(
         &path,
-        serde_json::to_string_pretty(&cfg).map_err(|e| e.to_string())?.as_bytes(),
+        serde_json::to_string_pretty(&cfg)
+            .map_err(|e| e.to_string())?
+            .as_bytes(),
         overwrite,
     )
     .map_err(|e| format!("写 ~/.claude/settings.json 失败：{e}"))?;
@@ -738,7 +766,9 @@ fn apply_cursor(bundle: &AgentConfigBundle, overwrite: bool) -> Result<String, S
         deep_merge(&mut cfg, patch);
         let wrote = write_with_backup(
             &path,
-            serde_json::to_string_pretty(&cfg).map_err(|e| e.to_string())?.as_bytes(),
+            serde_json::to_string_pretty(&cfg)
+                .map_err(|e| e.to_string())?
+                .as_bytes(),
             overwrite,
         )
         .map_err(|e| format!("写 ~/.cursor/cli-config.json 失败：{e}"))?;
@@ -752,7 +782,9 @@ fn apply_cursor(bundle: &AgentConfigBundle, overwrite: bool) -> Result<String, S
         let path = dir.join("mcp.json");
         let wrote = write_with_backup(
             &path,
-            serde_json::to_string_pretty(mcp).map_err(|e| e.to_string())?.as_bytes(),
+            serde_json::to_string_pretty(mcp)
+                .map_err(|e| e.to_string())?
+                .as_bytes(),
             overwrite,
         )
         .map_err(|e| format!("写 ~/.cursor/mcp.json 失败：{e}"))?;
@@ -791,7 +823,10 @@ fn apply_files(bundle: &AgentConfigBundle, overwrite: bool) -> Result<String, St
 }
 
 /// 把 bundle 应用到既有 agent 成员（只更新，不新建；跳过 system_locked）。
-fn provision_agents(conn: &rusqlite::Connection, bundle: &AgentConfigBundle) -> Result<String, String> {
+fn provision_agents(
+    conn: &rusqlite::Connection,
+    bundle: &AgentConfigBundle,
+) -> Result<String, String> {
     let rows = crate::db::list_agent_profiles(conn)?;
     if rows.is_empty() {
         return Ok(String::new());
@@ -864,7 +899,10 @@ fn provision_agents(conn: &rusqlite::Connection, bundle: &AgentConfigBundle) -> 
         if !enabled {
             continue;
         }
-        for row in rows.iter().filter(|r| !r.system_locked && r.adapter == adapter) {
+        for row in rows
+            .iter()
+            .filter(|r| !r.system_locked && r.adapter == adapter)
+        {
             let p = AgentProfilePatch {
                 adapter: adapter.to_string(),
                 model: model
@@ -891,11 +929,7 @@ fn provision_agents(conn: &rusqlite::Connection, bundle: &AgentConfigBundle) -> 
     Ok(format!("已更新 {} 个成员：{}", changed, detail.join("、")))
 }
 
-fn apply_patch(
-    conn: &rusqlite::Connection,
-    row: &AgentProfileRow,
-    patch: &AgentProfilePatch,
-) {
+fn apply_patch(conn: &rusqlite::Connection, row: &AgentProfileRow, patch: &AgentProfilePatch) {
     if let Some(m) = patch
         .model
         .as_deref()
@@ -904,10 +938,20 @@ fn apply_patch(
     {
         let _ = crate::db::set_member_model(conn, &row.member_id, Some(m));
     }
-    if let Some(k) = patch.api_key.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+    if let Some(k) = patch
+        .api_key
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         let _ = crate::db::set_member_api_key(conn, &row.member_id, Some(k));
     }
-    if let Some(e) = patch.executable.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+    if let Some(e) = patch
+        .executable
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         let _ = crate::db::set_member_executable(conn, &row.member_id, Some(e));
     }
 }
@@ -923,7 +967,14 @@ pub(crate) struct InstallSpec {
 fn npm_install_cmd(pkg: &str) -> Vec<String> {
     #[cfg(windows)]
     {
-        vec!["cmd".into(), "/c".into(), "npm".into(), "install".into(), "-g".into(), pkg.into()]
+        vec![
+            "cmd".into(),
+            "/c".into(),
+            "npm".into(),
+            "install".into(),
+            "-g".into(),
+            pkg.into(),
+        ]
     }
     #[cfg(not(windows))]
     {
@@ -1200,9 +1251,8 @@ pub fn auto_apply_on_startup(db_path: &Path) -> Result<(), String> {
     if !aa {
         return Ok(());
     }
-    let bundle: AgentConfigBundle = serde_json::from_str(&raw).map_err(|e| {
-        format!("agent_config 反序列化失败，跳过启动重放：{e}")
-    })?;
+    let bundle: AgentConfigBundle = serde_json::from_str(&raw)
+        .map_err(|e| format!("agent_config 反序列化失败，跳过启动重放：{e}"))?;
     let _ = apply_codex(&bundle, false);
     let _ = apply_claude(&bundle, false);
     let _ = apply_cursor(&bundle, false);
@@ -1239,7 +1289,10 @@ mod tests {
         let s = serde_json::to_value(&b).unwrap();
         assert_eq!(s["schemaVersion"].as_u64(), Some(1));
         assert!(s["codex"]["baseUrl"].is_string());
-        assert_eq!(s["codex"]["apiKey"], json!("sk-test-key-123456789012345678901234567890"));
+        assert_eq!(
+            s["codex"]["apiKey"],
+            json!("sk-test-key-123456789012345678901234567890")
+        );
         assert!(s.get("autoInstall").is_some());
         let json = serde_json::to_string(&b).unwrap();
         let back: AgentConfigBundle = serde_json::from_str(&json).unwrap();

@@ -149,7 +149,9 @@ pub fn expand_args(
     model: Option<&str>,
     session: Option<&str>,
 ) -> Vec<String> {
-    let model = model.map(str::trim).filter(|s| !s.is_empty() && *s != "default");
+    let model = model
+        .map(str::trim)
+        .filter(|s| !s.is_empty() && *s != "default");
     let session = session.map(str::trim).filter(|s| !s.is_empty());
     let mut out = Vec::new();
     for a in &m.args {
@@ -172,13 +174,23 @@ pub fn expand_args(
             other => out.push(other.to_string()),
         }
     }
-    if let Some(flag) = m.model_flag.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+    if let Some(flag) = m
+        .model_flag
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         if model.is_some() && !m.args.iter().any(|a| a == "{model}") {
             out.push(flag.to_string());
             out.push(model.unwrap().to_string());
         }
     }
-    if let Some(flag) = m.resume_flag.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+    if let Some(flag) = m
+        .resume_flag
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         if session.is_some() && !m.args.iter().any(|a| a == "{session}") {
             // insert after first arg-ish: prepend flag+session like cursor --resume
             let sid = session.unwrap().to_string();
@@ -353,7 +365,12 @@ impl SpawnSpec {
         }
     }
 
-    pub fn build_args(&self, prompt: &str, session_id: Option<&str>, model: Option<&str>) -> Vec<String> {
+    pub fn build_args(
+        &self,
+        prompt: &str,
+        session_id: Option<&str>,
+        model: Option<&str>,
+    ) -> Vec<String> {
         match self {
             Self::Builtin(k) => k.build_args(prompt, session_id, model),
             Self::Manifest(m) => expand_args(m, prompt, model, session_id),
@@ -491,8 +508,12 @@ mod tests {
         let spec = resolve_adapter_with(&table, "acme-cli").unwrap();
         assert_eq!(spec.id(), "acme-cli");
         let cat = catalog_with(&table);
-        assert!(cat.iter().any(|i| i.id == "acme-cli" && i.source == "manifest"));
-        assert!(cat.iter().any(|i| i.id == "cursor" && i.source == "builtin"));
+        assert!(cat
+            .iter()
+            .any(|i| i.id == "acme-cli" && i.source == "manifest"));
+        assert!(cat
+            .iter()
+            .any(|i| i.id == "cursor" && i.source == "builtin"));
     }
 
     #[test]

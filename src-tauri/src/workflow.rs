@@ -185,9 +185,7 @@ pub fn list_waves_for_group(conn: &Connection, group_id: &str) -> AppResult<Vec<
 
 pub fn list_waves(conn: &Connection, version_id: &str) -> AppResult<Vec<Wave>> {
     let mut stmt = conn
-        .prepare(&format!(
-            "{WAVE_SELECT} WHERE version_id=?1 ORDER BY idx"
-        ))
+        .prepare(&format!("{WAVE_SELECT} WHERE version_id=?1 ORDER BY idx"))
         .map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map(params![version_id], wave_from_row)
@@ -511,7 +509,10 @@ pub fn approve_waves(
         params![ts, version_id],
     )
     .map_err(|e| e.to_string())?;
-    Ok((get_version(conn, version_id)?, list_waves(conn, version_id)?))
+    Ok((
+        get_version(conn, version_id)?,
+        list_waves(conn, version_id)?,
+    ))
 }
 
 /// Default wave titles from roadmap one-liner / what (S3 helper when agent hasn't proposed).
@@ -534,12 +535,7 @@ pub fn default_waves_from_roadmap(v: &ProjectVersion) -> Vec<ApproveWaveItem> {
 }
 
 pub const WAVE_PHASES: &[&str] = &[
-    "assign",
-    "clarify",
-    "design",
-    "develop",
-    "verify",
-    "summary",
+    "assign", "clarify", "design", "develop", "verify", "summary",
 ];
 
 pub fn phase_label(phase: &str) -> String {
@@ -639,7 +635,11 @@ pub fn pause_version_roadmap(conn: &Connection, version_id: &str) -> AppResult<(
     Ok(())
 }
 
-pub fn mark_released(conn: &Connection, version_id: &str, git_tag: Option<String>) -> AppResult<ProjectVersion> {
+pub fn mark_released(
+    conn: &Connection,
+    version_id: &str,
+    git_tag: Option<String>,
+) -> AppResult<ProjectVersion> {
     let ts = now();
     conn.execute(
         "UPDATE project_versions SET status='released', released_at=?1, updated_at=?1, git_tag=COALESCE(?2, git_tag), kind=CASE WHEN ?2 IS NOT NULL THEN 'tag' ELSE kind END WHERE id=?3",
@@ -711,11 +711,7 @@ pub fn build_ask_kickoff_prompt(v: &ProjectVersion) -> String {
          澄清完成后，请给出 Wave1…WaveN 拆分方案，等待需求提出人同意。\n\
          同意后可在版本页点「确认 Waves」或让平台按默认两 Wave 落库。\n\
          Ask 期间请优先只与需求提出人对话；忽略无关闲聊。",
-        v.name,
-        v.one_liner,
-        v.what,
-        v.who,
-        v.how
+        v.name, v.one_liner, v.what, v.who, v.how
     )
 }
 
@@ -775,15 +771,26 @@ pub fn try_slash_command(
                 .filter(|w| w.status == "done" || w.status == "skipped")
                 .count();
             let mut text = format!("版本 {}（{}）", v.name, v.status);
-            if let Some(w) = waves.iter().find(|w| w.status == "running" || w.status == "paused") {
+            if let Some(w) = waves
+                .iter()
+                .find(|w| w.status == "running" || w.status == "paused")
+            {
                 text.push_str(&format!(
                     "\n→ Wave {}{}：{}",
                     w.idx,
-                    if w.status == "running" { " · 进行中" } else { " · 已暂停" },
+                    if w.status == "running" {
+                        " · 进行中"
+                    } else {
+                        " · 已暂停"
+                    },
                     w.title
                 ));
             } else if !waves.is_empty() {
-                text.push_str(&format!("\n→ 无进行中 Wave（完成 {}/{}）", done, waves.len()));
+                text.push_str(&format!(
+                    "\n→ 无进行中 Wave（完成 {}/{}）",
+                    done,
+                    waves.len()
+                ));
             }
             Ok(Some(text))
         }
@@ -792,10 +799,17 @@ pub fn try_slash_command(
             let Some(v) = versions.iter().find(|v| v.status == "asking") else {
                 return Ok(Some("没有处于 Ask 待批准的版本。".into()));
             };
-            let input = ApproveWavesInput { waves: default_waves_from_roadmap(v) };
+            let input = ApproveWavesInput {
+                waves: default_waves_from_roadmap(v),
+            };
             let (version, waves) = approve_waves(conn, &v.id, &input)?;
             let titles: Vec<&str> = waves.iter().map(|w| w.title.as_str()).collect();
-            Ok(Some(format!("已批准版本 {}，生成 {} 个 Wave：{}", version.name, waves.len(), titles.join(" / "))))
+            Ok(Some(format!(
+                "已批准版本 {}，生成 {} 个 Wave：{}",
+                version.name,
+                waves.len(),
+                titles.join(" / ")
+            )))
         }
         "wave" => {
             if arg.is_empty() {
@@ -806,10 +820,19 @@ pub fn try_slash_command(
             let Some(v) = versions.first() else {
                 return Ok(Some("还没有版本，无法创建 Wave。".into()));
             };
-            let input = ApproveWavesInput { waves: vec![ApproveWaveItem { title: arg.to_string() }] };
+            let input = ApproveWavesInput {
+                waves: vec![ApproveWaveItem {
+                    title: arg.to_string(),
+                }],
+            };
             let (version, waves) = approve_waves(conn, &v.id, &input)?;
             let titles: Vec<&str> = waves.iter().map(|w| w.title.as_str()).collect();
-            Ok(Some(format!("版本 {} 的 Wave 已更新为 {} 个：{}", version.name, waves.len(), titles.join(" / "))))
+            Ok(Some(format!(
+                "版本 {} 的 Wave 已更新为 {} 个：{}",
+                version.name,
+                waves.len(),
+                titles.join(" / ")
+            )))
         }
         _ => Ok(None),
     }
@@ -855,21 +878,35 @@ mod tests {
         .unwrap();
 
         // 群类型 / 成员类型 / 未知命令 → None（不劫持普通消息）
-        assert!(try_slash_command(&conn, "g", "chat", "user", "/board").unwrap().is_none());
-        assert!(try_slash_command(&conn, "g", "project", "agent", "/board").unwrap().is_none());
-        assert!(try_slash_command(&conn, "g", "project", "user", "/frobnicate").unwrap().is_none());
+        assert!(try_slash_command(&conn, "g", "chat", "user", "/board")
+            .unwrap()
+            .is_none());
+        assert!(try_slash_command(&conn, "g", "project", "agent", "/board")
+            .unwrap()
+            .is_none());
+        assert!(
+            try_slash_command(&conn, "g", "project", "user", "/frobnicate")
+                .unwrap()
+                .is_none()
+        );
 
         // /board → 摘要
-        let b = try_slash_command(&conn, "g", "project", "user", "/board").unwrap().unwrap();
+        let b = try_slash_command(&conn, "g", "project", "user", "/board")
+            .unwrap()
+            .unwrap();
         assert!(b.contains("v0.1.0"));
 
         // /wave <title> → 生成 1 个 Wave 并置 ready
-        let w = try_slash_command(&conn, "g", "project", "user", "/wave 第一波").unwrap().unwrap();
+        let w = try_slash_command(&conn, "g", "project", "user", "/wave 第一波")
+            .unwrap()
+            .unwrap();
         assert!(w.contains("第一波"));
         assert_eq!(list_waves(&conn, &v.id).unwrap().len(), 1);
 
         // /approve 无 asking → 提示
-        let a = try_slash_command(&conn, "g", "project", "user", "/approve").unwrap().unwrap();
+        let a = try_slash_command(&conn, "g", "project", "user", "/approve")
+            .unwrap()
+            .unwrap();
         assert!(a.contains("没有处于 Ask"));
     }
 
@@ -902,7 +939,10 @@ mod tests {
         .unwrap();
         assert_eq!(v.status, "planning");
         start_ask(&conn, &group, &v.id).unwrap();
-        assert_eq!(asking_version_id(&conn, "g").unwrap().as_deref(), Some(v.id.as_str()));
+        assert_eq!(
+            asking_version_id(&conn, "g").unwrap().as_deref(),
+            Some(v.id.as_str())
+        );
         assert!(!ask_allows_agent_run(&conn, "g", "stranger", "admin", &[], false).unwrap());
         assert!(ask_allows_agent_run(&conn, "g", "o", "admin", &[], false).unwrap());
         let (_v2, waves) = approve_waves(
@@ -950,7 +990,8 @@ mod tests {
         .unwrap();
         let peers = workspace_peer_group_names(&conn, "g1", "/AI/Shared").unwrap();
         assert_eq!(peers, vec!["Beta".to_string()]);
-        let board = board_for_group(file.path(), &crate::db::get_group(&conn, "g1").unwrap()).unwrap();
+        let board =
+            board_for_group(file.path(), &crate::db::get_group(&conn, "g1").unwrap()).unwrap();
         assert_eq!(board.workspace_path, "/AI/Shared");
         assert_eq!(board.workspace_shared_with, vec!["Beta".to_string()]);
     }

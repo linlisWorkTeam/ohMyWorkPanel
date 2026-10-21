@@ -32,7 +32,12 @@ pub fn resolve_base_url(provider: &str, api_url: Option<&str>) -> Result<String,
 pub fn is_chatbot_adapter(adapter: &str) -> bool {
     matches!(
         adapter,
-        "chatbot-opencode-go" | "chatbot-deepseek" | "chatbot-custom" | "opencode-go" | "deepseek" | "custom"
+        "chatbot-opencode-go"
+            | "chatbot-deepseek"
+            | "chatbot-custom"
+            | "opencode-go"
+            | "deepseek"
+            | "custom"
     )
 }
 
@@ -71,7 +76,14 @@ pub fn build_chat_messages(
         Some(i) => {
             let before = window[..i].trim();
             let after = window[i..].lines().skip(1).collect::<Vec<_>>().join("\n");
-            (if before.is_empty() { None } else { Some(before.to_string()) }, after)
+            (
+                if before.is_empty() {
+                    None
+                } else {
+                    Some(before.to_string())
+                },
+                after,
+            )
         }
         None => (None, window.to_string()),
     };
@@ -177,17 +189,26 @@ pub async fn run_chatbot_completion(
             .map_err(|e| format!("chatbot curl 启动失败：{e}"))?;
         if !output.status.success() {
             let err = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("chatbot curl 失败（{url}）：{}", truncate(err.trim(), 300)));
+            return Err(format!(
+                "chatbot curl 失败（{url}）：{}",
+                truncate(err.trim(), 300)
+            ));
         }
         let text = String::from_utf8_lossy(&output.stdout).to_string();
         let head = text.trim_start();
-        if head.starts_with("<!DOCTYPE") || head.starts_with("<html") || head.starts_with("<!doctype") {
+        if head.starts_with("<!DOCTYPE")
+            || head.starts_with("<html")
+            || head.starts_with("<!doctype")
+        {
             html_seen.push(url.clone());
             last_html = truncate(head, 160).to_string();
             continue;
         }
         let value: serde_json::Value = serde_json::from_str(&text).map_err(|e| {
-            format!("chatbot 响应解析失败（{url}）：{e}; body={}", truncate(&text, 200))
+            format!(
+                "chatbot 响应解析失败（{url}）：{e}; body={}",
+                truncate(&text, 200)
+            )
         })?;
         if let Some(msg) = value.pointer("/error/message").and_then(|v| v.as_str()) {
             return Err(format!("chatbot API 错误（{url}）：{}", truncate(msg, 300)));
@@ -235,17 +256,27 @@ mod tests {
 
     #[test]
     fn normalize_maps_providers() {
-        assert_eq!(normalize_adapter("opencode-go").unwrap(), "chatbot-opencode-go");
+        assert_eq!(
+            normalize_adapter("opencode-go").unwrap(),
+            "chatbot-opencode-go"
+        );
         assert_eq!(normalize_adapter("deepseek").unwrap(), "chatbot-deepseek");
-        assert_eq!(normalize_adapter("chatbot-deepseek").unwrap(), "chatbot-deepseek");
+        assert_eq!(
+            normalize_adapter("chatbot-deepseek").unwrap(),
+            "chatbot-deepseek"
+        );
         assert_eq!(normalize_adapter("custom").unwrap(), "chatbot-custom");
         assert!(normalize_adapter("openai").is_err());
     }
 
     #[test]
     fn provider_urls() {
-        assert!(provider_base_url("chatbot-opencode-go").unwrap().contains("opencode.ai"));
-        assert!(provider_base_url("chatbot-deepseek").unwrap().contains("deepseek.com"));
+        assert!(provider_base_url("chatbot-opencode-go")
+            .unwrap()
+            .contains("opencode.ai"));
+        assert!(provider_base_url("chatbot-deepseek")
+            .unwrap()
+            .contains("deepseek.com"));
         // 自定义 api_url 优先；custom 无 api_url 报错
         assert_eq!(
             resolve_base_url("chatbot-deepseek", Some("https://my.example.com/v1")).unwrap(),
@@ -260,7 +291,10 @@ mod tests {
 
     #[test]
     fn model_legacy_flash_normalized_to_chat() {
-        assert_eq!(default_model_for("deepseek", Some("deepseek-v4-flash")), "deepseek-chat");
+        assert_eq!(
+            default_model_for("deepseek", Some("deepseek-v4-flash")),
+            "deepseek-chat"
+        );
         assert_eq!(default_model_for("deepseek", None), "deepseek-chat");
         assert_eq!(default_model_for("custom", Some("my-model")), "my-model");
     }
@@ -270,10 +304,24 @@ mod tests {
         let window = "【历史摘要】\n用户前文\n\n最近群聊（从旧到新）：\n小A: 你好\n机器人: 你好呀\n小A: 今天天气如何\n机器人: 多云转晴";
         let msgs = build_chat_messages("sys", window, "机器人", "那么明天呢？");
         let roles: Vec<&str> = msgs.iter().map(|m| m["role"].as_str().unwrap()).collect();
-        assert_eq!(roles, vec!["system", "user", "user", "assistant", "user", "assistant", "user"]);
+        assert_eq!(
+            roles,
+            vec![
+                "system",
+                "user",
+                "user",
+                "assistant",
+                "user",
+                "assistant",
+                "user"
+            ]
+        );
         assert!(msgs[1]["content"].as_str().unwrap().contains("历史摘要"));
         assert_eq!(msgs[2]["content"].as_str().unwrap(), "你好");
-        assert_eq!(msgs.last().unwrap()["content"].as_str().unwrap(), "那么明天呢？");
+        assert_eq!(
+            msgs.last().unwrap()["content"].as_str().unwrap(),
+            "那么明天呢？"
+        );
     }
 
     #[test]

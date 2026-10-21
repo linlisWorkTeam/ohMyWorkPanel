@@ -1,10 +1,10 @@
+use axum::http::{header, HeaderValue, Request};
+use axum::middleware::{self, Next};
+use axum::response::Response;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use axum::http::{header, HeaderValue, Request};
-use axum::middleware::{self, Next};
-use axum::response::Response;
 use tokio::sync::broadcast;
 use tower_http::cors::CorsLayer;
 use tower_http::services::{ServeDir, ServeFile};
@@ -116,7 +116,12 @@ async fn main() {
     println!("ohMyWorkPanel Web Server -> http://{addr}");
     // Log server start
     if let Ok(conn) = db::open_db(&db_path) {
-        logger::info(&conn, "server", "ohMyWorkPanel Web Server started", Some(&format!("{{\"addr\":\"{}\"}}", addr)));
+        logger::info(
+            &conn,
+            "server",
+            "ohMyWorkPanel Web Server started",
+            Some(&format!("{{\"addr\":\"{}\"}}", addr)),
+        );
     }
     axum::serve(listener, app).await.expect("serve");
 }

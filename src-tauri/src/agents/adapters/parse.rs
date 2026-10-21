@@ -474,7 +474,13 @@ fn extract_session_id_inner(value: &Value, depth: usize) -> Option<String> {
     }
     match value {
         Value::Object(map) => {
-            for key in ["session_id", "sessionId", "chatId", "chat_id", "conversationId"] {
+            for key in [
+                "session_id",
+                "sessionId",
+                "chatId",
+                "chat_id",
+                "conversationId",
+            ] {
                 if let Some(Value::String(id)) = map.get(key) {
                     if !id.trim().is_empty() {
                         return Some(id.clone());
@@ -635,9 +641,7 @@ Gateway target: ws://127.0.0.1:18789
         assert_eq!(msg.text, "hi");
         assert_eq!(msg.mode, DeltaMode::Replace);
 
-        let lifecycle = parse_agent_event(
-            r#"{"type":"thread.started","thread_id":"t1"}"#,
-        );
+        let lifecycle = parse_agent_event(r#"{"type":"thread.started","thread_id":"t1"}"#);
         assert!(lifecycle.text.is_empty());
 
         let failed = parse_agent_event(

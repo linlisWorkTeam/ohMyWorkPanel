@@ -144,16 +144,24 @@ mod tests {
     #[test]
     fn forces_deepseek_provider_and_default_model() {
         let args = build_args("hi", None);
-        assert!(args.windows(2).any(|w| w[0] == "-c" && w[1].contains("model_provider")));
-        assert!(args.windows(2).any(|w| w[0] == "-c" && w[1].contains("18888")));
-        assert!(args.windows(2).any(|w| w[0] == "-m" && w[1] == "deepseek-v4-flash"));
+        assert!(args
+            .windows(2)
+            .any(|w| w[0] == "-c" && w[1].contains("model_provider")));
+        assert!(args
+            .windows(2)
+            .any(|w| w[0] == "-c" && w[1].contains("18888")));
+        assert!(args
+            .windows(2)
+            .any(|w| w[0] == "-m" && w[1] == "deepseek-v4-flash"));
         assert_eq!(args.last().map(String::as_str), Some("hi"));
     }
 
     #[test]
     fn remaps_legacy_openai_model_ids() {
         let args = build_args("x", Some("gpt-5"));
-        assert!(args.windows(2).any(|w| w[0] == "-m" && w[1] == "deepseek-v4-flash"));
+        assert!(args
+            .windows(2)
+            .any(|w| w[0] == "-m" && w[1] == "deepseek-v4-flash"));
     }
 
     #[test]
@@ -197,8 +205,15 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("auth.json");
         let mut f = std::fs::File::create(&path).unwrap();
-        write!(f, r#"{{"OPENAI_API_KEY":"sk-from-file","auth_mode":"apikey"}}"#).unwrap();
-        assert_eq!(read_openai_key_from_auth_path(&path).as_deref(), Some("sk-from-file"));
+        write!(
+            f,
+            r#"{{"OPENAI_API_KEY":"sk-from-file","auth_mode":"apikey"}}"#
+        )
+        .unwrap();
+        assert_eq!(
+            read_openai_key_from_auth_path(&path).as_deref(),
+            Some("sk-from-file")
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -30,7 +30,8 @@ fn find_tesseract() -> Option<String> {
 /// Run OCR on an image file and return extracted text.
 pub fn ocr_image(image_path: &str) -> AppResult<String> {
     let exe = find_tesseract().ok_or_else(|| {
-        "未找到 Tesseract OCR。请从 https://github.com/UB-Mannheim/tesseract/wiki 安装。".to_string()
+        "未找到 Tesseract OCR。请从 https://github.com/UB-Mannheim/tesseract/wiki 安装。"
+            .to_string()
     })?;
 
     let output = Command::new(&exe)
@@ -55,8 +56,8 @@ pub fn ocr_image(image_path: &str) -> AppResult<String> {
 /// Run OCR from a base64-encoded image string.
 /// Supports both raw base64 and data URLs (e.g. data:image/png;base64,...).
 pub fn ocr_image_base64(base64_data: &str) -> AppResult<String> {
-    use std::io::Write;
     use base64::Engine;
+    use std::io::Write;
 
     // Strip data URL prefix if present
     let b64 = if let Some(comma) = base64_data.find(',') {
@@ -72,7 +73,8 @@ pub fn ocr_image_base64(base64_data: &str) -> AppResult<String> {
     let dir = std::env::temp_dir();
     let path = dir.join(format!("ohmyworkpanel_ocr_{}.png", crate::db::id()));
     let mut file = std::fs::File::create(&path).map_err(|e| format!("创建临时文件失败: {e}"))?;
-    file.write_all(&bytes).map_err(|e| format!("写入临时文件失败: {e}"))?;
+    file.write_all(&bytes)
+        .map_err(|e| format!("写入临时文件失败: {e}"))?;
     drop(file);
 
     let result = ocr_image(&path.to_string_lossy());

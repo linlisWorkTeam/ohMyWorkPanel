@@ -322,50 +322,50 @@ pub struct ExecutionContext {
     /// Compact injected-context ledger line (also logged / WS).
     pub context_ledger: String,
 }
- 
- // === Project Management ===
- 
- #[derive(Debug, Clone, Serialize, Deserialize)]
- #[serde(rename_all = "camelCase")]
- pub struct RoadmapItem {
-     pub id: String,
-     pub group_id: String,
-     pub title: String,
-     pub description: String,
-     pub status: String,
-     pub priority: String,
-     pub target_date: Option<String>,
-     pub sort_order: i64,
-     pub created_at: i64,
- }
- 
- #[derive(Debug, Clone, Serialize, Deserialize)]
- #[serde(rename_all = "camelCase")]
- pub struct Feature {
-     pub id: String,
-     pub group_id: String,
-     pub title: String,
-     pub description: String,
-     pub status: String,
-     pub priority: String,
-     pub area: String,
-     pub assignee_member_id: Option<String>,
-     pub target_roadmap_item_id: Option<String>,
-     pub sort_order: i64,
-     pub created_at: i64,
-     pub updated_at: i64,
- }
- 
- #[derive(Debug, Clone, Serialize, Deserialize)]
- #[serde(rename_all = "camelCase")]
- pub struct FeatureTask {
-     pub id: String,
-     pub feature_id: String,
-     pub title: String,
-     pub done: bool,
-     pub sort_order: i64,
-     pub created_at: i64,
- }
+
+// === Project Management ===
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoadmapItem {
+    pub id: String,
+    pub group_id: String,
+    pub title: String,
+    pub description: String,
+    pub status: String,
+    pub priority: String,
+    pub target_date: Option<String>,
+    pub sort_order: i64,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Feature {
+    pub id: String,
+    pub group_id: String,
+    pub title: String,
+    pub description: String,
+    pub status: String,
+    pub priority: String,
+    pub area: String,
+    pub assignee_member_id: Option<String>,
+    pub target_roadmap_item_id: Option<String>,
+    pub sort_order: i64,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FeatureTask {
+    pub id: String,
+    pub feature_id: String,
+    pub title: String,
+    pub done: bool,
+    pub sort_order: i64,
+    pub created_at: i64,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -381,110 +381,110 @@ pub struct RoadmapOrchestration {
     pub created_at: i64,
     pub updated_at: i64,
 }
- 
- #[derive(Debug, Deserialize)]
- #[serde(rename_all = "camelCase")]
- pub struct CreateRoadmapItemInput {
-     pub group_id: String,
-     pub title: String,
-     pub description: Option<String>,
-     pub status: Option<String>,
-     pub priority: Option<String>,
-     pub target_date: Option<String>,
- }
- 
- #[derive(Debug, Deserialize)]
- #[serde(rename_all = "camelCase")]
- pub struct UpdateRoadmapItemInput {
-     pub title: Option<String>,
-     pub description: Option<String>,
-     pub status: Option<String>,
-     pub priority: Option<String>,
-     pub target_date: Option<String>,
-     pub sort_order: Option<i64>,
- }
- 
- #[derive(Debug, Deserialize)]
- #[serde(rename_all = "camelCase")]
- pub struct CreateFeatureInput {
-     pub group_id: String,
-     pub title: String,
-     pub description: Option<String>,
-     pub status: Option<String>,
-     pub priority: Option<String>,
-     pub area: Option<String>,
-     pub assignee_member_id: Option<String>,
-     pub target_roadmap_item_id: Option<String>,
- }
- 
- #[derive(Debug, Deserialize)]
- #[serde(rename_all = "camelCase")]
- pub struct UpdateFeatureInput {
-     pub title: Option<String>,
-     pub description: Option<String>,
-     pub status: Option<String>,
-     pub priority: Option<String>,
-     pub area: Option<String>,
-     pub assignee_member_id: Option<String>,
-     pub target_roadmap_item_id: Option<String>,
-     pub sort_order: Option<i64>,
- }
- 
- #[derive(Debug, Deserialize)]
- #[serde(rename_all = "camelCase")]
- pub struct CreateFeatureTaskInput {
-     pub feature_id: String,
-     pub title: String,
- }
- 
- #[derive(Debug, Deserialize)]
- #[serde(rename_all = "camelCase")]
- pub struct UpdateFeatureTaskInput {
-     pub title: Option<String>,
-     pub done: Option<bool>,
-     pub sort_order: Option<i64>,
- }
- 
- #[derive(Debug, Clone, Serialize, Deserialize)]
- #[serde(rename_all = "camelCase")]
- pub struct Experience {
-     pub id: String,
-     pub group_id: String,
-     pub source_member_id: String,
-     pub title: String,
-     pub content: String,
-     pub tags: String,
-     pub created_at: i64,
-     pub updated_at: i64,
- }
 
- #[derive(Debug, Clone, Serialize)]
- #[serde(rename_all = "camelCase")]
- pub struct RoadmapState {
-     pub group_id: String,
-     pub items: Vec<RoadmapItem>,
-     pub features: Vec<Feature>,
-     pub tasks: Vec<FeatureTask>,
- }
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateRoadmapItemInput {
+    pub group_id: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub status: Option<String>,
+    pub priority: Option<String>,
+    pub target_date: Option<String>,
+}
 
- /// 消息反馈聚合（👍/👎）。
- #[derive(Debug, Clone, Serialize)]
- #[serde(rename_all = "camelCase")]
- pub struct MessageFeedback {
-     pub up: i64,
-     pub down: i64,
-     #[serde(skip_serializing_if = "Option::is_none")]
-     pub my_vote: Option<String>,
- }
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateRoadmapItemInput {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub status: Option<String>,
+    pub priority: Option<String>,
+    pub target_date: Option<String>,
+    pub sort_order: Option<i64>,
+}
 
- /// run 阶段轨迹条目（时间线）。
- #[derive(Debug, Clone, Serialize)]
- #[serde(rename_all = "camelCase")]
- pub struct RunPhaseEntry {
-     pub phase: String,
-     pub note: String,
-     pub created_at: i64,
- }
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateFeatureInput {
+    pub group_id: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub status: Option<String>,
+    pub priority: Option<String>,
+    pub area: Option<String>,
+    pub assignee_member_id: Option<String>,
+    pub target_roadmap_item_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateFeatureInput {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub status: Option<String>,
+    pub priority: Option<String>,
+    pub area: Option<String>,
+    pub assignee_member_id: Option<String>,
+    pub target_roadmap_item_id: Option<String>,
+    pub sort_order: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateFeatureTaskInput {
+    pub feature_id: String,
+    pub title: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateFeatureTaskInput {
+    pub title: Option<String>,
+    pub done: Option<bool>,
+    pub sort_order: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Experience {
+    pub id: String,
+    pub group_id: String,
+    pub source_member_id: String,
+    pub title: String,
+    pub content: String,
+    pub tags: String,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoadmapState {
+    pub group_id: String,
+    pub items: Vec<RoadmapItem>,
+    pub features: Vec<Feature>,
+    pub tasks: Vec<FeatureTask>,
+}
+
+/// 消息反馈聚合（👍/👎）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MessageFeedback {
+    pub up: i64,
+    pub down: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub my_vote: Option<String>,
+}
+
+/// run 阶段轨迹条目（时间线）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunPhaseEntry {
+    pub phase: String,
+    pub note: String,
+    pub created_at: i64,
+}
 
 #[cfg(test)]
 mod contract_tests {
@@ -498,14 +498,22 @@ mod contract_tests {
     /// 本测试防止 Rust DTO 再出现 my_vote/created_at 类 snake 泄漏。
     #[test]
     fn feedback_and_phase_use_camel_case() {
-        let fb = MessageFeedback { up: 1, down: 2, my_vote: Some("up".into()) };
+        let fb = MessageFeedback {
+            up: 1,
+            down: 2,
+            my_vote: Some("up".into()),
+        };
         let v = to_json(&fb);
         assert_eq!(v["up"], 1);
         assert_eq!(v["down"], 2);
         assert_eq!(v["myVote"], "up");
         assert!(v.get("my_vote").is_none(), "snake_case 键不得泄漏");
 
-        let entry = RunPhaseEntry { phase: "streaming".into(), note: String::new(), created_at: 42 };
+        let entry = RunPhaseEntry {
+            phase: "streaming".into(),
+            note: String::new(),
+            created_at: 42,
+        };
         let w = to_json(&entry);
         assert_eq!(w["phase"], "streaming");
         assert_eq!(w["createdAt"], 42);
@@ -525,51 +533,122 @@ mod contract_tests {
         assert_eq!(v["messageId"], "m");
         assert_eq!(v["seq"], 7);
         assert!(v.get("group_id").is_none());
-        assert!(v.get("elapsed_ms").is_none(), "None 字段应被 skip_serializing_if 省略");
+        assert!(
+            v.get("elapsed_ms").is_none(),
+            "None 字段应被 skip_serializing_if 省略"
+        );
     }
 
     #[test]
     fn group_task_run_member_shape_matches_frontend() {
         let group = Group {
-            id: "g".into(), name: "g".into(), workspace_path: "/w".into(),
-            owner_member_id: "o".into(), admin_member_id: None, created_at: 1,
-            announcement: String::new(), announcement_updated_at: None,
-            group_kind: "project".into(), archived: false, is_system: true, unread_count: 3,
+            id: "g".into(),
+            name: "g".into(),
+            workspace_path: "/w".into(),
+            owner_member_id: "o".into(),
+            admin_member_id: None,
+            created_at: 1,
+            announcement: String::new(),
+            announcement_updated_at: None,
+            group_kind: "project".into(),
+            archived: false,
+            is_system: true,
+            unread_count: 3,
         };
         let gv = to_json(&group);
-        for key in ["id", "name", "workspacePath", "ownerMemberId", "createdAt", "groupKind", "isSystem", "unreadCount"] {
+        for key in [
+            "id",
+            "name",
+            "workspacePath",
+            "ownerMemberId",
+            "createdAt",
+            "groupKind",
+            "isSystem",
+            "unreadCount",
+        ] {
             assert!(gv.get(key).is_some(), "缺少 {}", key);
         }
         assert!(gv.get("workspace_path").is_none());
         assert_eq!(gv["groupKind"], "project");
 
         let run = TaskRun {
-            id: "r".into(), group_id: "g".into(), root_message_id: "m".into(),
-            agent_member_id: "a".into(), parent_run_id: None, depth: 0, status: "queued".into(),
-            output_message_id: None, error_message: None, review_status: None,
-            reviewer_member_id: None, created_at: 1, started_at: None, completed_at: None,
-            phase: Some("starting".into()), phase_updated_at: Some(9),
+            id: "r".into(),
+            group_id: "g".into(),
+            root_message_id: "m".into(),
+            agent_member_id: "a".into(),
+            parent_run_id: None,
+            depth: 0,
+            status: "queued".into(),
+            output_message_id: None,
+            error_message: None,
+            review_status: None,
+            reviewer_member_id: None,
+            created_at: 1,
+            started_at: None,
+            completed_at: None,
+            phase: Some("starting".into()),
+            phase_updated_at: Some(9),
         };
         let rv = to_json(&run);
-        for key in ["rootMessageId", "agentMemberId", "outputMessageId", "reviewStatus", "reviewerMemberId", "phaseUpdatedAt"] {
+        for key in [
+            "rootMessageId",
+            "agentMemberId",
+            "outputMessageId",
+            "reviewStatus",
+            "reviewerMemberId",
+            "phaseUpdatedAt",
+        ] {
             assert!(rv.get(key).is_some(), "缺少 {}", key);
         }
         assert_eq!(rv["phase"], "starting");
 
         let member = Member {
-            id: "a".into(), group_id: "g".into(), kind: "agent".into(), display_name: "A".into(),
-            avatar_color: "#000".into(), role_description: String::new(), is_active: true,
-            adapter: Some("mock".into()), executable_path: None, runtime_status: Some("ready".into()),
-            tags: String::new(), created_at: 1, workspace_path: None, api_key_set: true,
-            keep_alive: false, warm_status: None, model: None, auth_user_id: None,
-            invite_pending: false, system_locked: false, api_url: Some("https://api.example.com/v1".into()),
+            id: "a".into(),
+            group_id: "g".into(),
+            kind: "agent".into(),
+            display_name: "A".into(),
+            avatar_color: "#000".into(),
+            role_description: String::new(),
+            is_active: true,
+            adapter: Some("mock".into()),
+            executable_path: None,
+            runtime_status: Some("ready".into()),
+            tags: String::new(),
+            created_at: 1,
+            workspace_path: None,
+            api_key_set: true,
+            keep_alive: false,
+            warm_status: None,
+            model: None,
+            auth_user_id: None,
+            invite_pending: false,
+            system_locked: false,
+            api_url: Some("https://api.example.com/v1".into()),
         };
         let mv = to_json(&member);
-        for key in ["displayName", "avatarColor", "roleDescription", "isActive", "runtimeStatus", "apiKeySet", "keepAlive", "authUserId", "invitePending", "systemLocked", "apiUrl"] {
+        for key in [
+            "displayName",
+            "avatarColor",
+            "roleDescription",
+            "isActive",
+            "runtimeStatus",
+            "apiKeySet",
+            "keepAlive",
+            "authUserId",
+            "invitePending",
+            "systemLocked",
+            "apiUrl",
+        ] {
             assert!(mv.get(key).is_some(), "缺少 {}", key);
         }
-        assert!(mv.get("api_key").is_none(), "原始 API key 永不外泄（只暴露 apiKeySet）");
-        assert!(mv.get("connecterBearer").is_none(), "Connecter bearer 永不进入 Member DTO");
+        assert!(
+            mv.get("api_key").is_none(),
+            "原始 API key 永不外泄（只暴露 apiKeySet）"
+        );
+        assert!(
+            mv.get("connecterBearer").is_none(),
+            "Connecter bearer 永不进入 Member DTO"
+        );
         assert!(mv.get("display_name").is_none());
     }
 }

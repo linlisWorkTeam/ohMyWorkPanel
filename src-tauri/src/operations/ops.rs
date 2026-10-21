@@ -193,7 +193,10 @@ async fn run_script(kind: &str, script_rel: &str) -> Result<(), String> {
         let buf_err = log_buf.clone();
         let t1 = tokio::spawn(async move { pump_out(stdout, buf_out).await });
         let t2 = tokio::spawn(async move { pump_out(stderr, buf_err).await });
-        let status = child.wait().await.map_err(|e| format!("等待进程失败：{e}"))?;
+        let status = child
+            .wait()
+            .await
+            .map_err(|e| format!("等待进程失败：{e}"))?;
         let _ = t1.await;
         let _ = t2.await;
         Ok::<i32, String>(status.code().unwrap_or(-1))

@@ -1,6 +1,6 @@
+use chrono::Utc;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
-use chrono::Utc;
 use uuid::Uuid;
 
 /// Log severity levels
@@ -99,7 +99,14 @@ pub fn log(
     };
     conn.execute(
         "INSERT INTO logs(id,level,source,message,details,created_at) VALUES(?1,?2,?3,?4,?5,?6)",
-        params![entry.id, entry.level, entry.source, entry.message, entry.details, entry.created_at],
+        params![
+            entry.id,
+            entry.level,
+            entry.source,
+            entry.message,
+            entry.details,
+            entry.created_at
+        ],
     )
     .map_err(|e| e.to_string())?;
     Ok(())
@@ -110,9 +117,8 @@ pub fn query_logs(conn: &Connection, q: &LogQuery) -> Result<Vec<LogEntry>, Stri
     let limit = q.limit.unwrap_or(100).min(500);
     let offset = q.offset.unwrap_or(0);
 
-    let mut sql = String::from(
-        "SELECT id,level,source,message,details,created_at FROM logs WHERE 1=1",
-    );
+    let mut sql =
+        String::from("SELECT id,level,source,message,details,created_at FROM logs WHERE 1=1");
     let mut params_vec: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
     if let Some(ref level) = q.level {
@@ -132,7 +138,8 @@ pub fn query_logs(conn: &Connection, q: &LogQuery) -> Result<Vec<LogEntry>, Stri
     params_vec.push(Box::new(limit));
     params_vec.push(Box::new(offset));
 
-    let param_refs: Vec<&dyn rusqlite::types::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+        params_vec.iter().map(|p| p.as_ref()).collect();
 
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let rows = stmt
@@ -156,7 +163,11 @@ pub fn query_logs(conn: &Connection, q: &LogQuery) -> Result<Vec<LogEntry>, Stri
 }
 
 /// Count logs with optional level/source filter (matches query_logs behavior)
-pub fn count_logs(conn: &Connection, level: Option<&str>, source: Option<&str>) -> Result<i64, String> {
+pub fn count_logs(
+    conn: &Connection,
+    level: Option<&str>,
+    source: Option<&str>,
+) -> Result<i64, String> {
     let mut sql = "SELECT COUNT(*) FROM logs WHERE 1=1".to_string();
     let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
     if let Some(lvl) = level {

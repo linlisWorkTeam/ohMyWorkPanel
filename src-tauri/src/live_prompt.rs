@@ -50,9 +50,7 @@ pub fn parse_llm_prompt_response(body: &str) -> Option<String> {
 fn http_get_prompt(host: &str, port: u16, path: &str) -> Result<(u16, String), String> {
     let addr = format!("{host}:{port}");
     let mut stream = TcpStream::connect_timeout(
-        &addr
-            .parse()
-            .map_err(|e| format!("解析地址 {addr}：{e}"))?,
+        &addr.parse().map_err(|e| format!("解析地址 {addr}：{e}"))?,
         FETCH_TIMEOUT,
     )
     .map_err(|e| format!("连接 {addr} 失败：{e}"))?;
@@ -63,7 +61,9 @@ fn http_get_prompt(host: &str, port: u16, path: &str) -> Result<(u16, String), S
         .set_write_timeout(Some(FETCH_TIMEOUT))
         .map_err(|e| e.to_string())?;
     let req = format!("GET {path} HTTP/1.0\r\nHost: {host}:{port}\r\nConnection: close\r\n\r\n");
-    stream.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
+    stream
+        .write_all(req.as_bytes())
+        .map_err(|e| e.to_string())?;
     let mut buf = Vec::new();
     stream.read_to_end(&mut buf).map_err(|e| e.to_string())?;
     let sep = buf
@@ -151,7 +151,10 @@ mod tests {
     #[test]
     fn parse_prompt_json_and_plain() {
         let json = r#"{"mode":"panellive","prompt":"短回复强制","ttsMaxChars":50}"#;
-        assert_eq!(parse_llm_prompt_response(json).as_deref(), Some("短回复强制"));
+        assert_eq!(
+            parse_llm_prompt_response(json).as_deref(),
+            Some("短回复强制")
+        );
         assert_eq!(
             parse_llm_prompt_response("  纯文本  ").as_deref(),
             Some("纯文本")

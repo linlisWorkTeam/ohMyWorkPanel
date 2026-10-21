@@ -475,9 +475,18 @@ mod tests {
 
     #[test]
     fn negated_risk_disclaimers_are_not_marketing_claims() {
-        assert!(!contains_unnegated_phrase("这些限制不代表零风险。", "零风险"));
-        assert!(!contains_unnegated_phrase("当前方案不保证消除所有风险。", "保证"));
-        assert!(!contains_unnegated_phrase("This is not zero risk.", "zero risk"));
+        assert!(!contains_unnegated_phrase(
+            "这些限制不代表零风险。",
+            "零风险"
+        ));
+        assert!(!contains_unnegated_phrase(
+            "当前方案不保证消除所有风险。",
+            "保证"
+        ));
+        assert!(!contains_unnegated_phrase(
+            "This is not zero risk.",
+            "zero risk"
+        ));
         assert!(contains_unnegated_phrase("这是一套零风险方案。", "零风险"));
         assert!(contains_unnegated_phrase("我们保证消除风险。", "保证"));
     }

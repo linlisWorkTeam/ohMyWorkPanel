@@ -122,7 +122,9 @@ fn run_cursor_list_models() -> Result<Vec<String>, String> {
             Ok(None) if started.elapsed() > Duration::from_secs(LIST_TIMEOUT_SECS) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err(format!("{bin} --list-models timed out after {LIST_TIMEOUT_SECS}s"));
+                return Err(format!(
+                    "{bin} --list-models timed out after {LIST_TIMEOUT_SECS}s"
+                ));
             }
             Ok(None) => std::thread::sleep(Duration::from_millis(100)),
             Err(e) => return Err(format!("wait {bin}: {e}")),
@@ -245,7 +247,9 @@ pub fn start_cursor_model_sync_loop() {
             Err(e) => eprintln!("model_catalog: cursor sync join error: {e}"),
         }
         let Some(secs) = sync_interval_secs() else {
-            eprintln!("model_catalog: periodic sync disabled (OHMYWORKPANEL_CURSOR_MODEL_SYNC_SECS=0)");
+            eprintln!(
+                "model_catalog: periodic sync disabled (OHMYWORKPANEL_CURSOR_MODEL_SYNC_SECS=0)"
+            );
             return;
         };
         let mut ticker = tokio::time::interval(Duration::from_secs(secs));

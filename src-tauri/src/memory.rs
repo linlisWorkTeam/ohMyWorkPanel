@@ -1,7 +1,10 @@
 use std::path::{Path, PathBuf};
 
 /// Ensure group/agent `.ohmyworkpanel` memory layout under the group workspace.
-pub fn ensure_ohmyworkpanel_layout(group_ws: &Path, agent_member_id: Option<&str>) -> Result<(), String> {
+pub fn ensure_ohmyworkpanel_layout(
+    group_ws: &Path,
+    agent_member_id: Option<&str>,
+) -> Result<(), String> {
     let root = group_ws.join(".ohmyworkpanel");
     std::fs::create_dir_all(root.join("memory")).map_err(|e| e.to_string())?;
     if let Some(aid) = agent_member_id {
@@ -28,7 +31,10 @@ pub fn default_agent_workspace(group_ws: &Path, agent_member_id: &str) -> PathBu
 
 pub fn append_group_memory(group_ws: &Path, title: &str, content: &str) -> Result<(), String> {
     ensure_ohmyworkpanel_layout(group_ws, None)?;
-    let path = group_ws.join(".ohmyworkpanel").join("memory").join("group.md");
+    let path = group_ws
+        .join(".ohmyworkpanel")
+        .join("memory")
+        .join("group.md");
     let snippet = format!(
         "\n## {}\n{}\n",
         title.trim(),
@@ -53,9 +59,16 @@ pub fn append_agent_memory(
     append_file(&path, &snippet)
 }
 
-pub fn read_memory_excerpt(group_ws: &Path, agent_member_id: Option<&str>, max_chars: usize) -> String {
+pub fn read_memory_excerpt(
+    group_ws: &Path,
+    agent_member_id: Option<&str>,
+    max_chars: usize,
+) -> String {
     let mut out = String::new();
-    let group_path = group_ws.join(".ohmyworkpanel").join("memory").join("group.md");
+    let group_path = group_ws
+        .join(".ohmyworkpanel")
+        .join("memory")
+        .join("group.md");
     if let Ok(g) = std::fs::read_to_string(&group_path) {
         let t = truncate(g.trim(), max_chars / 2);
         if !t.is_empty() {
@@ -148,12 +161,9 @@ mod tests {
         assert!(ok.starts_with(group.canonicalize().unwrap()));
         let outside = dir.path().join("outside");
         std::fs::create_dir_all(&outside).unwrap();
-        let err = resolve_agent_workspace_under_group(
-            &group,
-            "a1",
-            Some(outside.to_str().unwrap()),
-        )
-        .unwrap_err();
+        let err =
+            resolve_agent_workspace_under_group(&group, "a1", Some(outside.to_str().unwrap()))
+                .unwrap_err();
         assert!(err.contains("之内"));
     }
 
@@ -164,13 +174,8 @@ mod tests {
         let outside = dir.path().join("outside");
         std::fs::create_dir_all(&group).unwrap();
         std::fs::create_dir_all(&outside).unwrap();
-        let ok = resolve_agent_workspace(
-            &group,
-            "a1",
-            Some(outside.to_str().unwrap()),
-            true,
-        )
-        .unwrap();
+        let ok =
+            resolve_agent_workspace(&group, "a1", Some(outside.to_str().unwrap()), true).unwrap();
         assert_eq!(ok, outside.canonicalize().unwrap());
     }
 }
