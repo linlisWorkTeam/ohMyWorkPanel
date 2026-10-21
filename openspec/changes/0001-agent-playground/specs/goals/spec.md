@@ -121,6 +121,33 @@
 - THEN 输出完全一致
 - AND 包含目标、轮次序号与上一轮判定
 
+### Requirement: 派发式执行
+驱动器 MUST 通过 dispatcher 发起一轮并轮询结果；等待超时、run 失败或取消 MUST 视为本轮失败，由驱动器决定是否记录。
+
+观察输出 MUST 截断到 2000 字以内再进入证据账本。
+
+#### Scenario: 轮询后完成
+- GIVEN dispatcher 先返回 pending，再返回 completed
+- WHEN 驱动一轮
+- THEN 得到输出摘要与 token 用量
+
+#### Scenario: 等待超时
+- GIVEN dispatcher 一直返回 pending
+- WHEN 超过轮询上限
+- THEN 返回超时错误
+- AND 错误信息包含派发句柄
+
+#### Scenario: run 失败或取消
+- GIVEN dispatcher 返回 failed 或 canceled
+- WHEN 驱动一轮
+- THEN 返回错误
+- AND 不产生观察结果
+
+#### Scenario: 长输出截断
+- GIVEN 输出超过 2000 字
+- WHEN 生成观察
+- THEN 摘要截断为 2000 字加省略号
+
 ### Requirement: 证据账本
 每一轮 MUST 保存观察摘要（`summary`），并能在重新读取时恢复；旧数据 MUST 以空串兼容。
 
