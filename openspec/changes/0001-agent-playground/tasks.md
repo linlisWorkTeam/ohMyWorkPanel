@@ -49,7 +49,7 @@
 - [ ] 3.2c 驱动器接线：runner 复用 scheduler（发消息 → 等 run → 观察），接后台任务
 - [x] 3.3 预算与熔断：轮次 / 时长 / token / 无进展 / 连续失败（触线即停）
 - [x] 3.4 人类闸门：每轮确认（`AwaitingApproval` → `approve`）
-- [ ] 3.5 证据账本：每轮结果落库并在群里可回看
+- [x] 3.5 证据账本：`goal_rounds.summary`（schema v9）+ Goal 条展示最近一轮
 - [ ] 3.6 验证：一个真实 goal 端到端跑完并停止
 
 ## P4 全量插拔

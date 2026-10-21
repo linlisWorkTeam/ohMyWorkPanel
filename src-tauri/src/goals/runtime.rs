@@ -146,6 +146,7 @@ mod tests {
         let loaded = service::get_goal(file.path(), &goal.id).unwrap().unwrap();
         assert_eq!(loaded.rounds.len(), 1);
         assert_eq!(loaded.rounds[0].tokens_used, 12);
+        assert_eq!(loaded.rounds[0].summary, "done");
     }
 
     #[test]

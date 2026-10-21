@@ -121,6 +121,26 @@
 - THEN 输出完全一致
 - AND 包含目标、轮次序号与上一轮判定
 
+### Requirement: 证据账本
+每一轮 MUST 保存观察摘要（`summary`），并能在重新读取时恢复；旧数据 MUST 以空串兼容。
+
+#### Scenario: 保存摘要
+- GIVEN 驱动器执行一轮并产出观察摘要
+- WHEN 轮次落库
+- THEN 摘要与判定、token 一起保存
+- AND 重新读取可见相同摘要
+
+#### Scenario: 旧数据兼容
+- GIVEN schema v8 的轮次记录没有 summary 列
+- WHEN 升级到 v9
+- THEN 新增列默认空串
+- AND 旧轮次仍可读取
+
+#### Scenario: 界面上回看
+- GIVEN 目标至少有一轮
+- WHEN 渲染 Goal 条
+- THEN 显示最近一轮摘要（过长省略，悬停看全文）
+
 ### Requirement: 写权限
 只有平台管理员或该群群主 MUST 能创建、启动、暂停、批准或中止目标；普通成员 MUST 只能读取。
 

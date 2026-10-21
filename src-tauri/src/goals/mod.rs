@@ -84,6 +84,9 @@ pub struct GoalRound {
     pub verdict: RoundVerdict,
     pub tokens_used: u64,
     pub finished_at: Timestamp,
+    /// 本轮观察摘要（证据账本）；旧数据为空串。
+    #[serde(default)]
+    pub summary: String,
 }
 
 /// 记录一轮之后引擎给出的下一步。
@@ -240,6 +243,7 @@ impl Goal {
             verdict,
             tokens_used,
             finished_at: now,
+            summary: String::new(),
         });
 
         if verdict == RoundVerdict::GoalMet {

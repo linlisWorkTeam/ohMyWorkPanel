@@ -10,7 +10,7 @@ use rusqlite::Connection;
 
 use crate::db::AppResult;
 
-pub const SCHEMA_VERSION: i64 = 8;
+pub const SCHEMA_VERSION: i64 = 9;
 
 /// 运行所有未执行的迁移，并把 `user_version` 升到 `SCHEMA_VERSION`。
 /// 幂等：已是最新版本时直接返回。
@@ -31,6 +31,7 @@ pub fn migrate(connection: &Connection) -> AppResult<()> {
             6 => migrate_v6(connection)?,
             7 => migrate_v7(connection)?,
             8 => migrate_v8(connection)?,
+            9 => migrate_v9(connection)?,
             _ => unreachable!("invalid schema version {}", version),
         }
     }
@@ -276,6 +277,15 @@ CREATE TABLE IF NOT EXISTS goal_rounds (
 "#,
         )
         .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// v9：Goal 证据账本——轮次观察摘要。
+fn migrate_v9(connection: &Connection) -> AppResult<()> {
+    let _ = connection.execute(
+        "ALTER TABLE goal_rounds ADD COLUMN summary TEXT NOT NULL DEFAULT ''",
+        [],
+    );
     Ok(())
 }
 
@@ -563,6 +573,7 @@ mod tests {
         }
         assert!(column_names(&conn, "goals").contains(&"budget_json".to_string()));
         assert!(column_names(&conn, "goal_rounds").contains(&"verdict".to_string()));
+        assert!(column_names(&conn, "goal_rounds").contains(&"summary".to_string()));
 
         // 二次启动幂等
         migrate(&conn).unwrap();

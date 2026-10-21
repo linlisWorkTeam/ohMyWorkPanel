@@ -106,6 +106,9 @@ impl<'a> GoalDriver<'a> {
         let outcome = goal
             .record_round(verdict, observation.tokens_used, now)
             .map_err(|error| DriverError::Goal(error.to_string()))?;
+        if let Some(round) = goal.rounds.last_mut() {
+            round.summary = observation.summary.clone();
+        }
         Ok(StepReport {
             round_index,
             verdict,

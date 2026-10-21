@@ -515,6 +515,7 @@ export interface GoalRound {
   verdict: GoalRoundVerdict;
   tokensUsed: number;
   finishedAt: number;
+  summary: string;
 }
 
 export interface Goal {

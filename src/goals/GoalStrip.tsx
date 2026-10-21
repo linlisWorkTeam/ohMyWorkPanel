@@ -111,6 +111,11 @@ export function GoalStrip({ group }: { group: { id: string } }) {
       <span className="gs-meta">
         {goal.rounds.length}/{budgetRounds} 轮 · {totalTokens(goal)} tok
       </span>
+      {goal.rounds.length > 0 && goal.rounds[goal.rounds.length - 1].summary && (
+        <span className="gs-last" title={goal.rounds[goal.rounds.length - 1].summary}>
+          {goal.rounds[goal.rounds.length - 1].summary}
+        </span>
+      )}
       {!terminal && goal.status === "draft" && (
         <button type="button" disabled={busy} onClick={() => void run(() => api.startGoal(goal.id))}>
           启动

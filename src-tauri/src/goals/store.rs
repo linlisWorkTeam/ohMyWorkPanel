@@ -164,14 +164,15 @@ fn append_round_conn(
     round: &GoalRound,
 ) -> AppResult<()> {
     conn.execute(
-        r#"INSERT OR REPLACE INTO goal_rounds (goal_id, idx, verdict, tokens_used, finished_at)
-           VALUES (?1, ?2, ?3, ?4, ?5)"#,
+        r#"INSERT OR REPLACE INTO goal_rounds (goal_id, idx, verdict, tokens_used, finished_at, summary)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6)"#,
         params![
             goal_id,
             round.index as i64,
             verdict_to_str(round.verdict),
             round.tokens_used as i64,
             round.finished_at,
+            round.summary,
         ],
     )
     .map_err(|error| error.to_string())?;
@@ -217,7 +218,7 @@ fn load_goal_conn(conn: &rusqlite::Connection, goal_id: &str) -> AppResult<Optio
     let budget: GoalBudget = serde_json::from_str(&budget).map_err(|error| error.to_string())?;
     let mut stmt = conn
         .prepare(
-            "SELECT idx, verdict, tokens_used, finished_at FROM goal_rounds WHERE goal_id = ?1 ORDER BY idx ASC",
+            "SELECT idx, verdict, tokens_used, finished_at, COALESCE(summary,'') FROM goal_rounds WHERE goal_id = ?1 ORDER BY idx ASC",
         )
         .map_err(|error| error.to_string())?;
     let raw_rounds = stmt
@@ -227,6 +228,7 @@ fn load_goal_conn(conn: &rusqlite::Connection, goal_id: &str) -> AppResult<Optio
                 row.get::<_, String>(1)?,
                 row.get::<_, i64>(2)?,
                 row.get::<_, i64>(3)?,
+                row.get::<_, String>(4)?,
             ))
         })
         .map_err(|error| error.to_string())?
@@ -234,12 +236,13 @@ fn load_goal_conn(conn: &rusqlite::Connection, goal_id: &str) -> AppResult<Optio
         .map_err(|error| error.to_string())?;
 
     let mut rounds = Vec::with_capacity(raw_rounds.len());
-    for (index, verdict, tokens_used, finished_at) in raw_rounds {
+    for (index, verdict, tokens_used, finished_at, summary) in raw_rounds {
         rounds.push(GoalRound {
             index: index as u32,
             verdict: verdict_from_str(&verdict)?,
             tokens_used: tokens_used as u64,
             finished_at,
+            summary,
         });
     }
 

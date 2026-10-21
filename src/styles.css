@@ -588,4 +588,5 @@
 .goal-strip input { flex:1; min-width:0; background:var(--lp-bg-elev); border:1px solid var(--lp-border-l1); color:var(--lp-text-primary); border-radius:6px; padding:3px 8px; font-size:12px; }
 .gs-error { color:var(--lp-error); }
 .gs-stop { color:var(--lp-warn); }
+.gs-last { max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--lp-text-secondary); font-size:11px; }
 
