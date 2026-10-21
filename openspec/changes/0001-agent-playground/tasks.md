@@ -14,9 +14,10 @@
 
 ## P1 插件内核 v0
 
-- [ ] 1.1 Rust：`kernel::Context` + `Service` 注册表（稳定 key、按群作用域）
-- [ ] 1.2 Rust：`inject` 声明与就绪等待（依赖拓扑，不手写启动顺序）
-- [ ] 1.3 Rust：`effect` / disposer 回收（逆序卸载，含单测）
+- [x] 1.1 Rust：`kernel::Context` + `Service` 注册表（稳定 key、类型安全取回）
+- [x] 1.2 Rust：`inject` 声明依赖（缺失时一次性列出全部缺口）
+- [x] 1.3 Rust：`effect` / disposer 回收（逆序卸载、重复释放幂等，含单测）
+- [ ] 1.3a Rust：按群作用域 fork 子上下文（服务可见性隔离）
 - [ ] 1.4 Rust：类型化事件五种分发（emit / waterfall / parallel / serial / bail）
 - [ ] 1.5 TS：前端同构内核，契约测试与 Rust 侧共享用例
 - [ ] 1.6 manifest v2：`contributes.services` / `inject` / `entry`，保留旧字段兼容

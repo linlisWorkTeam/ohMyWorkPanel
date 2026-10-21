@@ -22,6 +22,7 @@ pub mod event_sender;
 pub mod extensions;
 pub mod fs_browse;
 pub mod git_inspect;
+pub mod kernel;
 pub mod live_prompt;
 pub mod marketing;
 pub mod memory;
