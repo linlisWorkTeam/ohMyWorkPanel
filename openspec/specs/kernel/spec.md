@@ -159,11 +159,46 @@ v0 只覆盖进程内、单进程、同步语义；事件分发与清单 v2 属�
 - WHEN 装载
 - THEN 返回 `MissingDependency` 并列出缺口
 
+### Requirement: 插件清单 v2
+每个插件目录 MUST 提供 `plugin.manifest.json`，包含 `id`、`version`、`entry`；`provides`、`inject`、`permissions` 可选。
+
+清单 MUST 被校验：必填字段不得为空；同一字段不得重复；同一 key MUST NOT 同时出现在 `provides` 与 `inject`。装载器 MUST 拒绝注册表中不存在的 `entry`，且不安装任何插件。
+
+#### Scenario: 合法清单
+- GIVEN 清单含 `id`、`version`、`entry` 与一个 `provides` key
+- WHEN 解析
+- THEN 返回结构化清单
+- AND 可选字段取默认值
+
+#### Scenario: 空 id
+- GIVEN 清单 `id` 为空白
+- WHEN 解析
+- THEN 返回 `EmptyField("id")`
+
+#### Scenario: key 冲突
+- GIVEN 同一个 key 同时出现在 `provides` 与 `inject`
+- WHEN 解析
+- THEN 返回 `ConflictingKey`
+
+#### Scenario: 未注册的入口
+- GIVEN 清单声明 `entry = "builtin:missing"`
+- WHEN 映射为插件规格
+- THEN 返回 `UnknownEntry`
+- AND 不安装任何插件
+
+### Requirement: 清单目录发现
+系统 MUST 只扫描包含 `plugin.manifest.json` 的根目录；没有清单的目录 MUST 被跳过。
+
+#### Scenario: 混合根目录
+- GIVEN 根 A 含清单、根 B 为空
+- WHEN 执行发现
+- THEN 只返回根 A
+- AND 根 B 不产生错误
+
 ## 非目标（v0）
 
 - 事件分发 `waterfall`（环绕中间件）语义
 - 动态库插件与热重载（v0 只支持编译期注册）
-- 插件清单 v2 的文件发现与校验（装载器只接受内存中的 `PluginSpec`）
 - 按群作用域 fork 子上下文
 - 异步依赖就绪等待
 - 权限与沙箱

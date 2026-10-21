@@ -12,9 +12,14 @@
 mod context;
 mod effect;
 mod events;
+mod manifest;
 mod plugin;
 
 pub use context::{Context, ServiceRegistryError};
 pub use effect::EffectHandle;
 pub use events::{DispatchMode, EventBus, EventHandler, Subscription};
+pub use manifest::{
+    discover_manifests, manifests_to_specs, parse_manifest, start_plugins, Discovery,
+    ManifestError, PluginManifest, PluginRegistry, PLUGIN_MANIFEST_FILE,
+};
 pub use plugin::{load_plugins, LoadReport, PluginLoadError, PluginSpec};

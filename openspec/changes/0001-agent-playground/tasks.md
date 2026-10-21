@@ -22,7 +22,7 @@
 - [x] 1.4b Rust：插件装载器（依赖拓扑排序、声明兑现校验、失败整体回滚，7 个单测）
 - [ ] 1.4a Rust：`waterfall`（环绕中间件）语义
 - [ ] 1.5 TS：前端同构内核，契约测试与 Rust 侧共享用例
-- [ ] 1.6 manifest v2：`contributes.services` / `inject` / `entry`，保留旧字段兼容
+- [x] 1.6 manifest v2：`plugin.manifest.json`（id/version/entry/provides/inject/permissions）+ 目录发现 + 注册表映射（7 个单测）
 - [ ] 1.7 样板迁移：把现有扩展宿主改成 kernel 上的插件
 - [ ] 1.8 验证：`cargo test --lib` + `pnpm test` + `pnpm run test:gate`
 

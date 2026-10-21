@@ -10,8 +10,8 @@ use std::fmt;
 
 use super::context::{Context, ServiceRegistryError};
 
-/// 插件安装函数：注册服务、事件与副作用。
-pub type InstallFn = Box<dyn Fn(&Context) -> Result<(), String> + Send + Sync>;
+/// 插件安装函数：注册服务、事件与副作用。用 `Arc` 以便注册表复用同一个安装函数。
+pub type InstallFn = std::sync::Arc<dyn Fn(&Context) -> Result<(), String> + Send + Sync>;
 
 /// 一个可装载插件的静态描述。
 pub struct PluginSpec {
@@ -36,7 +36,7 @@ impl PluginSpec {
             id,
             provides,
             inject,
-            install: Box::new(install),
+            install: std::sync::Arc::new(install),
         }
     }
 }
