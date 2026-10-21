@@ -87,6 +87,26 @@
 - WHEN 记录轮次
 - THEN 返回 `NotActive`
 
+### Requirement: 创建校验
+创建目标 MUST 校验群存在、目标非空且不超过 2000 字；不满足时 MUST 拒绝并给出原因。
+
+#### Scenario: 目标为空
+- GIVEN 目标描述为空白
+- WHEN 创建
+- THEN 返回错误
+- AND 不写入任何记录
+
+#### Scenario: 群不存在
+- GIVEN 一个不存在的 groupId
+- WHEN 创建
+- THEN 返回「群不存在」
+
+#### Scenario: 状态迁移落库
+- GIVEN 目标已启动
+- WHEN 记录一轮并触发停止
+- THEN 轮次与状态在同一事务内写入
+- AND 重新读取可见相同结果
+
 ### Requirement: 持久化
 目标与轮次 MUST 落库，进程重启后 MUST 能恢复状态、预算快照与全部轮次；终态与停止原因 MUST 保留。
 

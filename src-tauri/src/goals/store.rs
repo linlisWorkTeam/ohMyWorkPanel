@@ -106,6 +106,10 @@ pub fn create_goal(db_path: &Path, goal: &Goal) -> AppResult<()> {
 /// 更新目标的可变字段（状态、启动时间、停止原因、审批开关、预算）。
 pub fn save_goal(db_path: &Path, goal: &Goal) -> AppResult<()> {
     let conn = open_db(db_path)?;
+    save_goal_conn(&conn, goal)
+}
+
+fn save_goal_conn(conn: &rusqlite::Connection, goal: &Goal) -> AppResult<()> {
     let budget = serde_json::to_string(&goal.budget).map_err(|error| error.to_string())?;
     let changed = conn
         .execute(
@@ -130,9 +134,35 @@ pub fn save_goal(db_path: &Path, goal: &Goal) -> AppResult<()> {
     Ok(())
 }
 
+/// 在同一事务里读取、修改并保存目标；不存在或闭包报错都会回滚。
+pub fn update_goal<F>(db_path: &Path, goal_id: &str, apply: F) -> AppResult<Goal>
+where
+    F: FnOnce(&mut Goal) -> AppResult<()>,
+{
+    let mut conn = open_db(db_path)?;
+    let tx = conn.transaction().map_err(|error| error.to_string())?;
+    let mut goal =
+        load_goal_conn(&tx, goal_id)?.ok_or_else(|| format!("goal 不存在：{goal_id}"))?;
+    apply(&mut goal)?;
+    save_goal_conn(&tx, &goal)?;
+    for round in &goal.rounds {
+        append_round_conn(&tx, &goal.id, round)?;
+    }
+    tx.commit().map_err(|error| error.to_string())?;
+    Ok(goal)
+}
+
 /// 追加（或覆盖）一轮记录。
 pub fn append_round(db_path: &Path, goal_id: &str, round: &GoalRound) -> AppResult<()> {
     let conn = open_db(db_path)?;
+    append_round_conn(&conn, goal_id, round)
+}
+
+fn append_round_conn(
+    conn: &rusqlite::Connection,
+    goal_id: &str,
+    round: &GoalRound,
+) -> AppResult<()> {
     conn.execute(
         r#"INSERT OR REPLACE INTO goal_rounds (goal_id, idx, verdict, tokens_used, finished_at)
            VALUES (?1, ?2, ?3, ?4, ?5)"#,
@@ -151,6 +181,10 @@ pub fn append_round(db_path: &Path, goal_id: &str, round: &GoalRound) -> AppResu
 /// 读取单个目标（含全部轮次）；不存在返回 `None`。
 pub fn load_goal(db_path: &Path, goal_id: &str) -> AppResult<Option<Goal>> {
     let conn = open_db(db_path)?;
+    load_goal_conn(&conn, goal_id)
+}
+
+fn load_goal_conn(conn: &rusqlite::Connection, goal_id: &str) -> AppResult<Option<Goal>> {
     let row = conn
         .query_row(
             r#"SELECT id, group_id, objective, status, budget_json,
