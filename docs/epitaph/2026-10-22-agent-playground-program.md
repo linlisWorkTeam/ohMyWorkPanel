@@ -9,7 +9,7 @@ status: active
 
 ## Built this session
 
-从 `origin/main`（`1bf4c58`）出发，本地 25 个提交，覆盖四条轨道：
+从 `origin/main`（`1bf4c58`）出发，本地 34 个提交，覆盖四条轨道：
 
 **P0 契约**
 - `openspec/`：`project.md`（愿景/原则/架构地图）、`specs/`（kernel、extensions 契约）、`changes/0001-agent-playground/`（proposal / design / tasks + scene、goals delta）
@@ -29,6 +29,12 @@ status: active
 
 **门禁修复（前置）**
 - 全仓 `cargo fmt` 基线、恢复 lint/format 门禁、`run-bash.mjs`（Windows Git Bash 启动器）
+
+**P4 插件化（进行中）**
+- 第二个内置插件 `adapter_catalog`：`svc.adapters`（list / resolve / candidates），Web `/api/adapters` 与 scheduler 执行路径、agent 自检均已接入并保留回退
+- 第三个 `workflow`：`svc.workflow`（board / create_version / update_roadmap / play_wave / pause_wave），Web 版本板、创建、Roadmap、Wave 播放/暂停全部接入
+- 第四个 `marketing`：`svc.marketing`（list / get），Web campaign 列表与详情接入
+- 新增 capability 契约：`openspec/specs/workflow/spec.md`、`openspec/specs/marketing/spec.md`、`changes/.../specs/plugin-migrations/spec.md`
 
 ## Key paths
 
@@ -57,7 +63,7 @@ status: active
 ## How to run / verify
 
 ```bash
-pnpm run test:gate        # vitest 140 + cargo 267 + clippy + fmt + lint + colors
+pnpm run test:gate        # vitest 140 + cargo 281 + clippy + fmt + lint + colors
 cd src-tauri && cargo test --no-default-features --lib
 pnpm run check:ai
 ```
@@ -73,8 +79,8 @@ pnpm run check:ai
 
 ## Open follow-ups
 
-- **未推送**：本地 25 个提交仅在本地；备份 tag `backup/pre-vision-2026-10-21` 已推
-- **P4 未开始**：CLI 适配器 / 工作流 / marketing 尚未插件化
+- **未推送**：本地 34 个提交仅在本地；备份 tag `backup/pre-vision-2026-10-21` 已推
+- **P4 未完成**：workflow 还剩 Ask / 发布写入；marketing 还剩生成 / 审核 / 导出；`commands.rs` / `App.tsx` 入口未瘦身
 - **真实 Agent 端到端**：Goal 的自动循环未用真实 CLI 验证过（task 3.7）
 - **场景视觉验收**：未在真实群数据下人工看过；tileset / 房间分区未做
 - **TS 同构内核**、`waterfall` 事件、按群作用域 fork 未做
