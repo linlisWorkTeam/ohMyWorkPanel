@@ -17,6 +17,20 @@
 - THEN 回退自由函数
 - AND 仍返回完整列表
 
+### Requirement: 适配器解析服务
+适配器目录服务 MUST 提供 `resolve(name)`，其结果 MUST 与自由函数 `resolve_adapter` 一致；执行路径 MUST 优先使用该服务，未装载时回退自由函数。
+
+#### Scenario: 解析一致
+- GIVEN 一个内置适配器名
+- WHEN 分别通过服务与自由函数解析
+- THEN 两者的启动规格一致
+
+#### Scenario: 未知适配器
+- GIVEN 不存在的适配器名
+- WHEN 通过服务解析
+- THEN 返回错误
+- AND 执行路径不会启动任何进程
+
 ### Requirement: 插件清单一致
 每个内置插件 MUST 声明 `id`、`entry`、`provides`，且 `entry` 必须能在注册表中解析。
 

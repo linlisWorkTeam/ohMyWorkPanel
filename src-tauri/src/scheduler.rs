@@ -713,7 +713,11 @@ async fn run_agent(
         return Ok(());
     }
 
-    let spec = adapters::manifest::resolve_adapter(adapter_name)?;
+    // 优先走内核服务；未装载时回退自由函数，保证执行路径不受插件装载影响。
+    let spec = match crate::plugins::adapter_catalog_service() {
+        Some(catalog) => catalog.resolve(adapter_name)?,
+        None => adapters::manifest::resolve_adapter(adapter_name)?,
+    };
     let delta_count = Arc::new(AtomicU64::new(0));
     let hb_stop = Arc::new(AtomicBool::new(false));
     {

@@ -59,7 +59,8 @@
 ## P4 全量插拔
 
 - [x] 4.1a 适配器目录插件：`svc.adapters` + Web 入口优先服务、回退自由函数（3 个单测）
-- [ ] 4.1b CLI 适配器执行路径插件化（`build_args` / 候选可执行文件）
+- [x] 4.1b 适配器解析走内核服务：scheduler 执行路径优先 `svc.adapters.resolve`，失败回退自由函数
+- [ ] 4.1c `build_args` / 候选可执行文件插件化
 - [ ] 4.2 迁移工作流（版本 / Wave）为插件
 - [ ] 4.3 迁移 marketing 为插件
 - [ ] 4.4 内置功能不再直接出现在 `commands.rs` / `App.tsx`

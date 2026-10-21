@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use crate::agents::adapters::manifest::{catalog, AdapterCatalogItem};
+use crate::agents::adapters::manifest::{catalog, resolve_adapter, AdapterCatalogItem, SpawnSpec};
 use crate::kernel::{Context, PluginManifest, PluginRegistry};
 
 pub const ENTRY: &str = "builtin:adapter-catalog";
@@ -20,6 +20,11 @@ impl AdapterCatalog {
     /// 当前可用适配器（内置 + 已加载的 `*.adapter.json`）。
     pub fn list(&self) -> Vec<AdapterCatalogItem> {
         catalog()
+    }
+
+    /// 解析一个适配器名，返回启动规格。
+    pub fn resolve(&self, name: &str) -> Result<SpawnSpec, String> {
+        resolve_adapter(name)
     }
 }
 
@@ -77,5 +82,23 @@ mod tests {
     fn context_without_plugin_has_no_service() {
         let ctx = Context::new();
         assert!(from_context(&ctx).is_none());
+    }
+
+    #[test]
+    fn resolve_matches_the_free_function() {
+        let mut registry = PluginRegistry::new();
+        register(&mut registry);
+        let ctx = Context::new();
+        start_plugins(&ctx, &registry, vec![manifest()]).unwrap();
+        let service = from_context(&ctx).unwrap();
+
+        let via_service = format!("{:?}", service.resolve("mock").unwrap());
+        let via_function = format!(
+            "{:?}",
+            crate::agents::adapters::manifest::resolve_adapter("mock").unwrap()
+        );
+        assert_eq!(via_service, via_function);
+
+        assert!(service.resolve("no-such-adapter").is_err());
     }
 }
