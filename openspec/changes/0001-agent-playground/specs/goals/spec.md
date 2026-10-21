@@ -87,6 +87,40 @@
 - WHEN 记录轮次
 - THEN 返回 `NotActive`
 
+### Requirement: 驱动循环
+驱动器 MUST 按「执行一轮 → 判定 → 记录」推进，并在目标停止、等待审批或触达单次步数上限时结束。
+
+#### Scenario: 推进到达成
+- GIVEN 目标是 `active`
+- WHEN judge 在第 3 轮判定 `GoalMet`
+- THEN 驱动执行 3 轮后结束
+- AND 终止原因为 `GoalMet`
+
+#### Scenario: 单次步数上限
+- GIVEN 预算不限且 judge 始终返回 `Progress`
+- WHEN 上限为 5
+- THEN 驱动在 5 轮后停止
+- AND 返回 `StepBudgetReached`
+
+#### Scenario: 审批闸门
+- GIVEN 目标开启每轮审批
+- WHEN 驱动执行一轮
+- THEN 结束原因为 `AwaitingApproval`
+- AND 目标进入 `awaiting_approval`
+
+#### Scenario: 执行失败
+- GIVEN runner 返回错误
+- WHEN 驱动一轮
+- THEN 返回 runner 错误
+- AND 不写入任何轮次
+- AND 目标仍为 `active`
+
+#### Scenario: 确定性 prompt
+- GIVEN 同一目标连续组装 prompt
+- WHEN 轮次未变
+- THEN 输出完全一致
+- AND 包含目标、轮次序号与上一轮判定
+
 ### Requirement: 创建校验
 创建目标 MUST 校验群存在、目标非空且不超过 2000 字；不满足时 MUST 拒绝并给出原因。
 
