@@ -162,6 +162,13 @@ pub fn run() {
             commands::revise_marketing_campaign,
             commands::approve_marketing_campaign,
             commands::export_marketing_campaign,
+            commands::list_goals,
+            commands::get_goal,
+            commands::create_goal,
+            commands::start_goal,
+            commands::pause_goal,
+            commands::approve_goal,
+            commands::abort_goal,
         ])
         .run(tauri::generate_context!())
         .expect("Failed to launch ohMyWorkPanel");

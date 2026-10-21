@@ -42,6 +42,7 @@
 - [x] 3.1a `goal` 领域模型与状态机（Draft/Active/Paused/AwaitingApproval/Completed/Aborted，12 个单测）
 - [x] 3.1b `goal` 持久化：`goals` + `goal_rounds`（schema v8，5 个 store 单测）
 - [x] 3.1c Goal 应用服务：创建校验、状态迁移、轮次事务写入（6 个单测）
+- [x] 3.1d Goal IPC + 前端入口：Tauri 7 命令 / Web 6 路由 / 群聊顶部 Goal 条（新建、启动、暂停、批准、停止）
 - [ ] 3.2 循环驱动器插件：plan → act → observe → judge（依赖 3.1c + scheduler）
 - [x] 3.3 预算与熔断：轮次 / 时长 / token / 无进展 / 连续失败（触线即停）
 - [x] 3.4 人类闸门：每轮确认（`AwaitingApproval` → `approve`）

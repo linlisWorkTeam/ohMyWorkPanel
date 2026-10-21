@@ -1599,6 +1599,58 @@ pub fn export_marketing_campaign(
     crate::marketing::export_campaign(&open_db(&state.db_path)?, &campaign_id)
 }
 
+// === 群组级 Goal（P3 自治循环） ===
+
+#[tauri::command]
+pub fn list_goals(
+    group_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<crate::goals::Goal>> {
+    crate::goals::service::list_goals(&state.db_path, &group_id)
+}
+
+#[tauri::command]
+pub fn get_goal(
+    goal_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<Option<crate::goals::Goal>> {
+    crate::goals::service::get_goal(&state.db_path, &goal_id)
+}
+
+#[tauri::command]
+pub fn create_goal(
+    input: crate::goals::CreateGoalInput,
+    state: State<'_, AppState>,
+) -> AppResult<crate::goals::Goal> {
+    crate::goals::service::create_goal(
+        &state.db_path,
+        &input.group_id,
+        &input.objective,
+        input.budget.unwrap_or_default(),
+        input.require_approval_each_round,
+    )
+}
+
+#[tauri::command]
+pub fn start_goal(goal_id: String, state: State<'_, AppState>) -> AppResult<crate::goals::Goal> {
+    crate::goals::service::start_goal(&state.db_path, &goal_id)
+}
+
+#[tauri::command]
+pub fn pause_goal(goal_id: String, state: State<'_, AppState>) -> AppResult<crate::goals::Goal> {
+    crate::goals::service::pause_goal(&state.db_path, &goal_id)
+}
+
+#[tauri::command]
+pub fn approve_goal(goal_id: String, state: State<'_, AppState>) -> AppResult<crate::goals::Goal> {
+    crate::goals::service::approve_goal(&state.db_path, &goal_id)
+}
+
+#[tauri::command]
+pub fn abort_goal(goal_id: String, state: State<'_, AppState>) -> AppResult<crate::goals::Goal> {
+    crate::goals::service::abort_goal(&state.db_path, &goal_id)
+}
+
 /// 解析 "x.y.z" / "x.y.z-beta" / "x.y.z+build" → 数值三元组（忽略预发布/构建后缀）。
 /// （比较逻辑与单测见 models::parse_version / models::is_newer_version，双特性共同编译。）
 #[derive(serde::Serialize)]

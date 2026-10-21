@@ -63,6 +63,7 @@ import { ServerPathPicker } from "./groups/ServerPathPicker";
 import { ExtensionPanel } from "./extensions/ExtensionPanel";
 import { VersionView } from "./workflow/VersionView";
 import { SceneView } from "./scene/SceneView";
+import { GoalStrip } from "./goals/GoalStrip";
 import { GroupSettingsView } from "./groups/GroupSettingsView";
 import { AgentConfigView } from "./agents/AgentConfigView";
 import {
@@ -1380,6 +1381,7 @@ export function App() {
           </div>
       </> : null}
       wave={!isChatGroup && current ? (
+        <>
           <div
             className="goal-bar"
             data-status={goalBar?.status ?? "idle"}
@@ -1394,6 +1396,8 @@ export function App() {
             <span className="progress"><i style={{ width: `${goalBar && goalBar.total ? Math.round((goalBar.done / goalBar.total) * 100) : 0}%` }} /></span>
             <span className="g-act">{goalBar ? `${goalBar.done}/${goalBar.total} 完成` : "0/0"}</span>
           </div>
+          <GoalStrip group={current.group} />
+        </>
       ) : null}
       chat={current ? (
         mainView === "scene" ? (

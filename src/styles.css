@@ -575,3 +575,17 @@
 .scene-canvas { width:100%; height:100%; display:block; cursor:pointer; }
 .scene-empty { flex:1; display:grid; place-items:center; color:var(--lp-text-secondary); font-size:13px; border:1px dashed var(--lp-border); border-radius:12px; }
 
+.goal-strip { display:flex; align-items:center; gap:10px; padding:6px 10px; font-size:12px; color:var(--lp-text-secondary); }
+.gs-title { font-family:var(--mono); font-size:10px; letter-spacing:.12em; color:var(--lp-accent); }
+.gs-objective { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--lp-text-primary); }
+.gs-status { padding:1px 6px; border-radius:6px; background:var(--lp-bg-elev); }
+.goal-strip[data-status="active"] .gs-status { color:var(--lp-accent); }
+.goal-strip[data-status="awaiting_approval"] .gs-status { color:var(--lp-warn); }
+.goal-strip[data-status="aborted"] .gs-status { color:var(--lp-error); }
+.goal-strip[data-status="completed"] .gs-status { color:var(--lp-success); }
+.gs-meta { font-family:var(--mono); font-size:11px; }
+.goal-strip button { border:1px solid var(--lp-border-l1); background:var(--lp-bg-elev); color:var(--lp-text-primary); border-radius:6px; padding:2px 8px; font-size:12px; cursor:pointer; }
+.goal-strip input { flex:1; min-width:0; background:var(--lp-bg-elev); border:1px solid var(--lp-border-l1); color:var(--lp-text-primary); border-radius:6px; padding:3px 8px; font-size:12px; }
+.gs-error { color:var(--lp-error); }
+.gs-stop { color:var(--lp-warn); }
+

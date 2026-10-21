@@ -13,6 +13,7 @@ pub type Timestamp = i64;
 
 /// 预算与护栏。`0` 表示该项不限制，其余为硬上限。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GoalBudget {
     pub max_rounds: u32,
     pub max_wall_time_ms: u64,
@@ -75,6 +76,7 @@ pub enum StopReason {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GoalRound {
     pub index: u32,
     pub verdict: RoundVerdict,
@@ -115,7 +117,20 @@ impl From<GoalError> for String {
     }
 }
 
+/// 创建目标的传输层 DTO（Tauri 与 Web 共用）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateGoalInput {
+    pub group_id: String,
+    pub objective: String,
+    #[serde(default)]
+    pub budget: Option<GoalBudget>,
+    #[serde(default)]
+    pub require_approval_each_round: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Goal {
     pub id: String,
     pub group_id: String,

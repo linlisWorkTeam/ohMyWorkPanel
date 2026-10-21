@@ -3288,6 +3288,16 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             "/api/marketing/campaigns/{campaign_id}/export",
             get(export_marketing_campaign_web),
         )
+        // 群组级 Goal（P3 自治循环）
+        .route(
+            "/api/groups/{group_id}/goals",
+            get(list_goals_web).post(create_goal_web),
+        )
+        .route("/api/goals/{goal_id}", get(get_goal_web))
+        .route("/api/goals/{goal_id}/start", post(start_goal_web))
+        .route("/api/goals/{goal_id}/pause", post(pause_goal_web))
+        .route("/api/goals/{goal_id}/approve", post(approve_goal_web))
+        .route("/api/goals/{goal_id}/abort", post(abort_goal_web))
         // V1.3.0 Version / Wave workflow
         .route(
             "/api/groups/{group_id}/version-board",
@@ -3351,6 +3361,118 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .merge(protected)
         .layer(middleware::from_fn(request_id_middleware))
         .with_state(state)
+}
+
+// === 群组级 Goal（P3 自治循环） ===
+
+fn goal_group_id(state: &AppState, goal_id: &str) -> Result<String, (StatusCode, String)> {
+    crate::goals::service::get_goal(&state.db_path, goal_id)
+        .map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error))?
+        .map(|goal| goal.group_id)
+        .ok_or((StatusCode::NOT_FOUND, "goal 不存在".to_string()))
+}
+
+async fn list_goals_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(group_id): Path<String>,
+) -> Result<Json<Vec<crate::goals::Goal>>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
+    drop(conn);
+    crate::goals::service::list_goals(&state.db_path, &group_id)
+        .map(Json)
+        .map_err(|error| (StatusCode::BAD_REQUEST, error))
+}
+
+async fn get_goal_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(goal_id): Path<String>,
+) -> Result<Json<crate::goals::Goal>, (StatusCode, String)> {
+    let group_id = goal_group_id(&state, &goal_id)?;
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
+    drop(conn);
+    let goal = crate::goals::service::get_goal(&state.db_path, &goal_id)
+        .map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error))?
+        .ok_or((StatusCode::NOT_FOUND, "goal 不存在".to_string()))?;
+    Ok(Json(goal))
+}
+
+async fn create_goal_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(group_id): Path<String>,
+    Json(input): Json<crate::goals::CreateGoalInput>,
+) -> Result<Json<crate::goals::Goal>, (StatusCode, String)> {
+    if input.group_id != group_id {
+        return Err((StatusCode::BAD_REQUEST, "groupId 与路由不一致".into()));
+    }
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_group_access(&conn, &claims.sub, &input.group_id).map_err(map_acl_err)?;
+    drop(conn);
+    crate::goals::service::create_goal(
+        &state.db_path,
+        &input.group_id,
+        &input.objective,
+        input.budget.unwrap_or_default(),
+        input.require_approval_each_round,
+    )
+    .map(Json)
+    .map_err(|error| (StatusCode::BAD_REQUEST, error))
+}
+
+fn mutate_goal(
+    state: &AppState,
+    claims: &crate::auth::Claims,
+    goal_id: &str,
+    action: fn(&std::path::Path, &str) -> crate::db::AppResult<crate::goals::Goal>,
+) -> Result<Json<crate::goals::Goal>, (StatusCode, String)> {
+    let group_id = goal_group_id(state, goal_id)?;
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
+    drop(conn);
+    action(&state.db_path, goal_id)
+        .map(Json)
+        .map_err(|error| (StatusCode::BAD_REQUEST, error))
+}
+
+async fn start_goal_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(goal_id): Path<String>,
+) -> Result<Json<crate::goals::Goal>, (StatusCode, String)> {
+    mutate_goal(&state, &claims, &goal_id, crate::goals::service::start_goal)
+}
+
+async fn pause_goal_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(goal_id): Path<String>,
+) -> Result<Json<crate::goals::Goal>, (StatusCode, String)> {
+    mutate_goal(&state, &claims, &goal_id, crate::goals::service::pause_goal)
+}
+
+async fn approve_goal_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(goal_id): Path<String>,
+) -> Result<Json<crate::goals::Goal>, (StatusCode, String)> {
+    mutate_goal(
+        &state,
+        &claims,
+        &goal_id,
+        crate::goals::service::approve_goal,
+    )
+}
+
+async fn abort_goal_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(goal_id): Path<String>,
+) -> Result<Json<crate::goals::Goal>, (StatusCode, String)> {
+    mutate_goal(&state, &claims, &goal_id, crate::goals::service::abort_goal)
 }
 
 #[cfg(test)]
