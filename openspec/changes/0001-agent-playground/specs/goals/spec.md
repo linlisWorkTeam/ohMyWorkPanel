@@ -121,6 +121,34 @@
 - THEN 输出完全一致
 - AND 包含目标、轮次序号与上一轮判定
 
+### Requirement: 调度适配
+派发 MUST 在群里写入一条消息并为指定 Agent 创建 run，然后触发调度；发送者 MUST 属于该群。
+
+轮询 MUST 把 run 状态映射为：`completed` → Completed（读输出消息）、`failed` → Failed、`canceled` → Canceled、其余 → Pending。
+
+#### Scenario: 派发
+- GIVEN 群里存在发送者与驱动 Agent
+- WHEN 派发一轮
+- THEN 写入消息
+- AND 创建一个 queued run
+- AND 触发一次调度
+
+#### Scenario: 发送者不合法
+- GIVEN 发送者不属于该群
+- WHEN 派发
+- THEN 返回错误
+- AND 不写消息、不建 run
+
+#### Scenario: 完成映射
+- GIVEN run 状态为 completed 且挂有输出消息
+- WHEN 轮询
+- THEN 返回 Completed 并携带输出内容
+
+#### Scenario: 失败映射
+- GIVEN run 状态为 failed
+- WHEN 轮询
+- THEN 返回 Failed 并携带错误信息
+
 ### Requirement: 派发式执行
 驱动器 MUST 通过 dispatcher 发起一轮并轮询结果；等待超时、run 失败或取消 MUST 视为本轮失败，由驱动器决定是否记录。
 

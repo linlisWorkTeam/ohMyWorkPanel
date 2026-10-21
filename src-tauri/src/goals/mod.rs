@@ -7,6 +7,7 @@
 pub mod dispatch;
 pub mod driver;
 pub mod runtime;
+pub mod scheduler_adapter;
 pub mod service;
 pub mod store;
 

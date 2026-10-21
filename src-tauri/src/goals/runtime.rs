@@ -1,10 +1,10 @@
-//! Goal 运行时：把一次驱动收敛成「加锁 → 事务内执行一轮 → 落库」。
+//! Goal 运行时：把一次驱动收敛成「加锁 → 执行一轮 → 事务写回」。
 //!
 //! 真实调度器（发消息、等 run）由 `GoalRunner` 注入；这里解决的是并发与一致性：
 //! - 同一个 goal 同一时刻只允许一个驱动器（进程内锁）；
-//! - 执行失败整体回滚，不会留下"跑了但没记账"的半轮。
+//! - runner 失败时不写回任何轮次；
+//! - 状态与轮次用单个事务写回，避免半套数据。
 
-use std::cell::Cell;
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::{Mutex, OnceLock};
@@ -53,18 +53,17 @@ pub struct TickReport {
 }
 
 /// 执行一轮并落库。runner/judge 由调用方注入。
+///
+/// 注意：runner 可能会写库（发消息、建 run），因此不能把 `step` 包在目标事务里，
+/// 否则会与 SQLite 写锁冲突。这里先在内存推进，再用一个事务把状态与轮次写回；
+/// 若 runner 成功后写回失败，会留下消息/run 但没有轮次记录，属于可接受的降级。
 pub fn tick(db_path: &Path, goal_id: &str, driver: &GoalDriver<'_>) -> AppResult<TickReport> {
     let guard = try_begin(goal_id)?;
-    let step = Cell::new(None);
-    let goal = store::update_goal(db_path, goal_id, |goal| {
-        let report = driver.step(goal, now()).map_err(String::from)?;
-        step.set(Some(report));
-        Ok(())
-    })?;
+    let mut goal =
+        store::load_goal(db_path, goal_id)?.ok_or_else(|| format!("goal 不存在：{goal_id}"))?;
+    let step = driver.step(&mut goal, now()).map_err(String::from)?;
+    store::persist_goal(db_path, &goal)?;
     drop(guard);
-    let step = step
-        .into_inner()
-        .ok_or_else(|| "驱动未产生轮次".to_string())?;
     Ok(TickReport { goal, step })
 }
 

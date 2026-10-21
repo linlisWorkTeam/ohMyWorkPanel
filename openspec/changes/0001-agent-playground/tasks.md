@@ -47,7 +47,8 @@
 - [x] 3.2a 驱动器内核：注入式 runner/judge、单次步数上限、prompt 组装（7 个单测）
 - [x] 3.2b 驱动运行时：单 goal 驱动锁 + tick 事务落库 + 失败回滚（5 个单测）
 - [x] 3.2c 派发式 runner：dispatcher trait + 轮询/超时/失败/取消 + 摘要截断（7 个单测）
-- [ ] 3.2d 调度器适配：把 prompt 写成群消息并触发 scheduler，读取 run 输出
+- [x] 3.2d 调度器适配：写消息 + 建 run + 注入 kick + 状态映射 + 启发式 judge（7 个单测，含端到端 tick）
+- [ ] 3.2e 驱动器入口：`advance_goal` 命令与 Web 路由，接 AppState/scheduler、后台阻塞任务
 - [x] 3.3 预算与熔断：轮次 / 时长 / token / 无进展 / 连续失败（触线即停）
 - [x] 3.4 人类闸门：每轮确认（`AwaitingApproval` → `approve`）
 - [x] 3.5 证据账本：`goal_rounds.summary`（schema v9）+ Goal 条展示最近一轮

@@ -152,6 +152,20 @@ where
     Ok(goal)
 }
 
+/// 把已在内存中修改过的目标整体写回：状态与全部轮次在同一事务内完成。
+///
+/// 与 [`update_goal`] 的区别：不做读取，也不在事务里执行副作用（runner 可能写库）。
+pub fn persist_goal(db_path: &Path, goal: &Goal) -> AppResult<()> {
+    let mut conn = open_db(db_path)?;
+    let tx = conn.transaction().map_err(|error| error.to_string())?;
+    save_goal_conn(&tx, goal)?;
+    for round in &goal.rounds {
+        append_round_conn(&tx, &goal.id, round)?;
+    }
+    tx.commit().map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 /// 追加（或覆盖）一轮记录。
 pub fn append_round(db_path: &Path, goal_id: &str, round: &GoalRound) -> AppResult<()> {
     let conn = open_db(db_path)?;
