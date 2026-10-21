@@ -86,3 +86,22 @@
 - GIVEN 目标已暂停或等待审批
 - WHEN 记录轮次
 - THEN 返回 `NotActive`
+
+### Requirement: 持久化
+目标与轮次 MUST 落库，进程重启后 MUST 能恢复状态、预算快照与全部轮次；终态与停止原因 MUST 保留。
+
+#### Scenario: 恢复
+- GIVEN 目标已运行 3 轮并落库
+- WHEN 重新读取
+- THEN 状态、预算、3 条轮次与停止原因一致
+
+#### Scenario: 终态保留
+- GIVEN 目标已因预算中止
+- WHEN 重新读取
+- THEN 状态为 `aborted`
+- AND 停止原因为对应护栏
+
+#### Scenario: 按群列表
+- GIVEN 同一群有多个目标
+- WHEN 列出
+- THEN 按创建时间倒序返回

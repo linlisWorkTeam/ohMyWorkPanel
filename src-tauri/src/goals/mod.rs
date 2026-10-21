@@ -4,6 +4,8 @@
 //! 之后，只要触碰轮次、时长、token、无进展、连续失败中的任意一条，就必须停。
 //! 这个模块不碰数据库、不调度 Agent，纯粹决定「该不该继续」。
 
+pub mod store;
+
 use serde::{Deserialize, Serialize};
 
 pub type Timestamp = i64;
