@@ -10,10 +10,10 @@
     "tauri": "tauri",
     "lint": "eslint src",
     "test": "vitest run",
-    "test:gate": "bash scripts/test-gate.sh",
+    "test:gate": "node scripts/run-bash.mjs scripts/test-gate.sh",
     "check:colors": "node scripts/check-color-purity.mjs",
-    "check:ai": "bash scripts/ai-harness.sh check",
-    "submit:ai": "bash scripts/ai-harness.sh submit"
+    "check:ai": "node scripts/run-bash.mjs scripts/ai-harness.sh check",
+    "submit:ai": "node scripts/run-bash.mjs scripts/ai-harness.sh submit"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.8.0",
