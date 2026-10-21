@@ -128,16 +128,24 @@ pub fn load_panellive_manifest(root: &Path) -> AppResult<ExtensionManifest> {
 }
 
 pub fn discover_extensions() -> Vec<DiscoveredExtension> {
+    discover_extensions_from(&extension_roots())
+}
+
+/// 从给定根目录发现扩展；供插件内核按自己的根目录快照调用。
+pub fn discover_extensions_from(roots: &[PathBuf]) -> Vec<DiscoveredExtension> {
     let mut out = Vec::new();
     let mut seen_ids = std::collections::HashSet::new();
-    for root in extension_roots() {
+    for root in roots {
         if !root.join("extension.manifest.json").is_file() {
             continue;
         }
-        match load_manifest(&root) {
+        match load_manifest(root) {
             Ok(manifest) => {
                 if seen_ids.insert(manifest.id.clone()) {
-                    out.push(DiscoveredExtension { root, manifest });
+                    out.push(DiscoveredExtension {
+                        root: root.clone(),
+                        manifest,
+                    });
                 }
             }
             Err(e) => eprintln!("extension discover skip {}: {e}", root.display()),
@@ -147,7 +155,12 @@ pub fn discover_extensions() -> Vec<DiscoveredExtension> {
 }
 
 pub fn find_extension(ext_id: &str) -> AppResult<DiscoveredExtension> {
-    discover_extensions()
+    find_extension_in(&extension_roots(), ext_id)
+}
+
+/// 在给定根目录里查找扩展。
+pub fn find_extension_in(roots: &[PathBuf], ext_id: &str) -> AppResult<DiscoveredExtension> {
+    discover_extensions_from(roots)
         .into_iter()
         .find(|d| d.manifest.id == ext_id)
         .ok_or_else(|| format!("未知扩展：{ext_id}"))

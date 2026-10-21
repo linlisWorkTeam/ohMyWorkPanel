@@ -2320,8 +2320,10 @@ async fn proxy_extension(
         crate::extensions::sanitize_proxy_path(&path).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
     let upstream_path = crate::extensions::with_proxy_query(sanitized.as_str(), uri.query())
         .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
-    let disc =
-        crate::extensions::find_extension(&ext_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    let disc = crate::plugins::extension_host_service()
+        .map(|host| host.find(&ext_id))
+        .unwrap_or_else(|| crate::extensions::find_extension(&ext_id))
+        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
     let port = disc.manifest.runtime.default_port;
     let ct = headers
         .get(axum::http::header::CONTENT_TYPE)
@@ -2466,11 +2468,12 @@ async fn dispatch_a2a_web(
         return Err((StatusCode::BAD_REQUEST, "groupId 必填".into()));
     }
     // Skills must be declared by a discovered extension; that extension must be enabled for the group.
-    let declared_by = crate::extensions::discover_extensions()
-        .into_iter()
-        .find(|d| {
-            crate::extensions::skill_allowed(&d.manifest.contributes.a2a_skills, &envelope.skill)
-        });
+    let discovered = crate::plugins::extension_host_service()
+        .map(|host| host.discover())
+        .unwrap_or_else(crate::extensions::discover_extensions);
+    let declared_by = discovered.into_iter().find(|d| {
+        crate::extensions::skill_allowed(&d.manifest.contributes.a2a_skills, &envelope.skill)
+    });
     if let Some(disc) = declared_by {
         let enabled =
             crate::extensions::is_extension_enabled(&conn, &envelope.group_id, &disc.manifest.id)

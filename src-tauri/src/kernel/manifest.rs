@@ -17,7 +17,7 @@ use super::plugin::{load_plugins, InstallFn, LoadReport, PluginSpec};
 /// 清单文件名；每个插件目录放一个。
 pub const PLUGIN_MANIFEST_FILE: &str = "plugin.manifest.json";
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginManifest {
     pub id: String,
