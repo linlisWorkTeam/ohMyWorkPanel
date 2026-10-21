@@ -9,7 +9,8 @@ use crate::db::{open_db, AppResult};
 use crate::kernel::{Context, PluginManifest, PluginRegistry};
 use crate::models::Group;
 use crate::workflow::{
-    board_for_group, create_version, CreateVersionInput, ProjectVersion, VersionBoard,
+    board_for_group, create_version, update_roadmap, CreateVersionInput, ProjectVersion,
+    UpdateRoadmapInput, VersionBoard,
 };
 
 pub const ENTRY: &str = "builtin:workflow";
@@ -35,6 +36,17 @@ impl WorkflowService {
     ) -> AppResult<ProjectVersion> {
         let conn = open_db(db_path)?;
         create_version(&conn, group, input)
+    }
+
+    /// 更新 Roadmap（What / Who / How / 一句话 / 名称）。
+    pub fn update_roadmap(
+        &self,
+        db_path: &Path,
+        version_id: &str,
+        input: &UpdateRoadmapInput,
+    ) -> AppResult<ProjectVersion> {
+        let conn = open_db(db_path)?;
+        update_roadmap(&conn, version_id, input)
     }
 }
 
@@ -143,6 +155,59 @@ mod tests {
             .versions
             .iter()
             .any(|version| version.id == via_service.id));
+    }
+
+    #[test]
+    fn service_updates_roadmap_like_the_free_function() {
+        let (file, mut group) = group_db();
+        group.admin_member_id = Some("m-agent".into());
+        let mut registry = PluginRegistry::new();
+        register(&mut registry);
+        let ctx = Context::new();
+        start_plugins(&ctx, &registry, vec![manifest()]).unwrap();
+        let service = from_context(&ctx).unwrap();
+        let created = service
+            .create_version(
+                file.path(),
+                &group,
+                &CreateVersionInput {
+                    group_id: "g".into(),
+                    name: Some("v-roadmap".into()),
+                    what: None,
+                    who: None,
+                    how: None,
+                    one_liner: None,
+                    requester_member_id: None,
+                    mode: Some("create".into()),
+                },
+            )
+            .unwrap();
+
+        let updated = service
+            .update_roadmap(
+                file.path(),
+                &created.id,
+                &UpdateRoadmapInput {
+                    what: Some("做版本页".into()),
+                    who: Some("Codex".into()),
+                    how: Some("先契约后实现".into()),
+                    one_liner: Some("一句话".into()),
+                    name: None,
+                    requester_member_id: None,
+                },
+            )
+            .unwrap();
+
+        assert_eq!(updated.what, "做版本页");
+        assert_eq!(updated.who, "Codex");
+        assert_eq!(updated.how, "先契约后实现");
+        let board = service.board(file.path(), &group).unwrap();
+        let reloaded = board
+            .versions
+            .iter()
+            .find(|version| version.id == created.id)
+            .unwrap();
+        assert_eq!(reloaded.what, "做版本页");
     }
 
     #[test]

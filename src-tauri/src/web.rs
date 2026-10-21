@@ -2685,9 +2685,12 @@ async fn update_version_roadmap_web(
     require_group_access(&conn, &claims.sub, &v.group_id).map_err(map_acl_err)?;
     let group = db_get_group(&conn, &v.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_version_manager(&conn, &claims.sub, &group)?;
-    crate::workflow::update_roadmap(&conn, &version_id, &input)
-        .map(Json)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+    // 优先走内核服务；未装载时回退自由函数。
+    let updated = match crate::plugins::workflow_service() {
+        Some(service) => service.update_roadmap(&state.db_path, &version_id, &input),
+        None => crate::workflow::update_roadmap(&conn, &version_id, &input),
+    };
+    updated.map(Json).map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
 
 #[derive(Deserialize)]

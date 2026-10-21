@@ -63,7 +63,8 @@
 - [x] 4.1c 候选可执行文件走服务：`candidates()` + agent 自检调用点迁移；`build_args` 暂留适配器内部（仅 run_streaming 使用）
 - [x] 4.2a workflow 契约 + 版本板读数插件：`specs/workflow/spec.md` + `svc.workflow.board`（3 个单测）
 - [x] 4.2b workflow 写用例第一刀：`create_version` 走服务（kind=draft / status=planning，1 个单测）
-- [ ] 4.2c workflow 其余写操作（Roadmap / Ask / Wave / 发布）
+- [x] 4.2c workflow Roadmap 更新走服务（What/Who/How/一句话，1 个单测）
+- [ ] 4.2d workflow Ask / Wave / 发布写操作
 - [x] 4.3a marketing 契约 + 查询插件：`specs/marketing/spec.md` + `svc.marketing.list/get`（3 个单测）
 - [ ] 4.3b marketing 生成 / 审核 / 导出插件化
 - [ ] 4.4 内置功能不再直接出现在 `commands.rs` / `App.tsx`
