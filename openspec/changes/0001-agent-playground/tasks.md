@@ -43,6 +43,7 @@
 - [x] 3.1b `goal` 持久化：`goals` + `goal_rounds`（schema v8，5 个 store 单测）
 - [x] 3.1c Goal 应用服务：创建校验、状态迁移、轮次事务写入（6 个单测）
 - [x] 3.1d Goal IPC + 前端入口：Tauri 7 命令 / Web 6 路由 / 群聊顶部 Goal 条（新建、启动、暂停、批准、停止）
+- [x] 3.1e 写权限收紧：群主 / 平台管理员（3 个单测；Web 入口已拦截）
 - [x] 3.2a 驱动器内核：注入式 runner/judge、单次步数上限、prompt 组装（7 个单测）
 - [x] 3.2b 驱动运行时：单 goal 驱动锁 + tick 事务落库 + 失败回滚（5 个单测）
 - [ ] 3.2c 驱动器接线：runner 复用 scheduler（发消息 → 等 run → 观察），接后台任务

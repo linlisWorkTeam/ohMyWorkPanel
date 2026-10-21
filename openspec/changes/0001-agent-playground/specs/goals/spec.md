@@ -121,6 +121,30 @@
 - THEN 输出完全一致
 - AND 包含目标、轮次序号与上一轮判定
 
+### Requirement: 写权限
+只有平台管理员或该群群主 MUST 能创建、启动、暂停、批准或中止目标；普通成员 MUST 只能读取。
+
+#### Scenario: 平台管理员
+- GIVEN 平台管理员
+- WHEN 创建或启动目标
+- THEN 允许
+
+#### Scenario: 群主
+- GIVEN 用户在群里的成员绑定为该群 owner
+- WHEN 操作本群目标
+- THEN 允许
+
+#### Scenario: 普通成员
+- GIVEN 普通成员
+- WHEN 尝试启动目标
+- THEN 返回「只有群主或平台管理员可以操作目标」
+- AND 目标状态不变
+
+#### Scenario: 跨群群主
+- GIVEN 用户是另一个群的群主
+- WHEN 操作本群目标
+- THEN 拒绝
+
 ### Requirement: 单驱动与事务边界
 同一个目标同一时刻 MUST 只允许一个驱动器；驱动一轮与轮次落库 MUST 在同一事务内完成，失败 MUST 回滚。
 

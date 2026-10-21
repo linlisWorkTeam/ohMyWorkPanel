@@ -6,6 +6,8 @@
 use std::cell::Cell;
 use std::path::Path;
 
+use rusqlite::params;
+
 use crate::db::{id, now, open_db, AppResult};
 
 use super::store;
@@ -13,6 +15,38 @@ use super::{Goal, GoalBudget, RoundOutcome, RoundVerdict};
 
 /// 目标描述上限，避免把整篇需求塞进一行。
 pub const MAX_OBJECTIVE_CHARS: usize = 2000;
+
+/// 谁能写目标：平台管理员，或该群的群主（owner member 绑定的用户）。
+///
+/// 普通成员仍可读取目标，但不能创建、启动、暂停、批准或中止——自治循环会花
+/// token，写权限必须比读权限窄。
+pub fn can_manage(db_path: &Path, user_id: &str, group_id: &str) -> AppResult<bool> {
+    if user_id.trim().is_empty() {
+        return Ok(false);
+    }
+    let conn = open_db(db_path)?;
+    if crate::db::is_admin_user(&conn, user_id)? {
+        return Ok(true);
+    }
+    let owned: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM groups g JOIN members m ON m.id = g.owner_member_id \
+             WHERE g.id = ?1 AND m.auth_user_id = ?2",
+            params![group_id, user_id],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(owned > 0)
+}
+
+/// 写权限校验，失败信息直接面向用户。
+pub fn require_manage(db_path: &Path, user_id: &str, group_id: &str) -> AppResult<()> {
+    if can_manage(db_path, user_id, group_id)? {
+        Ok(())
+    } else {
+        Err("只有群主或平台管理员可以操作目标".into())
+    }
+}
 
 pub fn create_goal(
     db_path: &Path,
@@ -118,6 +152,40 @@ mod tests {
         file
     }
 
+    fn db_with_owner() -> NamedTempFile {
+        let file = NamedTempFile::new().unwrap();
+        init_db(file.path()).unwrap();
+        let conn = open_db(file.path()).unwrap();
+        conn.execute(
+            "INSERT INTO users (id, username, password_hash, created_at) VALUES ('u-owner','goal-owner','x',1)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO users (id, username, password_hash, created_at) VALUES ('u-other','goal-other','x',1)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO users (id, username, password_hash, created_at, is_admin) VALUES ('u-root','goal-root','x',1,1)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO groups (id, name, workspace_path, owner_member_id, created_at)
+             VALUES ('grp-1', '测试群', '/tmp', 'm-owner', 1)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO members (id, group_id, kind, display_name, avatar_color, role_description, is_active, created_at, auth_user_id)
+             VALUES ('m-owner', 'grp-1', 'user', 'Owner', 'c', 'owner', 1, 1, 'u-owner')",
+            [],
+        )
+        .unwrap();
+        file
+    }
+
     fn budget() -> GoalBudget {
         GoalBudget::default()
     }
@@ -210,5 +278,30 @@ mod tests {
         assert_eq!(after.status, GoalStatus::Aborted);
         let loaded = get_goal(file.path(), &goal.id).unwrap().unwrap();
         assert_eq!(loaded.stop_reason, Some(StopReason::RoundsExhausted));
+    }
+
+    #[test]
+    fn platform_admin_and_group_owner_can_manage() {
+        let file = db_with_owner();
+        assert!(can_manage(file.path(), "u-root", "grp-1").unwrap());
+        assert!(can_manage(file.path(), "u-owner", "grp-1").unwrap());
+        assert!(can_manage(file.path(), "seed-user-root", "grp-1").unwrap());
+    }
+
+    #[test]
+    fn ordinary_member_cannot_manage() {
+        let file = db_with_owner();
+        assert!(!can_manage(file.path(), "u-other", "grp-1").unwrap());
+        let error = require_manage(file.path(), "u-other", "grp-1")
+            .err()
+            .unwrap();
+        assert!(error.contains("只有群主或平台管理员"));
+        assert!(!can_manage(file.path(), "", "grp-1").unwrap());
+    }
+
+    #[test]
+    fn owner_of_another_group_cannot_manage() {
+        let file = db_with_owner();
+        assert!(!can_manage(file.path(), "u-owner", "grp-other").unwrap());
     }
 }

@@ -3412,6 +3412,8 @@ async fn create_goal_web(
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     require_group_access(&conn, &claims.sub, &input.group_id).map_err(map_acl_err)?;
     drop(conn);
+    crate::goals::service::require_manage(&state.db_path, &claims.sub, &input.group_id)
+        .map_err(|error| (StatusCode::FORBIDDEN, error))?;
     crate::goals::service::create_goal(
         &state.db_path,
         &input.group_id,
@@ -3433,6 +3435,8 @@ fn mutate_goal(
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
     drop(conn);
+    crate::goals::service::require_manage(&state.db_path, &claims.sub, &group_id)
+        .map_err(|error| (StatusCode::FORBIDDEN, error))?;
     action(&state.db_path, goal_id)
         .map(Json)
         .map_err(|error| (StatusCode::BAD_REQUEST, error))
