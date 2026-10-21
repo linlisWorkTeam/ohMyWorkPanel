@@ -13,6 +13,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 
 use super::effect::{EffectHandle, EffectStack};
+use super::events::EventBus;
 
 type Service = Arc<dyn Any + Send + Sync>;
 
@@ -54,6 +55,7 @@ impl From<ServiceRegistryError> for String {
 struct ContextInner {
     services: RwLock<HashMap<&'static str, Service>>,
     effects: EffectStack,
+    events: EventBus,
     disposed: AtomicBool,
 }
 
@@ -75,6 +77,7 @@ impl Context {
             inner: Arc::new(ContextInner {
                 services: RwLock::new(HashMap::new()),
                 effects: EffectStack::default(),
+                events: EventBus::new(),
                 disposed: AtomicBool::new(false),
             }),
         }
@@ -160,6 +163,11 @@ impl Context {
         }
     }
 
+    /// 事件总线；上下文释放时监听器会被清空。
+    pub fn events(&self) -> &EventBus {
+        &self.inner.events
+    }
+
     /// 登记一个可撤销副作用。
     pub fn effect(
         &self,
@@ -175,6 +183,7 @@ impl Context {
             return;
         }
         self.inner.effects.dispose_all();
+        self.inner.events.clear();
     }
 }
 

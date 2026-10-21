@@ -71,9 +71,56 @@ v0 只覆盖进程内、单进程、同步语义；事件分发与清单 v2 属�
 - THEN 返回 `Disposed` 错误
 - AND 取回旧服务返回 `NotFound`
 
+### Requirement: 事件分发
+内核 MUST 提供四种分发语义，且语义与调用点一致：
+
+| 模式 | 顺序 | 等待 | 返回值 |
+|---|---|---|---|
+| `emit` | 注册顺序 | 逐个等待 | 无（返回调用数量） |
+| `parallel` | 并发 | 全部完成 | 每个监听器的可选结果 |
+| `serial` | 注册顺序 | 逐个等待 | 每个监听器的可选结果 |
+| `bail` | 注册顺序 | 遇到首个返回值即停 | 首个返回值 |
+
+#### Scenario: emit 按注册顺序调用全部监听器
+- GIVEN 依次注册 a、b、c 三个监听器
+- WHEN 以 `emit` 分发
+- THEN 调用顺序为 a、b、c
+- AND 返回被调用数量 3
+
+#### Scenario: bail 短路
+- GIVEN 第一个监听器返回 `None`，第二个返回 `Some(allow)`，第三个返回 `Some(deny)`
+- WHEN 以 `bail` 分发
+- THEN 结果为 `allow`
+- AND 第三个监听器不被调用
+
+#### Scenario: serial 保序收集
+- GIVEN 两个依次返回 1、2 的监听器
+- WHEN 以 `serial` 分发
+- THEN 结果为 `[Some(1), Some(2)]`
+
+#### Scenario: parallel 收集全部结果
+- GIVEN 两个返回不同值的监听器
+- WHEN 以 `parallel` 分发
+- THEN 两个结果都出现
+- AND 顺序不作为契约
+
+#### Scenario: 注销监听器
+- GIVEN 同一事件注册了两个监听器
+- WHEN 注销其中一个
+- THEN 只剩一个监听器参与分发
+- AND 重复注销返回未找到
+
+### Requirement: 释放清空监听器
+上下文释放时 MUST 清空事件总线，避免已卸载插件继续收到事件。
+
+#### Scenario: 释放后不再分发
+- GIVEN 上下文注册了监听器
+- WHEN 释放上下文后再分发同名事件
+- THEN 监听器不会被调用
+
 ## 非目标（v0）
 
-- 事件分发（emit / waterfall / parallel / serial / bail）
+- 事件分发 `waterfall`（环绕中间件）语义
 - 插件清单 v2 与插件加载器
 - 按群作用域 fork 子上下文
 - 异步依赖就绪等待

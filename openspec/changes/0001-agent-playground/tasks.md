@@ -18,7 +18,8 @@
 - [x] 1.2 Rust：`inject` 声明依赖（缺失时一次性列出全部缺口）
 - [x] 1.3 Rust：`effect` / disposer 回收（逆序卸载、重复释放幂等，含单测）
 - [ ] 1.3a Rust：按群作用域 fork 子上下文（服务可见性隔离）
-- [ ] 1.4 Rust：类型化事件五种分发（emit / waterfall / parallel / serial / bail）
+- [x] 1.4 Rust：类型化事件分发（emit / parallel / serial / bail，含短路与注销语义）
+- [ ] 1.4a Rust：`waterfall`（环绕中间件）语义
 - [ ] 1.5 TS：前端同构内核，契约测试与 Rust 侧共享用例
 - [ ] 1.6 manifest v2：`contributes.services` / `inject` / `entry`，保留旧字段兼容
 - [ ] 1.7 样板迁移：把现有扩展宿主改成 kernel 上的插件
