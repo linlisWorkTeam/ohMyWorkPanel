@@ -118,10 +118,52 @@ v0 只覆盖进程内、单进程、同步语义；事件分发与清单 v2 属�
 - WHEN 释放上下文后再分发同名事件
 - THEN 监听器不会被调用
 
+### Requirement: 按依赖顺序装载插件
+装载器 MUST 先安装依赖的提供者，再安装消费者，无论输入顺序如何；插件 id MUST 唯一。
+
+#### Scenario: 输入顺序颠倒
+- GIVEN `consumer` 依赖 `svc.a`，`provider` 提供 `svc.a`
+- WHEN 以 `[consumer, provider]` 的顺序装载
+- THEN `provider` 先安装
+- AND 报告中的顺序为 `[provider, consumer]`
+
+#### Scenario: 重复 id
+- GIVEN 两个插件声明同一个 id
+- WHEN 装载
+- THEN 返回 `DuplicateId`
+- AND 不安装任何插件
+
+### Requirement: 装载失败整体回滚
+任一插件安装失败、依赖缺失、依赖成环，或声明提供的服务实际未注册时，装载器 MUST 释放上下文，不允许半套插件继续运行。
+
+#### Scenario: 安装函数报错
+- GIVEN 插件安装返回错误
+- WHEN 装载
+- THEN 返回 `Install` 错误
+- AND 上下文已释放
+
+#### Scenario: 声明未兑现
+- GIVEN 插件声明 `provides = ["svc.x"]` 但安装后没有注册
+- WHEN 装载
+- THEN 返回 `ProvidesNotRegistered`
+- AND 上下文已释放
+
+#### Scenario: 依赖成环
+- GIVEN `a` 依赖 `svc.b`、`b` 依赖 `svc.a`，两者各自提供对方需要的服务
+- WHEN 装载
+- THEN 返回 `Cycle`
+- AND 上下文已释放
+
+#### Scenario: 依赖无人提供
+- GIVEN 插件依赖一个没有任何插件提供的服务
+- WHEN 装载
+- THEN 返回 `MissingDependency` 并列出缺口
+
 ## 非目标（v0）
 
 - 事件分发 `waterfall`（环绕中间件）语义
-- 插件清单 v2 与插件加载器
+- 动态库插件与热重载（v0 只支持编译期注册）
+- 插件清单 v2 的文件发现与校验（装载器只接受内存中的 `PluginSpec`）
 - 按群作用域 fork 子上下文
 - 异步依赖就绪等待
 - 权限与沙箱
