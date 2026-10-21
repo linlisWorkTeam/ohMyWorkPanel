@@ -44,3 +44,30 @@
 - GIVEN run 状态为 `paused`（未知）
 - WHEN 投影
 - THEN 角色状态为 `idle`
+
+### Requirement: 可回退的视图切换
+场景 MUST 作为独立视图存在且默认不激活；退出后 MUST 回到聊天，不改变消息、草稿或调度状态。
+
+#### Scenario: 进入与退出
+- GIVEN 用户正在聊天
+- WHEN 点击像素场景入口
+- THEN 主区切换为场景视图
+- AND 输入框隐藏
+- WHEN 点击「返回聊天」
+- THEN 回到聊天视图
+- AND 消息与草稿保持原样
+
+#### Scenario: 空群
+- GIVEN 群内没有成员
+- WHEN 进入场景
+- THEN 显示空状态提示
+- AND 不渲染画布
+
+### Requirement: 点击角色打开既有面板
+点击场景中的角色 MUST 打开既有的成员面板，而不是新增一条独立的详情路径。
+
+#### Scenario: 点中角色
+- GIVEN 场景中有角色
+- WHEN 点击某个角色
+- THEN 成员面板打开
+- AND 不发送消息、不改变选中角色以外的状态

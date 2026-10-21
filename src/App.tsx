@@ -62,6 +62,7 @@ import { LogsPanel } from "./observability/LogsPanel";
 import { ServerPathPicker } from "./groups/ServerPathPicker";
 import { ExtensionPanel } from "./extensions/ExtensionPanel";
 import { VersionView } from "./workflow/VersionView";
+import { SceneView } from "./scene/SceneView";
 import { GroupSettingsView } from "./groups/GroupSettingsView";
 import { AgentConfigView } from "./agents/AgentConfigView";
 import {
@@ -1357,6 +1358,16 @@ export function App() {
             {liveReady && <span className="status-chip">Live</span>}
             <button
               type="button"
+              className={`icon-btn ${mainView === "scene" ? "on" : ""}`}
+              onClick={() => setMainView(mainView === "scene" ? "chat" : "scene")}
+              aria-label="像素场景"
+              aria-pressed={mainView === "scene"}
+              title="像素场景（实验）：把成员放进取景框"
+            >
+              ◧
+            </button>
+            <button
+              type="button"
               className={`icon-btn ${showMembers ? "on" : ""}`}
               onClick={toggleMembers}
               aria-label="成员 / Agent 面板"
@@ -1385,7 +1396,14 @@ export function App() {
           </div>
       ) : null}
       chat={current ? (
-        !isChatGroup && mainView === "versions" ? (
+        mainView === "scene" ? (
+          <SceneView
+            members={members}
+            runs={current.runs}
+            onExit={() => setMainView("chat")}
+            onSelectAgent={() => setShowMembers(true)}
+          />
+        ) : !isChatGroup && mainView === "versions" ? (
           <VersionView
             group={current.group}
             members={members}
@@ -1458,7 +1476,7 @@ export function App() {
       ) : groups.length === 0 && groupsLoaded ? (
         <EmptyHome canCreate={isAdmin} onCreate={() => setShowCreate(true)} />
       ) : <div className="loading">正在打开本地群聊…</div>}
-      composer={current && mainView !== "dsh" && mainView !== "agent-config" && !(!isChatGroup && mainView === "versions") ? <div className="wp-composer-anchor">
+      composer={current && mainView !== "dsh" && mainView !== "agent-config" && mainView !== "scene" && !(!isChatGroup && mainView === "versions") ? <div className="wp-composer-anchor">
           {slashOpen && (
             <div className="mention-menu slash-menu">
               {SLASH_COMMANDS.map((c) => (
