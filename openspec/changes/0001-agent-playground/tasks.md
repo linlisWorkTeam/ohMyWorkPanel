@@ -39,10 +39,11 @@
 
 ## P3 Goal 模式 MVP
 
-- [ ] 3.1 `goal` 领域对象与 SQLite schema（迁移版本递增）
+- [x] 3.1a `goal` 领域模型与状态机（Draft/Active/Paused/AwaitingApproval/Completed/Aborted，12 个单测）
+- [ ] 3.1b `goal` 持久化与 SQLite schema（迁移版本递增）
 - [ ] 3.2 循环驱动器插件：plan → act → observe → judge
-- [ ] 3.3 预算与熔断：轮次 / 时长 / token / 无进展
-- [ ] 3.4 人类闸门：每轮确认或里程碑确认
+- [x] 3.3 预算与熔断：轮次 / 时长 / token / 无进展 / 连续失败（触线即停）
+- [x] 3.4 人类闸门：每轮确认（`AwaitingApproval` → `approve`）
 - [ ] 3.5 证据账本：每轮结果落库并在群里可回看
 - [ ] 3.6 验证：一个真实 goal 端到端跑完并停止
 

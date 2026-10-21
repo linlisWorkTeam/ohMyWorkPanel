@@ -9,6 +9,7 @@
 | Capability | 覆盖范围 | 代码入口 | 状态 |
 |---|---|---|---|
 | [kernel](kernel/spec.md) | 服务注册表、依赖声明、可撤销副作用 | `src-tauri/src/kernel/` | seeded（v0） |
+| goals | 群组级目标、预算护栏、人类闸门 | `src-tauri/src/goals/` | partial（delta 见 `changes/0001-agent-playground/specs/goals/`） |
 | [extensions](extensions/spec.md) | 扩展发现、清单契约、同源反代、页签可见性 | `src-tauri/src/extensions.rs`、`src/extensions/` | seeded |
 | accounts | 注册、登录、邀请、会话、在线状态 | `src-tauri/src/accounts/`、`src/accounts/` | todo |
 | groups | 建群、工作区绑定、群公告、群类型 | `src-tauri/src/groups/`、`src/groups/` | todo |
