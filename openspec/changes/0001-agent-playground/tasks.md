@@ -61,7 +61,8 @@
 - [x] 4.1a 适配器目录插件：`svc.adapters` + Web 入口优先服务、回退自由函数（3 个单测）
 - [x] 4.1b 适配器解析走内核服务：scheduler 执行路径优先 `svc.adapters.resolve`，失败回退自由函数
 - [x] 4.1c 候选可执行文件走服务：`candidates()` + agent 自检调用点迁移；`build_args` 暂留适配器内部（仅 run_streaming 使用）
-- [ ] 4.2 迁移工作流（版本 / Wave）为插件
+- [x] 4.2a workflow 契约 + 版本板读数插件：`specs/workflow/spec.md` + `svc.workflow.board`（3 个单测）
+- [ ] 4.2b workflow 写操作插件化（版本 / Roadmap / Ask / Wave / 发布）
 - [ ] 4.3 迁移 marketing 为插件
 - [ ] 4.4 内置功能不再直接出现在 `commands.rs` / `App.tsx`
 - [ ] 4.5 每个迁移都补 OpenSpec delta 与回归测试

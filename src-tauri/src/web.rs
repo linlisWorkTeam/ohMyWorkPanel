@@ -2646,7 +2646,12 @@ async fn version_board_web(
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
     let group = db_get_group(&conn, &group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
-    crate::workflow::board_for_group(&state.db_path, &group)
+    // 优先走内核服务；未装载时回退自由函数。
+    let board = match crate::plugins::workflow_service() {
+        Some(service) => service.board(&state.db_path, &group),
+        None => crate::workflow::board_for_group(&state.db_path, &group),
+    };
+    board
         .map(Json)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
 }

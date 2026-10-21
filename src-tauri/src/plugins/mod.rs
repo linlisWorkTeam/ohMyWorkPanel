@@ -2,6 +2,7 @@
 
 pub mod adapter_catalog;
 pub mod extension_host;
+pub mod workflow;
 
 use std::sync::{Arc, OnceLock};
 
@@ -14,12 +15,17 @@ pub fn registry() -> PluginRegistry {
     let mut registry = PluginRegistry::new();
     extension_host::register(&mut registry);
     adapter_catalog::register(&mut registry);
+    workflow::register(&mut registry);
     registry
 }
 
 /// 内置清单列表。后续可从磁盘发现更多插件并与内置清单合并。
 pub fn builtin_manifests() -> Vec<PluginManifest> {
-    vec![extension_host::manifest(), adapter_catalog::manifest()]
+    vec![
+        extension_host::manifest(),
+        adapter_catalog::manifest(),
+        workflow::manifest(),
+    ]
 }
 
 /// 装载内置插件；返回上下文与装载报告。
@@ -55,6 +61,11 @@ pub fn adapter_catalog_service() -> Option<Arc<adapter_catalog::AdapterCatalog>>
     kernel().require(adapter_catalog::SERVICE_KEY).ok()
 }
 
+/// 工作流服务；未装载时返回 `None`，调用方可退回自由函数实现。
+pub fn workflow_service() -> Option<Arc<workflow::WorkflowService>> {
+    kernel().require(workflow::SERVICE_KEY).ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -64,13 +75,20 @@ mod tests {
         let (ctx, report) = bootstrap().unwrap();
         assert_eq!(
             report.loaded,
-            vec![extension_host::PLUGIN_ID, adapter_catalog::PLUGIN_ID]
+            vec![
+                extension_host::PLUGIN_ID,
+                adapter_catalog::PLUGIN_ID,
+                workflow::PLUGIN_ID
+            ]
         );
         assert!(ctx
             .require::<extension_host::ExtensionHost>(extension_host::SERVICE_KEY)
             .is_ok());
         assert!(ctx
             .require::<adapter_catalog::AdapterCatalog>(adapter_catalog::SERVICE_KEY)
+            .is_ok());
+        assert!(ctx
+            .require::<workflow::WorkflowService>(workflow::SERVICE_KEY)
             .is_ok());
     }
 
