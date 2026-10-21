@@ -1607,7 +1607,11 @@ async fn get_agent_models_web(
 async fn list_cli_adapters_web(
     ClaimsExtractor(_claims): ClaimsExtractor,
 ) -> Json<Vec<crate::adapters::manifest::AdapterCatalogItem>> {
-    Json(crate::adapters::manifest::catalog())
+    // 优先走内核服务；未装载时回退自由函数，保证 Web 不会因插件问题不可用。
+    let items = crate::plugins::adapter_catalog_service()
+        .map(|catalog| catalog.list())
+        .unwrap_or_else(crate::adapters::manifest::catalog);
+    Json(items)
 }
 
 async fn refresh_agent_models_web(
