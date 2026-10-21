@@ -2665,9 +2665,12 @@ async fn create_version_web(
     require_group_access(&conn, &claims.sub, &input.group_id).map_err(map_acl_err)?;
     let group = db_get_group(&conn, &input.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_version_manager(&conn, &claims.sub, &group)?;
-    crate::workflow::create_version(&conn, &group, &input)
-        .map(Json)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+    // 优先走内核服务；未装载时回退自由函数。
+    let created = match crate::plugins::workflow_service() {
+        Some(service) => service.create_version(&state.db_path, &group, &input),
+        None => crate::workflow::create_version(&conn, &group, &input),
+    };
+    created.map(Json).map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
 
 async fn update_version_roadmap_web(

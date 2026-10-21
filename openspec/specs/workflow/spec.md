@@ -7,12 +7,12 @@
 ## Requirements
 
 ### Requirement: 版本
-版本 MUST 属于一个群，包含名称、类型、状态与 Roadmap 三要素（What / Who / How）；新建版本 MUST 默认为 `draft`。
+版本 MUST 属于一个群，包含名称、类型（kind）、状态与 Roadmap 三要素（What / Who / How）；新建版本 MUST 为 `kind=draft`、`status=planning`。
 
 #### Scenario: 新建版本
 - GIVEN 一个项目群
 - WHEN 创建版本
-- THEN 状态为 `draft`
+- THEN `kind` 为 `draft`、`status` 为 `planning`
 - AND 出现在该群的版本板上
 
 #### Scenario: 跨群隔离

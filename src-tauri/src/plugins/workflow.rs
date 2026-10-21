@@ -1,14 +1,16 @@
-//! 内置插件：版本 / Wave 工作流（P4 深水区的第一层读数）。
+//! 内置插件：版本 / Wave 工作流（P4 深水区）。
 //!
-//! 当前只收口「读」：版本板聚合。写操作仍走既有 use case，等契约稳定后再迁。
+//! 已收口：版本板读数 + 版本创建。其余写操作仍走既有 use case。
 
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::db::AppResult;
+use crate::db::{open_db, AppResult};
 use crate::kernel::{Context, PluginManifest, PluginRegistry};
 use crate::models::Group;
-use crate::workflow::{board_for_group, VersionBoard};
+use crate::workflow::{
+    board_for_group, create_version, CreateVersionInput, ProjectVersion, VersionBoard,
+};
 
 pub const ENTRY: &str = "builtin:workflow";
 pub const SERVICE_KEY: &str = "svc.workflow";
@@ -22,6 +24,17 @@ impl WorkflowService {
     /// 群版本板（Git 快照 + 版本 + Wave + asking）。
     pub fn board(&self, db_path: &Path, group: &Group) -> AppResult<VersionBoard> {
         board_for_group(db_path, group)
+    }
+
+    /// 新建版本（有副作用的写用例）。
+    pub fn create_version(
+        &self,
+        db_path: &Path,
+        group: &Group,
+        input: &CreateVersionInput,
+    ) -> AppResult<ProjectVersion> {
+        let conn = open_db(db_path)?;
+        create_version(&conn, group, input)
     }
 }
 
@@ -97,6 +110,39 @@ mod tests {
             via_service.asking_version_id,
             via_function.asking_version_id
         );
+    }
+
+    #[test]
+    fn service_creates_a_version_like_the_free_function() {
+        let (file, mut group) = group_db();
+        group.admin_member_id = Some("m-agent".into());
+        let mut registry = PluginRegistry::new();
+        register(&mut registry);
+        let ctx = Context::new();
+        start_plugins(&ctx, &registry, vec![manifest()]).unwrap();
+        let service = from_context(&ctx).unwrap();
+        let input = CreateVersionInput {
+            group_id: "g".into(),
+            name: Some("v-next".into()),
+            what: Some("what".into()),
+            who: Some("who".into()),
+            how: Some("how".into()),
+            one_liner: Some("one".into()),
+            requester_member_id: None,
+            mode: Some("create".into()),
+        };
+
+        let via_service = service.create_version(file.path(), &group, &input).unwrap();
+        assert_eq!(via_service.status, "planning");
+        assert_eq!(via_service.kind, "draft");
+        assert_eq!(via_service.name, "v-next");
+        assert_eq!(via_service.group_id, "g");
+
+        let board = service.board(file.path(), &group).unwrap();
+        assert!(board
+            .versions
+            .iter()
+            .any(|version| version.id == via_service.id));
     }
 
     #[test]

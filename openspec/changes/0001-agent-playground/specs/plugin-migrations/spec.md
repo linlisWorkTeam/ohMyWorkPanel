@@ -45,6 +45,21 @@
 - WHEN 取候选
 - THEN 返回错误
 
+### Requirement: 工作流写用例
+版本创建 MUST 能通过工作流服务执行，结果与自由函数一致（`kind=draft`、`status=planning`）；Web 入口 MUST 优先使用服务。
+
+#### Scenario: 通过服务创建版本
+- GIVEN 群里有管理员 Agent
+- WHEN 通过服务创建版本
+- THEN 返回 `kind=draft`、`status=planning`
+- AND 版本板能看到它
+
+#### Scenario: 回退
+- GIVEN 插件未装载
+- WHEN 创建版本
+- THEN 使用自由函数
+- AND 行为不变
+
 ### Requirement: 插件清单一致
 每个内置插件 MUST 声明 `id`、`entry`、`provides`，且 `entry` 必须能在注册表中解析。
 
