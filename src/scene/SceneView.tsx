@@ -46,7 +46,7 @@ export function SceneView({ members, runs, onExit, onSelectAgent }: SceneViewPro
           <span data-state="blocked">阻塞 {summary.blocked}</span>
           <span data-state="done">完成 {summary.done}</span>
         </div>
-        <button type="button" className="icon-btn" onClick={onExit} title="返回聊天">
+        <button type="button" className="scene-exit" onClick={onExit} title="返回聊天">
           返回聊天
         </button>
       </div>
