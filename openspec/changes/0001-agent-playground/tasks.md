@@ -75,5 +75,6 @@
 - [x] 4.4a `commands.rs` 按领域拆分第一刀：Goal 命令移入 `commands/goals.rs`，`commands::<name>` 路径由 mod.rs 重导出（IPC 签名不变）
 - [x] 4.4b workflow / marketing 命令组拆分：`commands/workflow.rs`、`commands/marketing.rs`（共享 helper 走 `super::`，注册路径不变）
 - [x] 4.4c members / pm 命令组拆分：`commands/members.rs`、`commands/pm.rs`（mod.rs 压到约 39KB）
-- [ ] 4.4d 继续拆分：chat / observability / ops 命令组
+- [x] 4.4d observability / ops 命令组拆分：`commands/observability.rs`、`commands/ops.rs`（helper `normalize_group_kind` 留在 mod.rs）
+- [ ] 4.4e chat 命令组拆分（send_message / run 控制 / 反馈）
 - [ ] 4.5 每个迁移都补 OpenSpec delta 与回归测试

@@ -28,6 +28,18 @@ pub mod members;
 pub use members::*;
 pub mod pm;
 pub use pm::*;
+pub mod observability;
+pub use observability::*;
+pub mod ops;
+pub use ops::*;
+
+fn normalize_group_kind(raw: Option<&str>) -> String {
+    match raw.map(str::trim).unwrap_or("project") {
+        "chat" => "chat".into(),
+        _ => "project".into(),
+    }
+}
+
 use rusqlite::{params, OptionalExtension};
 use std::{sync::atomic::Ordering, time::Duration};
 use tauri::{AppHandle, Emitter, State};
@@ -529,81 +541,6 @@ pub fn get_preset_roles_command(state: State<'_, AppState>) -> AppResult<Vec<Pre
 // === PM: Roadmap Items ===
 
 #[tauri::command]
-pub fn save_experience(
-    group_id: String,
-    source_member_id: String,
-    title: String,
-    content: String,
-    tags: Option<String>,
-    state: State<'_, AppState>,
-) -> AppResult<String> {
-    save_experience_db(
-        &open_db(&state.db_path)?,
-        &group_id,
-        &source_member_id,
-        &title,
-        &content,
-        tags.as_deref().unwrap_or(""),
-    )
-}
-
-#[tauri::command]
-pub fn query_experiences(
-    group_id: String,
-    query: Option<String>,
-    limit: Option<i64>,
-    state: State<'_, AppState>,
-) -> AppResult<Vec<Experience>> {
-    query_experiences_db(
-        &open_db(&state.db_path)?,
-        &group_id,
-        query.as_deref().unwrap_or(""),
-        limit.unwrap_or(20),
-    )
-}
-
-#[tauri::command]
-pub fn delete_experience(id: String, state: State<'_, AppState>) -> AppResult<bool> {
-    delete_experience_db(&open_db(&state.db_path)?, &id)
-}
-
-// === Logs ===
-
-#[tauri::command]
-pub fn list_logs(
-    limit: Option<i64>,
-    offset: Option<i64>,
-    level: Option<String>,
-    source: Option<String>,
-    since: Option<i64>,
-    state: State<'_, AppState>,
-) -> AppResult<Vec<LogEntry>> {
-    logger::query_logs(
-        &open_db(&state.db_path)?,
-        &LogQuery {
-            limit,
-            offset,
-            level,
-            source,
-            since,
-        },
-    )
-}
-
-#[tauri::command]
-pub fn count_logs(level: Option<String>, state: State<'_, AppState>) -> AppResult<i64> {
-    logger::count_logs(&open_db(&state.db_path)?, level.as_deref(), None)
-}
-
-#[tauri::command]
-pub fn clear_logs(state: State<'_, AppState>) -> AppResult<()> {
-    let conn = open_db(&state.db_path)?;
-    logger::clear_logs(&conn)?;
-    logger::info(&conn, "logs", "logs cleared by user", None);
-    Ok(())
-}
-
-#[tauri::command]
 pub fn list_server_dir(path: String) -> AppResult<crate::fs_browse::DirListing> {
     crate::fs_browse::list_server_dir(&path)
 }
@@ -677,33 +614,6 @@ pub fn set_group_announcement_cmd(
         &g.announcement,
     );
     Ok(g)
-}
-
-#[tauri::command]
-pub async fn ops_release_status() -> crate::ops::ReleaseStatus {
-    crate::ops::release_status().await
-}
-
-#[tauri::command]
-pub fn ops_job_status() -> crate::ops::OpsJobState {
-    crate::ops::ops_job_snapshot()
-}
-
-#[tauri::command]
-pub fn ops_run_test_gate() -> AppResult<()> {
-    crate::ops::kickoff_test_gate()
-}
-
-#[tauri::command]
-pub fn ops_deploy_canary() -> AppResult<()> {
-    crate::ops::kickoff_deploy_canary()
-}
-
-fn normalize_group_kind(raw: Option<&str>) -> String {
-    match raw.map(str::trim).unwrap_or("project") {
-        "chat" => "chat".into(),
-        _ => "project".into(),
-    }
 }
 
 #[tauri::command]
