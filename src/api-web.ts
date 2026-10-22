@@ -9,6 +9,7 @@ import type {
   Experience, SaveExperienceInput, LogEntry, LogLevel, LogQueryFilter,
   DirListing, Group, ReleaseStatus, OpsJobState, ExtensionStatus, A2aDispatchResult,
   InvitePreview,
+  Goal, CreateGoalInput,
 } from "./types";
 import type { CampaignExport, ContentCampaign, CreateCampaignInput } from "./marketing/types";
 
@@ -566,6 +567,32 @@ export const api = {
       `/api/agent-config/install/${encodeURIComponent(cli)}`,
       { method: "POST" },
     ),
+
+  // === 群组级 Goal（P3 自治循环） ===
+  listGoals: (groupId: string) =>
+    apiFetch<Goal[]>(`/api/groups/${encodeURIComponent(groupId)}/goals`),
+  getGoal: (goalId: string) =>
+    apiFetch<Goal | null>(`/api/goals/${encodeURIComponent(goalId)}`),
+  createGoal: (input: CreateGoalInput) =>
+    apiFetch<Goal>(`/api/groups/${encodeURIComponent(input.groupId)}/goals`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  startGoal: (goalId: string) =>
+    apiFetch<Goal>(`/api/goals/${encodeURIComponent(goalId)}/start`, { method: "POST" }),
+  pauseGoal: (goalId: string) =>
+    apiFetch<Goal>(`/api/goals/${encodeURIComponent(goalId)}/pause`, { method: "POST" }),
+  approveGoal: (goalId: string) =>
+    apiFetch<Goal>(`/api/goals/${encodeURIComponent(goalId)}/approve`, { method: "POST" }),
+  abortGoal: (goalId: string) =>
+    apiFetch<Goal>(`/api/goals/${encodeURIComponent(goalId)}/abort`, { method: "POST" }),
+  advanceGoal: (goalId: string) =>
+    apiFetch<Goal>(`/api/goals/${encodeURIComponent(goalId)}/advance`, { method: "POST" }),
+  setGoalAutoAdvance: (goalId: string, enabled: boolean) =>
+    apiFetch<Goal>(`/api/goals/${encodeURIComponent(goalId)}/auto-advance`, {
+      method: "POST",
+      body: JSON.stringify({ enabled }),
+    }),
 
   // WebSocket - replaces Tauri listen()
   connectWS: (onMessage: (data: string) => void) => {

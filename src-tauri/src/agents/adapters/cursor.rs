@@ -4,7 +4,10 @@ pub fn build_args(prompt: &str, session_id: Option<&str>, model: Option<&str>) -
         args.push("--resume".into());
         args.push(id.to_string());
     }
-    if let Some(m) = model.map(str::trim).filter(|s| !s.is_empty() && *s != "default") {
+    if let Some(m) = model
+        .map(str::trim)
+        .filter(|s| !s.is_empty() && *s != "default")
+    {
         args.push("--model".into());
         args.push(m.to_string());
     }

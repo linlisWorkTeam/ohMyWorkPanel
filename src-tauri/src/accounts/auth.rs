@@ -1,9 +1,9 @@
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::Argon2;
-use rand_core::OsRng;
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
-use serde::{Deserialize, Serialize};
 use chrono::Utc;
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use rand_core::OsRng;
+use serde::{Deserialize, Serialize};
 
 // Keep the existing signing secret during the repository rename so active
 // sessions are not invalidated solely because the public project name changed.
@@ -11,7 +11,7 @@ const JWT_SECRET: &str = "linlis-work-panel-jwt-secret-2026";
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
-    pub sub: String,  // user_id
+    pub sub: String, // user_id
     pub username: String,
     pub exp: usize,
 }
@@ -33,9 +33,7 @@ pub fn verify_password(password: &str, hash: &str) -> Result<bool, String> {
 }
 
 pub fn create_jwt(user_id: &str, username: &str) -> Result<String, String> {
-    let exp = Utc::now()
-        .timestamp() as usize
-        + 86400 * 7;
+    let exp = Utc::now().timestamp() as usize + 86400 * 7;
     let claims = Claims {
         sub: user_id.to_string(),
         username: username.to_string(),

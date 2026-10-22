@@ -13,19 +13,14 @@ use std::{
     sync::RwLock,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum StreamDialect {
+    #[default]
     Jsonl,
     Plain,
     #[serde(rename = "cursor-stream-json")]
     CursorStreamJson,
-}
-
-impl Default for StreamDialect {
-    fn default() -> Self {
-        Self::Jsonl
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -84,7 +79,7 @@ fn id_ok(id: &str) -> bool {
             return false;
         }
     }
-    !start && id.chars().all(|ch| ch.is_ascii())
+    !start && id.is_ascii()
 }
 
 fn looks_like_shell(arg: &str) -> bool {
@@ -149,7 +144,9 @@ pub fn expand_args(
     model: Option<&str>,
     session: Option<&str>,
 ) -> Vec<String> {
-    let model = model.map(str::trim).filter(|s| !s.is_empty() && *s != "default");
+    let model = model
+        .map(str::trim)
+        .filter(|s| !s.is_empty() && *s != "default");
     let session = session.map(str::trim).filter(|s| !s.is_empty());
     let mut out = Vec::new();
     for a in &m.args {
@@ -172,16 +169,26 @@ pub fn expand_args(
             other => out.push(other.to_string()),
         }
     }
-    if let Some(flag) = m.model_flag.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
-        if model.is_some() && !m.args.iter().any(|a| a == "{model}") {
+    if let Some(flag) = m
+        .model_flag
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        if let Some(model) = model.filter(|_| !m.args.iter().any(|a| a == "{model}")) {
             out.push(flag.to_string());
-            out.push(model.unwrap().to_string());
+            out.push(model.to_string());
         }
     }
-    if let Some(flag) = m.resume_flag.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
-        if session.is_some() && !m.args.iter().any(|a| a == "{session}") {
+    if let Some(flag) = m
+        .resume_flag
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        if let Some(session) = session.filter(|_| !m.args.iter().any(|a| a == "{session}")) {
             // insert after first arg-ish: prepend flag+session like cursor --resume
-            let sid = session.unwrap().to_string();
+            let sid = session.to_string();
             if !out.iter().any(|x| x == flag) {
                 out.insert(0, flag.to_string());
                 out.insert(1, sid);
@@ -214,7 +221,7 @@ fn scan_roots() -> HashMap<String, AdapterManifest> {
     let mut map = HashMap::new();
     let mut roots: Vec<PathBuf> = Vec::new();
     if let Ok(raw) = std::env::var("OHMYWORKPANEL_ADAPTER_ROOTS") {
-        for part in raw.split(|c| c == ':' || c == ';') {
+        for part in raw.split([':', ';']) {
             let p = part.trim();
             if !p.is_empty() {
                 roots.push(PathBuf::from(p));
@@ -260,6 +267,20 @@ fn manifest_table() -> HashMap<String, AdapterManifest> {
 
 pub fn resolve_adapter(name: &str) -> Result<SpawnSpec, String> {
     resolve_adapter_with(&manifest_table(), name)
+}
+
+/// 某适配器的候选可执行文件名（清单优先，其次内置）。
+pub fn candidates(name: &str) -> Result<Vec<String>, String> {
+    let name = name.trim();
+    if let Some(manifest) = manifest_table().get(name) {
+        return Ok(manifest.executables.clone());
+    }
+    AdapterKind::parse(name).map(|kind| {
+        kind.candidate_executables()
+            .iter()
+            .map(|candidate| (*candidate).to_string())
+            .collect()
+    })
 }
 
 pub fn resolve_adapter_with(
@@ -353,7 +374,12 @@ impl SpawnSpec {
         }
     }
 
-    pub fn build_args(&self, prompt: &str, session_id: Option<&str>, model: Option<&str>) -> Vec<String> {
+    pub fn build_args(
+        &self,
+        prompt: &str,
+        session_id: Option<&str>,
+        model: Option<&str>,
+    ) -> Vec<String> {
         match self {
             Self::Builtin(k) => k.build_args(prompt, session_id, model),
             Self::Manifest(m) => expand_args(m, prompt, model, session_id),
@@ -491,8 +517,12 @@ mod tests {
         let spec = resolve_adapter_with(&table, "acme-cli").unwrap();
         assert_eq!(spec.id(), "acme-cli");
         let cat = catalog_with(&table);
-        assert!(cat.iter().any(|i| i.id == "acme-cli" && i.source == "manifest"));
-        assert!(cat.iter().any(|i| i.id == "cursor" && i.source == "builtin"));
+        assert!(cat
+            .iter()
+            .any(|i| i.id == "acme-cli" && i.source == "manifest"));
+        assert!(cat
+            .iter()
+            .any(|i| i.id == "cursor" && i.source == "builtin"));
     }
 
     #[test]

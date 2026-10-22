@@ -60,19 +60,31 @@ check_tracked_hygiene() {
 
   added_markers="$({
     if [[ -n "${diff_base}" ]]; then
-      git diff --unified=0 "${diff_base}...HEAD" -- src src-tauri/src
+      # Compare the base directly to the current worktree so a follow-up removal
+      # cancels an earlier committed addition instead of reporting stale lines.
+      git diff --unified=0 "${diff_base}" -- src src-tauri/src
+    else
+      git diff --unified=0 HEAD -- src src-tauri/src
     fi
-    git diff --unified=0 HEAD -- src src-tauri/src
   } | grep '^+' | grep -v '^+++' \
     | grep -E '(^|[^A-Za-z0-9_])(TODO|FIXME)([^A-Za-z0-9_]|$)' \
     | grep -vE '(issue|spec|docs/|根据项目实际补充)' || true)"
   if [[ -n "${added_markers}" ]]; then
-    fail "source TODO/FIXME comments must reference an issue, spec, or documentation"
+    fail "source TODO/FIXME comments must reference an issue, spec, or documentation:\n${added_markers}"
   fi
 }
 
 check_docs_links() {
-  python3 - <<'PY'
+  local python_bin
+  if command -v python >/dev/null 2>&1; then
+    python_bin="python"
+  elif command -v python3 >/dev/null 2>&1; then
+    python_bin="python3"
+  else
+    fail "Python is required to validate Markdown links"
+  fi
+
+  "${python_bin}" - <<'PY'
 from pathlib import Path
 import re
 

@@ -17,7 +17,10 @@ fn main() {
         eprintln!("用法: dblog <db路径> [条数]");
         std::process::exit(2);
     });
-    let limit = args.get(2).and_then(|s| s.parse::<i64>().ok()).unwrap_or(25);
+    let limit = args
+        .get(2)
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(25);
     let conn = Connection::open_with_flags(
         &path,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
@@ -67,7 +70,7 @@ fn main() {
             .unwrap();
         for row in rows {
             let (id, status, err, phase, ts) = row.unwrap();
-            println!("[{ts}] {status} phase={phase} err={}", err = short(&err, 220));
+            println!("[{ts}] {id} {status} phase={phase} err={err}", err = short(&err, 220));
         }
     } else {
         println!("(task_runs 表不存在？)");

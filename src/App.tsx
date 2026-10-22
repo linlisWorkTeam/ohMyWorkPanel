@@ -1,6 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { FormEvent, KeyboardEvent, memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type PointerEvent } from "react";
+import { FormEvent, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import { api, getAuthToken, onUnauthorized, requiresAuth, setAuthToken } from "./api";
 import {
   BOTTOM_THRESHOLD_PX,
@@ -12,9 +12,7 @@ import {
 import { currentMentionQuery, findMentionedMemberIds } from "./chat/mentions";
 import {
   appendChannelDelta,
-  hasRenderableContent,
   isLazyMessageChannel,
-  parseMessageContent,
 } from "./chat/messageContent";
 import { defaultModelForAdapter, modelsForAdapter, applyAgentModelsPayload } from "./agents/agentModels";
 import {
@@ -26,9 +24,7 @@ import {
 } from "./agents/adaptersCatalog";
 import { canSubmitUserMember, chatbotSlotTaken, memberRosterAction, type UserAddMode } from "./members/memberForm";
 import { InviteLanding, parseInviteTokenFromPath } from "./accounts/InviteLanding";
-import { markdownToHtml } from "./chat/markdownLite";
 import { detectMemoryPressure, formatHeartbeatLabel } from "./observability/heartbeatPolicy";
-import { agentBusyLabel, queueCounts, runsForAgentActive } from "./members/queueCounts";
 import {
   bumpUnread,
   clearUnread,
@@ -66,6 +62,9 @@ import { LogsPanel } from "./observability/LogsPanel";
 import { ServerPathPicker } from "./groups/ServerPathPicker";
 import { ExtensionPanel } from "./extensions/ExtensionPanel";
 import { VersionView } from "./workflow/VersionView";
+import { resolveSceneView, openSceneGroupScope } from "./scene/host";
+import type { SceneViewProps } from "./scene/SceneView";
+import { GoalStrip } from "./goals/GoalStrip";
 import { GroupSettingsView } from "./groups/GroupSettingsView";
 import { AgentConfigView } from "./agents/AgentConfigView";
 import {
@@ -146,6 +145,32 @@ function RuntimeHeaderThemePop(props: { open: boolean; onPick: () => void }) {
   return <Cmp {...props} />;
 }
 
+/**
+ * 场景槽位：通过前端内核取用 `svc.scene` 提供的视图。
+ * 每个群通过 `ctx.fork()` 开一个独立作用域（群专属房间配置），卸载即释放。
+ * 插件缺失/装载失败时给出提示，不影响聊天等既有视图（fail-open）。
+ */
+function SceneSlot({ groupId, ...props }: SceneViewProps & { groupId: string }) {
+  const View = resolveSceneView();
+  const [roomSeed, setRoomSeed] = useState(0);
+
+  useEffect(() => {
+    const scope = openSceneGroupScope(groupId);
+    if (!scope) return;
+    setRoomSeed(scope.roomSeed);
+    return () => scope.dispose();
+  }, [groupId]);
+
+  if (!View) {
+    return (
+      <div className="scene-empty" role="status">
+        场景插件未装载，已回退到聊天视图。
+      </div>
+    );
+  }
+  return <View {...props} roomSeed={roomSeed} />;
+}
+
 export function App() {
   const inviteToken =
     typeof window !== "undefined" ? parseInviteTokenFromPath(window.location.pathname) : null;
@@ -188,7 +213,6 @@ export function App() {
   const [settings, setSettings] = useState<RuntimeSettings | null>(null);
   const [manifestUrl, setManifestUrl] = useState(() => localStorage.getItem("updateManifestUrl") ?? "");
   const [updateMsg, setUpdateMsg] = useState<string | null>(null);
-  const [updateLink, setUpdateLink] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
   const [updatingNow, setUpdatingNow] = useState(false);
   const [updateNotice, setUpdateNotice] = useState<import("./types").UpdateCheckResult | null>(null);
@@ -217,7 +241,6 @@ export function App() {
   const runUpdateCheck = async () => {
     setUpdating(true);
     setUpdateMsg(null);
-    setUpdateLink(null);
     try {
       localStorage.setItem("updateManifestUrl", manifestUrl.trim());
       const r = await api.checkForUpdate(manifestUrl.trim() || undefined);
@@ -227,7 +250,6 @@ export function App() {
         setUpdateMsg(r.error);
       } else if (r.hasUpdate) {
         setUpdateMsg(`发现新版本 ${r.latestVersion}（当前 ${r.currentVersion}）${r.notes ? `：${r.notes}` : ""}`);
-        setUpdateLink(r.downloadUrl ?? null);
         if (localStorage.getItem("updateIgnored") !== r.latestVersion) setUpdateNotice(r);
       } else {
         setUpdateMsg(`已是最新版本（${r.currentVersion}）。`);
@@ -250,7 +272,7 @@ export function App() {
       setError(readError(reason));
     }
   };
-  const [agentCfgImported, setAgentCfgImported] = useState(false);
+  const [, setAgentCfgImported] = useState(false);
   const [wsLink, setWsLink] = useState<{ state: WsLinkState; elapsedMs: number }>({
     state: "connected",
     elapsedMs: 0,
@@ -858,7 +880,6 @@ export function App() {
   const chatbotTaken = chatbotSlotTaken(current?.group, members);
   const isChatGroup = current?.group.groupKind === "chat";
   const isAdmin = authUser?.isAdmin ?? !requiresAuth;
-  const owner = current && members.find((member) => member.id === current.group.ownerMemberId);
   const senderMemberId = current
     ? resolveSenderMemberId(members, current.group.ownerMemberId, authUser?.userId, isAdmin)
     : null;
@@ -1365,6 +1386,16 @@ export function App() {
             {liveReady && <span className="status-chip">Live</span>}
             <button
               type="button"
+              className={`icon-btn ${mainView === "scene" ? "on" : ""}`}
+              onClick={() => setMainView(mainView === "scene" ? "chat" : "scene")}
+              aria-label="像素场景"
+              aria-pressed={mainView === "scene"}
+              title="像素场景（实验）：把成员放进取景框"
+            >
+              ◧
+            </button>
+            <button
+              type="button"
               className={`icon-btn ${showMembers ? "on" : ""}`}
               onClick={toggleMembers}
               aria-label="成员 / Agent 面板"
@@ -1377,6 +1408,7 @@ export function App() {
           </div>
       </> : null}
       wave={!isChatGroup && current ? (
+        <>
           <div
             className="goal-bar"
             data-status={goalBar?.status ?? "idle"}
@@ -1391,9 +1423,19 @@ export function App() {
             <span className="progress"><i style={{ width: `${goalBar && goalBar.total ? Math.round((goalBar.done / goalBar.total) * 100) : 0}%` }} /></span>
             <span className="g-act">{goalBar ? `${goalBar.done}/${goalBar.total} 完成` : "0/0"}</span>
           </div>
+          <GoalStrip group={current.group} />
+        </>
       ) : null}
       chat={current ? (
-        !isChatGroup && mainView === "versions" ? (
+        mainView === "scene" ? (
+          <SceneSlot
+            groupId={current.group.id}
+            members={members}
+            runs={current.runs}
+            onExit={() => setMainView("chat")}
+            onSelectAgent={() => setShowMembers(true)}
+          />
+        ) : !isChatGroup && mainView === "versions" ? (
           <VersionView
             group={current.group}
             members={members}
@@ -1466,7 +1508,7 @@ export function App() {
       ) : groups.length === 0 && groupsLoaded ? (
         <EmptyHome canCreate={isAdmin} onCreate={() => setShowCreate(true)} />
       ) : <div className="loading">正在打开本地群聊…</div>}
-      composer={current && mainView !== "dsh" && mainView !== "agent-config" && !(!isChatGroup && mainView === "versions") ? <div className="wp-composer-anchor">
+      composer={current && mainView !== "dsh" && mainView !== "agent-config" && mainView !== "scene" && !(!isChatGroup && mainView === "versions") ? <div className="wp-composer-anchor">
           {slashOpen && (
             <div className="mention-menu slash-menu">
               {SLASH_COMMANDS.map((c) => (
@@ -1970,7 +2012,7 @@ export function App() {
       <Modal title="发现新版本" onClose={() => setUpdateNotice(null)}>
         <p className="form-hint" style={{ marginBottom: 10 }}>
           {updateNotice.currentVersion} → <strong>{updateNotice.latestVersion}</strong>
-          {updateNotice.notes ? `　${updateNotice.notes}` : ""}
+          {updateNotice.notes ? `\u3000${updateNotice.notes}` : ""}
         </p>
         <ButtonGroup align="stretch">
           <UiButton

@@ -2,11 +2,7 @@
 
 pub fn models_for_adapter(adapter: &str) -> &'static [&'static str] {
     match adapter {
-        "codex" => &[
-            "deepseek-v4-flash",
-            "deepseek-chat",
-            "deepseek-reasoner",
-        ],
+        "codex" => &["deepseek-v4-flash", "deepseek-chat", "deepseek-reasoner"],
         // Keep in sync with `cursor-agent --list-models` / src/agentModels.ts
         "cursor" => &[
             "auto",
@@ -38,18 +34,17 @@ pub fn models_for_adapter(adapter: &str) -> &'static [&'static str] {
         "openclaw" => &["default"],
         // dsh: 模型选择由 DeepSeek Harness 的 profile 配置决定，前端不提供下拉。
         "dsh" => &[],
-        "chatbot-deepseek" | "deepseek" => &[
-            "deepseek-v4-flash",
-            "deepseek-chat",
-            "deepseek-reasoner",
-        ],
+        "chatbot-deepseek" | "deepseek" => {
+            &["deepseek-v4-flash", "deepseek-chat", "deepseek-reasoner"]
+        }
         "chatbot-opencode-go" | "opencode-go" => &["deepseek-v4-flash", "deepseek-chat"],
         "mock" => &[],
         _ => &[],
     }
 }
 
-pub fn default_model(adapter: &str) -> Option<&'static str> {
+#[cfg(test)]
+fn default_model(adapter: &str) -> Option<&'static str> {
     models_for_adapter(adapter).first().copied()
 }
 

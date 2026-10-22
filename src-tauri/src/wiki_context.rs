@@ -99,7 +99,7 @@ pub fn build_wiki_query(group_name: &str, root_task: &str, announcement: &str) -
 }
 
 fn run_retrieve(cli: &std::path::Path, query: &str) -> Result<WikiRetrieveResult, String> {
-    let secs = ((timeout_ms() + 999) / 1000).max(1);
+    let secs = timeout_ms().div_ceil(1000).max(1);
     // Prefer GNU timeout so a hung jieba/python cannot stall the scheduler.
     let output = Command::new("timeout")
         .arg(format!("{secs}s"))
@@ -155,9 +155,22 @@ pub fn format_wiki_block(result: &WikiRetrieveResult) -> String {
         lines.push(format!("note: {note}"));
     }
     for (i, h) in result.hits.iter().enumerate() {
-        let path = if h.path.is_empty() { "?" } else { h.path.as_str() };
-        let title = if h.title.is_empty() { path } else { h.title.as_str() };
-        let excerpt = h.text.replace('\n', " ").chars().take(360).collect::<String>();
+        let path = if h.path.is_empty() {
+            "?"
+        } else {
+            h.path.as_str()
+        };
+        let title = if h.title.is_empty() {
+            path
+        } else {
+            h.title.as_str()
+        };
+        let excerpt = h
+            .text
+            .replace('\n', " ")
+            .chars()
+            .take(360)
+            .collect::<String>();
         lines.push(format!(
             "{}. [{}] {} (score={:.2})\n   {}",
             i + 1,
@@ -223,7 +236,11 @@ mod tests {
             return;
         }
         // May be slow first jieba load; allow env skip in tiny CI
-        if std::env::var("OHMYWORKPANEL_WIKI_SKIP_LIVE_TEST").ok().as_deref() == Some("1") {
+        if std::env::var("OHMYWORKPANEL_WIKI_SKIP_LIVE_TEST")
+            .ok()
+            .as_deref()
+            == Some("1")
+        {
             return;
         }
         let block = wiki_context_block("ohMyWorkPanel", "灰度 test:gate commit 前", "");

@@ -100,7 +100,10 @@ pub fn get_orchestration(conn: &Connection, id: &str) -> AppResult<RoadmapOrches
     .map_err(|e| format!("编排不存在：{e}"))
 }
 
-pub fn list_orchestrations(conn: &Connection, group_id: &str) -> AppResult<Vec<RoadmapOrchestration>> {
+pub fn list_orchestrations(
+    conn: &Connection,
+    group_id: &str,
+) -> AppResult<Vec<RoadmapOrchestration>> {
     let mut stmt = conn
         .prepare(&format!(
             "{ORCH_SELECT} WHERE group_id=?1 ORDER BY updated_at DESC LIMIT 50"
@@ -114,7 +117,10 @@ pub fn list_orchestrations(conn: &Connection, group_id: &str) -> AppResult<Vec<R
     Ok(rows)
 }
 
-fn active_orch_for_item(conn: &Connection, roadmap_item_id: &str) -> AppResult<Option<RoadmapOrchestration>> {
+fn active_orch_for_item(
+    conn: &Connection,
+    roadmap_item_id: &str,
+) -> AppResult<Option<RoadmapOrchestration>> {
     conn.query_row(
         &format!("{ORCH_SELECT} WHERE roadmap_item_id=?1 AND status IN ('running','paused','failed') ORDER BY updated_at DESC LIMIT 1"),
         params![roadmap_item_id],
@@ -256,7 +262,8 @@ pub fn start_roadmap_item(
     }
     let group = get_group(&conn, &group_id)?;
     let (features, tasks) = load_bound_work(&conn, &group_id, roadmap_item_id)?;
-    let (feature, task) = next_checklist(&features, &tasks).ok_or_else(|| "没有可执行的 checklist。".to_string())?;
+    let (feature, task) =
+        next_checklist(&features, &tasks).ok_or_else(|| "没有可执行的 checklist。".to_string())?;
     let agent_id = resolve_assignee(feature, group.admin_member_id.as_deref())?;
     let members = get_members(&conn, &group_id)?;
     let agent = members
@@ -422,7 +429,11 @@ pub fn on_run_terminal(
         };
         if !succeeded {
             orch.status = "failed".into();
-            orch.error_message = Some(error.unwrap_or("任务失败，编排已暂停，可点「继续」重试。").into());
+            orch.error_message = Some(
+                error
+                    .unwrap_or("任务失败，编排已暂停，可点「继续」重试。")
+                    .into(),
+            );
             orch.updated_at = now();
             conn.execute(
                 "UPDATE roadmap_orchestrations SET status=?1,error_message=?2,updated_at=?3 WHERE id=?4",
@@ -463,7 +474,8 @@ pub fn on_run_terminal(
                 |r| r.get(0),
             )
             .unwrap_or_else(|_| "路线图".into());
-        let (features, tasks) = match load_bound_work(&conn, &orch.group_id, &orch.roadmap_item_id) {
+        let (features, tasks) = match load_bound_work(&conn, &orch.group_id, &orch.roadmap_item_id)
+        {
             Ok(v) => v,
             Err(_) => {
                 // no remaining work

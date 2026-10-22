@@ -192,6 +192,21 @@ status: active
 | M3 审核 | 群聊发起、查看、要求修改、批准、Markdown 导出 | ✅ revision=1、零阻断项、批准与导出通过；桌面 Web 可视验收零控制台错误 |
 | M4 发布 | 平台 OAuth、自动发布、指标回流 | Backlog；明确不进 MVP |
 
+### 阶段 9 — **Agent 游乐园（愿景程序，2026-10-21 立项）**
+
+> 目标形态：Agent 是平台居民，人类只在社交间隙投递任务。行为契约迁至 [`openspec/`](../openspec/README.md)（Requirement + Scenario），本文件继续做方向与优先级 SSOT。
+> 程序总览：[`changes/0001-agent-playground`](../openspec/changes/0001-agent-playground/proposal.md)。
+
+| 轨道 | 内容 | 状态 |
+|---|---|---|
+| **P1 插件内核** | Cordis 语义：服务注册表、`inject`、可撤销副作用、类型化事件；Rust + TS 双运行时同构 | ✅ Rust + TS 同构（服务/依赖/副作用/5 种事件含 waterfall/装载器/清单 v2+磁盘发现/作用域 fork/桌面与 Web 同源） |
+| **P2 像素前台** | 平面像素场景，Agent 以像素小人呈现；注册为壳插件，默认关闭、可回退 | ✅ 只读场景 + 30fps 预算 + 选中高亮 + 分群房间 + adapter 造型 + 工位/会议/候场功能区；tileset 未做 |
+| **P3 Goal 模式** | 群组级 goal 驱动自主循环；预算 / 熔断 / 人工闸门 / 证据账本 | ✅ MVP（模型/持久化/驱动/派发/自动循环/权限/判决标记/账本 UI）+ mock E2E 通过；真实 CLI 受本机凭据限制 |
+| **P4 全量插拔** | 内置能力按 capability 逐个迁为插件 | ✅ 四个内置插件服务化；Web/桌面/scheduler 只走服务单一路径；`commands.rs` 按领域拆为 10 个模块 |
+| **P0 契约** | OpenSpec 骨架、capability 清单、样板 spec、程序 change | ✅ 本阶段 |
+
+**纪律**：P0–P4 期间不得回退既有功能；每个切片单独 commit，门禁绿；新能力先写 OpenSpec change 再改码。
+
 
 ---
 
@@ -252,6 +267,8 @@ status: active
 
 | 文档 | 用途 |
 |---|---|
+| [`openspec/README.md`](../openspec/README.md) | **行为契约 SSOT**：Requirement + Scenario；新功能先立 change |
+| [`openspec/changes/0001-agent-playground/proposal.md`](../openspec/changes/0001-agent-playground/proposal.md) | 阶段 9 程序：插件内核 / 像素前台 / Goal 模式 / 全量插拔 |
 | [`docs/epitaph/README.md`](epitaph/README.md) | 会话交接 |
 | [`docs/testing-strategy.md`](testing-strategy.md) | 测试金字塔与缺口 |
 | [`docs/release-checklist.md`](release-checklist.md) | 发版检查 |

@@ -7,6 +7,7 @@ import type {
   CreateFeatureTaskInput, UpdateFeatureTaskInput,
   Experience, SaveExperienceInput, LogEntry, LogLevel, LogQueryFilter,
   DirListing, Group, ReleaseStatus, OpsJobState, InvitePreview,
+  Goal, CreateGoalInput,
 } from "./types";
 import type { CampaignExport, ContentCampaign, CreateCampaignInput } from "./marketing/types";
 
@@ -228,4 +229,15 @@ export const api = {
     void cli;
     throw new Error("Agent 配置（一键导入/导出）仅 Web 服务可用");
   },
+  // === 群组级 Goal（P3 自治循环） ===
+  listGoals: (groupId: string) => invoke<Goal[]>("list_goals", { groupId }),
+  getGoal: (goalId: string) => invoke<Goal | null>("get_goal", { goalId }),
+  createGoal: (input: CreateGoalInput) => invoke<Goal>("create_goal", { input }),
+  startGoal: (goalId: string) => invoke<Goal>("start_goal", { goalId }),
+  pauseGoal: (goalId: string) => invoke<Goal>("pause_goal", { goalId }),
+  approveGoal: (goalId: string) => invoke<Goal>("approve_goal", { goalId }),
+  abortGoal: (goalId: string) => invoke<Goal>("abort_goal", { goalId }),
+  advanceGoal: (goalId: string) => invoke<Goal>("advance_goal", { goalId }),
+  setGoalAutoAdvance: (goalId: string, enabled: boolean) =>
+    invoke<Goal>("set_goal_auto_advance", { goalId, enabled }),
 };

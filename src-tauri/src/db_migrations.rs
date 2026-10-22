@@ -10,7 +10,7 @@ use rusqlite::Connection;
 
 use crate::db::AppResult;
 
-pub const SCHEMA_VERSION: i64 = 7;
+pub const SCHEMA_VERSION: i64 = 10;
 
 /// 运行所有未执行的迁移，并把 `user_version` 升到 `SCHEMA_VERSION`。
 /// 幂等：已是最新版本时直接返回。
@@ -30,6 +30,9 @@ pub fn migrate(connection: &Connection) -> AppResult<()> {
             5 => migrate_v5(connection)?,
             6 => migrate_v6(connection)?,
             7 => migrate_v7(connection)?,
+            8 => migrate_v8(connection)?,
+            9 => migrate_v9(connection)?,
+            10 => migrate_v10(connection)?,
             _ => unreachable!("invalid schema version {}", version),
         }
     }
@@ -122,7 +125,9 @@ fn migrate_v4(connection: &Connection) -> AppResult<()> {
 
 /// v5：Self-Marketing campaign 运行态。业务 payload 使用版本化 JSON，避免 MVP 过早拆表。
 fn migrate_v5(connection: &Connection) -> AppResult<()> {
-    connection.execute_batch(r#"
+    connection
+        .execute_batch(
+            r#"
 CREATE TABLE IF NOT EXISTS content_campaigns (
   id TEXT PRIMARY KEY,
   group_id TEXT NOT NULL,
@@ -153,7 +158,9 @@ CREATE INDEX IF NOT EXISTS idx_content_campaigns_planner_run
   ON content_campaigns(planner_run_id);
 CREATE INDEX IF NOT EXISTS idx_content_campaigns_writer_run
   ON content_campaigns(writer_run_id);
-"#).map_err(|e| e.to_string())?;
+"#,
+        )
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -240,6 +247,58 @@ ALTER TABLE members_new RENAME TO members;
     result
 }
 
+/// v8：群组级 Goal（愿景程序 P3）——目标与轮次账本。
+/// 只新增表，不改动任何既有表；`budget_json` 保存预算快照，便于后续字段演进。
+fn migrate_v8(connection: &Connection) -> AppResult<()> {
+    connection
+        .execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS goals (
+  id TEXT PRIMARY KEY,
+  group_id TEXT NOT NULL,
+  objective TEXT NOT NULL,
+  status TEXT NOT NULL,
+  budget_json TEXT NOT NULL,
+  require_approval_each_round INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  started_at INTEGER,
+  stop_reason TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_goals_group ON goals(group_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS goal_rounds (
+  goal_id TEXT NOT NULL,
+  idx INTEGER NOT NULL,
+  verdict TEXT NOT NULL,
+  tokens_used INTEGER NOT NULL,
+  finished_at INTEGER NOT NULL,
+  PRIMARY KEY (goal_id, idx),
+  FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE
+);
+"#,
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// v9：Goal 证据账本——轮次观察摘要。
+fn migrate_v9(connection: &Connection) -> AppResult<()> {
+    let _ = connection.execute(
+        "ALTER TABLE goal_rounds ADD COLUMN summary TEXT NOT NULL DEFAULT ''",
+        [],
+    );
+    Ok(())
+}
+
+/// v10：Goal 自动推进开关。默认关闭，必须由人显式打开。
+fn migrate_v10(connection: &Connection) -> AppResult<()> {
+    let _ = connection.execute(
+        "ALTER TABLE goals ADD COLUMN auto_advance INTEGER NOT NULL DEFAULT 0",
+        [],
+    );
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -259,7 +318,8 @@ mod tests {
     }
 
     fn user_version(conn: &Connection) -> i64 {
-        conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap()
+        conn.query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap()
     }
 
     #[test]
@@ -274,7 +334,8 @@ mod tests {
         assert!(column_names(&conn, "task_runs").contains(&"wave_id".to_string()));
         assert!(column_names(&conn, "task_runs").contains(&"version_id".to_string()));
         assert!(column_names(&conn, "task_runs").contains(&"provider_dispatch_id".to_string()));
-        assert!(column_names(&conn, "connecter_provider_profiles").contains(&"bearer_token".to_string()));
+        assert!(column_names(&conn, "connecter_provider_profiles")
+            .contains(&"bearer_token".to_string()));
         assert!(column_names(&conn, "agent_profiles").contains(&"api_key".to_string()));
         assert!(column_names(&conn, "agent_profiles").contains(&"api_url".to_string()));
         assert!(column_names(&conn, "groups").contains(&"group_kind".to_string()));
@@ -282,13 +343,21 @@ mod tests {
         assert!(column_names(&conn, "content_campaigns").contains(&"snapshot_json".to_string()));
         assert!(column_names(&conn, "content_campaigns").contains(&"feedback_by".to_string()));
         let rpl: i64 = conn
-            .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='run_phase_log'", [], |r| r.get(0))
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='run_phase_log'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(rpl, 0, "run_phase_log 应已被迁移 v3 删除");
 
         // members DDL 允许 chatbot
         let ddl: String = conn
-            .query_row("SELECT sql FROM sqlite_master WHERE type='table' AND name='members'", [], |r| r.get(0))
+            .query_row(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='members'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert!(ddl.contains("chatbot"));
     }
@@ -338,24 +407,35 @@ mod tests {
         assert!(column_names(&conn, "task_runs").contains(&"wave_id".to_string()));
         assert!(column_names(&conn, "task_runs").contains(&"version_id".to_string()));
         assert!(column_names(&conn, "task_runs").contains(&"provider_dispatch_id".to_string()));
-        assert!(column_names(&conn, "connecter_provider_profiles").contains(&"target_subject_id".to_string()));
+        assert!(column_names(&conn, "connecter_provider_profiles")
+            .contains(&"target_subject_id".to_string()));
         assert!(column_names(&conn, "agent_profiles").contains(&"api_key".to_string()));
         assert!(column_names(&conn, "agent_profiles").contains(&"api_url".to_string()));
         assert!(column_names(&conn, "groups").contains(&"group_kind".to_string()));
         assert!(column_names(&conn, "run_events").contains(&"seq".to_string()));
         assert!(column_names(&conn, "content_campaigns").contains(&"validation_json".to_string()));
         let rpl_legacy: i64 = conn
-            .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='run_phase_log'", [], |r| r.get(0))
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='run_phase_log'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(rpl_legacy, 0, "老库迁移后 run_phase_log 应被删除");
 
         // members 重建后允许 chatbot 且数据保留
         let ddl: String = conn
-            .query_row("SELECT sql FROM sqlite_master WHERE type='table' AND name='members'", [], |r| r.get(0))
+            .query_row(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='members'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert!(ddl.contains("chatbot"));
         let names: String = conn
-            .query_row("SELECT display_name FROM members WHERE id='m'", [], |r| r.get(0))
+            .query_row("SELECT display_name FROM members WHERE id='m'", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(names, "olo");
         let group: String = conn
@@ -373,7 +453,11 @@ mod tests {
         let conn = open_db(file.path()).unwrap();
         assert_eq!(user_version(&conn), SCHEMA_VERSION);
         let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='members'", [], |r| r.get(0))
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='members'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(count, 1);
     }
@@ -478,5 +562,32 @@ mod tests {
         assert!(column_names(&conn, "task_runs").contains(&"provider_dispatch_id".to_string()));
         assert!(column_names(&conn, "connecter_provider_profiles").contains(&"env".to_string()));
         assert!(column_names(&conn, "content_campaigns").contains(&"snapshot_json".to_string()));
+    }
+
+    #[test]
+    fn v8_adds_goal_tables_without_touching_existing_ones() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        init_db(file.path()).unwrap();
+        let conn = open_db(file.path()).unwrap();
+
+        assert_eq!(user_version(&conn), SCHEMA_VERSION);
+        for table in ["goals", "goal_rounds"] {
+            let count: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
+                    [table],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(count, 1, "缺少表 {table}");
+        }
+        assert!(column_names(&conn, "goals").contains(&"budget_json".to_string()));
+        assert!(column_names(&conn, "goals").contains(&"auto_advance".to_string()));
+        assert!(column_names(&conn, "goal_rounds").contains(&"verdict".to_string()));
+        assert!(column_names(&conn, "goal_rounds").contains(&"summary".to_string()));
+
+        // 二次启动幂等
+        migrate(&conn).unwrap();
+        assert_eq!(user_version(&conn), SCHEMA_VERSION);
     }
 }

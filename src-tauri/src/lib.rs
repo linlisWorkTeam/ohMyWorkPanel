@@ -5,38 +5,41 @@ pub mod operations;
 // Compatibility re-exports preserve existing Rust paths while the filesystem is
 // organized by product domain. New code should use the domain paths.
 pub use accounts::{auth, presence};
-pub use agents::{agent_config, model_catalog};
 pub(crate) use agents::adapters;
+pub use agents::{agent_config, model_catalog};
 pub use operations::{keepalive, logger, metrics, ops, release_drain};
 
 pub mod a2a;
 
+pub mod codex_proxy;
 #[cfg(feature = "gui")]
 mod commands;
-mod ocr;
-pub mod codex_proxy;
 mod context_policy;
 mod context_seams;
 pub mod db;
+pub mod db_migrations;
+pub mod event_sender;
 pub mod extensions;
+pub mod fs_browse;
+pub mod git_inspect;
+pub mod goals;
+pub mod kernel;
 pub mod live_prompt;
 pub mod marketing;
-pub mod fs_browse;
 pub mod memory;
-pub mod wiki_context;
 mod message_content;
 mod models;
-pub mod event_sender;
+mod ocr;
 pub mod orchestrator;
+pub mod plugins;
 pub mod scheduler;
-pub mod git_inspect;
-pub mod workflow;
 pub mod web;
-pub mod db_migrations;
+pub mod wiki_context;
+pub mod workflow;
 
+pub use adapters::manifest::reload_manifests as reload_cli_adapter_manifests;
 #[cfg(feature = "gui")]
 use db::init_db;
-pub use adapters::manifest::reload_manifests as reload_cli_adapter_manifests;
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
@@ -44,9 +47,9 @@ use std::{
 };
 
 #[cfg(feature = "gui")]
-use tauri::Manager;
-#[cfg(feature = "gui")]
 use std::fs;
+#[cfg(feature = "gui")]
+use tauri::Manager;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -68,12 +71,26 @@ pub fn run() {
             fs::create_dir_all(&dir)?;
             let db_path = dir.join("ohmyworkpanel.sqlite3");
             init_db(&db_path).map_err(std::io::Error::other)?;
-            app.manage(AppState {
+            let state = AppState {
                 db_path,
                 cancellations: Arc::new(Mutex::new(HashMap::new())),
                 scheduling_groups: Arc::new(Mutex::new(HashSet::new())),
                 live_sessions: Arc::new(Mutex::new(HashMap::new())),
-            });
+            };
+            // Goal 自动推进：扫描 active + auto_advance 的目标，默认无目标时为空转。
+            let sched = crate::scheduler::SchedulerState {
+                db_path: state.db_path.clone(),
+                event_sender: crate::event_sender::EventSender::Tauri(app.handle().clone()),
+                cancellations: state.cancellations.clone(),
+                scheduling_groups: state.scheduling_groups.clone(),
+                live_sessions: state.live_sessions.clone(),
+            };
+            tauri::async_runtime::spawn(crate::goals::autopilot_loop::run_forever(
+                state.db_path.clone(),
+                sched,
+                std::time::Duration::from_secs(10),
+            ));
+            app.manage(state);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -159,6 +176,15 @@ pub fn run() {
             commands::revise_marketing_campaign,
             commands::approve_marketing_campaign,
             commands::export_marketing_campaign,
+            commands::list_goals,
+            commands::get_goal,
+            commands::create_goal,
+            commands::start_goal,
+            commands::pause_goal,
+            commands::approve_goal,
+            commands::abort_goal,
+            commands::advance_goal,
+            commands::set_goal_auto_advance,
         ])
         .run(tauri::generate_context!())
         .expect("Failed to launch ohMyWorkPanel");

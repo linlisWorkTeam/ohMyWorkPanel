@@ -46,20 +46,15 @@ fn default_auth_path() -> std::path::PathBuf {
     if let Some(home) = std::env::var_os("CODEX_HOME") {
         return std::path::PathBuf::from(home).join("auth.json");
     }
+    #[cfg(windows)]
     let home = std::env::var_os("HOME")
         .map(std::path::PathBuf::from)
-        .or_else(|| {
-            #[cfg(windows)]
-            {
-                std::env::var_os("USERPROFILE").map(std::path::PathBuf::from)
-            }
-            #[cfg(not(windows))]
-            {
-                None
-            }
-        })
-        .unwrap_or_else(|| std::path::PathBuf::from("/root"));
-    home.join(".codex").join("auth.json")
+        .or_else(|| std::env::var_os("USERPROFILE").map(std::path::PathBuf::from));
+    #[cfg(not(windows))]
+    let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
+    home.unwrap_or_else(|| std::path::PathBuf::from("/root"))
+        .join(".codex")
+        .join("auth.json")
 }
 
 pub(crate) fn read_openai_key_from_auth_path(path: &std::path::Path) -> Option<String> {
@@ -144,16 +139,24 @@ mod tests {
     #[test]
     fn forces_deepseek_provider_and_default_model() {
         let args = build_args("hi", None);
-        assert!(args.windows(2).any(|w| w[0] == "-c" && w[1].contains("model_provider")));
-        assert!(args.windows(2).any(|w| w[0] == "-c" && w[1].contains("18888")));
-        assert!(args.windows(2).any(|w| w[0] == "-m" && w[1] == "deepseek-v4-flash"));
+        assert!(args
+            .windows(2)
+            .any(|w| w[0] == "-c" && w[1].contains("model_provider")));
+        assert!(args
+            .windows(2)
+            .any(|w| w[0] == "-c" && w[1].contains("18888")));
+        assert!(args
+            .windows(2)
+            .any(|w| w[0] == "-m" && w[1] == "deepseek-v4-flash"));
         assert_eq!(args.last().map(String::as_str), Some("hi"));
     }
 
     #[test]
     fn remaps_legacy_openai_model_ids() {
         let args = build_args("x", Some("gpt-5"));
-        assert!(args.windows(2).any(|w| w[0] == "-m" && w[1] == "deepseek-v4-flash"));
+        assert!(args
+            .windows(2)
+            .any(|w| w[0] == "-m" && w[1] == "deepseek-v4-flash"));
     }
 
     #[test]
@@ -197,8 +200,15 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("auth.json");
         let mut f = std::fs::File::create(&path).unwrap();
-        write!(f, r#"{{"OPENAI_API_KEY":"sk-from-file","auth_mode":"apikey"}}"#).unwrap();
-        assert_eq!(read_openai_key_from_auth_path(&path).as_deref(), Some("sk-from-file"));
+        write!(
+            f,
+            r#"{{"OPENAI_API_KEY":"sk-from-file","auth_mode":"apikey"}}"#
+        )
+        .unwrap();
+        assert_eq!(
+            read_openai_key_from_auth_path(&path).as_deref(),
+            Some("sk-from-file")
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -480,3 +480,62 @@ export interface UpdateCheckResult {
   sha256?: string | null;
   error?: string | null;
 }
+
+// === 群组级 Goal（P3 自治循环） ===
+
+export type GoalStatus =
+  | "draft"
+  | "active"
+  | "paused"
+  | "awaiting_approval"
+  | "completed"
+  | "aborted";
+
+export type GoalRoundVerdict = "progress" | "no_progress" | "failed" | "goal_met";
+
+export type GoalStopReason =
+  | "goal_met"
+  | "rounds_exhausted"
+  | "wall_time_exhausted"
+  | "tokens_exhausted"
+  | "no_progress"
+  | "consecutive_failures"
+  | "aborted_by_human";
+
+export interface GoalBudget {
+  maxRounds: number;
+  maxWallTimeMs: number;
+  maxTokens: number;
+  maxNoProgressRounds: number;
+  maxConsecutiveFailures: number;
+}
+
+export interface GoalRound {
+  index: number;
+  verdict: GoalRoundVerdict;
+  tokensUsed: number;
+  finishedAt: number;
+  summary: string;
+}
+
+export interface Goal {
+  id: string;
+  groupId: string;
+  objective: string;
+  budget: GoalBudget;
+  status: GoalStatus;
+  createdAt: number;
+  startedAt: number | null;
+  rounds: GoalRound[];
+  stopReason: GoalStopReason | null;
+  requireApprovalEachRound: boolean;
+  autoAdvance: boolean;
+}
+
+export interface CreateGoalInput {
+  groupId: string;
+  objective: string;
+  budget?: GoalBudget;
+  requireApprovalEachRound?: boolean;
+  autoAdvance?: boolean;
+}

@@ -129,7 +129,8 @@ pub fn dispatch_live_skill(
     let (msg, session_id) = match envelope.skill.as_str() {
         "live.session.start" => {
             let port = upstream_port()?;
-            let (code, body) = crate::extensions::http_post_json_local(host, port, "/v1/session/start", "{}")?;
+            let (code, body) =
+                crate::extensions::http_post_json_local(host, port, "/v1/session/start", "{}")?;
             if code != 200 {
                 return Err(format!("PanelLive session/start HTTP {code}: {body}"));
             }
@@ -160,7 +161,10 @@ pub fn dispatch_live_skill(
             if let Some(s) = sched {
                 s.mark_live_stopped(&envelope.group_id);
             }
-            ("Live session cancel accepted (stop→cancel)".into(), Some(sid))
+            (
+                "Live session cancel accepted (stop→cancel)".into(),
+                Some(sid),
+            )
         }
         "live.transcribe.result" => {
             validate_events_payload(&envelope.payload)?;

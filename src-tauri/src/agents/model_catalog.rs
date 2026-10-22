@@ -1,4 +1,4 @@
-//! Live agent model catalogs. Cursor is synced from CLI; others stay static (TODO).
+//! Live agent model catalogs. Cursor is synced from CLI; other adapters currently stay static.
 
 use crate::adapters::{models as static_models, AdapterKind};
 use serde::Serialize;
@@ -122,7 +122,9 @@ fn run_cursor_list_models() -> Result<Vec<String>, String> {
             Ok(None) if started.elapsed() > Duration::from_secs(LIST_TIMEOUT_SECS) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err(format!("{bin} --list-models timed out after {LIST_TIMEOUT_SECS}s"));
+                return Err(format!(
+                    "{bin} --list-models timed out after {LIST_TIMEOUT_SECS}s"
+                ));
             }
             Ok(None) => std::thread::sleep(Duration::from_millis(100)),
             Err(e) => return Err(format!("wait {bin}: {e}")),
@@ -228,10 +230,10 @@ pub fn catalog_response() -> AgentModelsResponse {
         cursor_source,
         cursor_synced_at,
         todos: vec![
-            "TODO: live sync Codex model list".into(),
-            "TODO: live sync Claude Code model list".into(),
-            "TODO: live sync OpenClaw / OpenCode model lists".into(),
-            "TODO: persist live catalog to SQLite for cold start".into(),
+            "Backlog: live sync Codex model list".into(),
+            "Backlog: live sync Claude Code model list".into(),
+            "Backlog: live sync OpenClaw / OpenCode model lists".into(),
+            "Backlog: persist live catalog to SQLite for cold start".into(),
         ],
     }
 }
@@ -245,7 +247,9 @@ pub fn start_cursor_model_sync_loop() {
             Err(e) => eprintln!("model_catalog: cursor sync join error: {e}"),
         }
         let Some(secs) = sync_interval_secs() else {
-            eprintln!("model_catalog: periodic sync disabled (OHMYWORKPANEL_CURSOR_MODEL_SYNC_SECS=0)");
+            eprintln!(
+                "model_catalog: periodic sync disabled (OHMYWORKPANEL_CURSOR_MODEL_SYNC_SECS=0)"
+            );
             return;
         };
         let mut ticker = tokio::time::interval(Duration::from_secs(secs));
@@ -292,8 +296,8 @@ Tip: use --model <id>
     #[test]
     fn catalog_includes_cursor_and_todos() {
         let resp = catalog_response();
-        assert!(resp.adapters.get("cursor").is_some());
-        assert!(resp.adapters.get("codex").is_some());
+        assert!(resp.adapters.contains_key("cursor"));
+        assert!(resp.adapters.contains_key("codex"));
         assert!(resp.todos.iter().any(|t| t.contains("Codex")));
     }
 }

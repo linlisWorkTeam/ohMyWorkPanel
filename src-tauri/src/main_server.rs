@@ -1,10 +1,10 @@
+use axum::http::{header, HeaderValue, Request};
+use axum::middleware::{self, Next};
+use axum::response::Response;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use axum::http::{header, HeaderValue, Request};
-use axum::middleware::{self, Next};
-use axum::response::Response;
 use tokio::sync::broadcast;
 use tower_http::cors::CorsLayer;
 use tower_http::services::{ServeDir, ServeFile};
@@ -84,9 +84,15 @@ async fn main() {
 
     // Start background scheduler for agent runs
     web::start_scheduler_background(sched.clone());
+    // Goal 自动推进：无 auto_advance 目标时为空转。
+    tokio::spawn(ohmyworkpanel_lib::goals::autopilot_loop::run_forever(
+        db_path.clone(),
+        sched.clone(),
+        std::time::Duration::from_secs(10),
+    ));
     ohmyworkpanel_lib::keepalive::start_keepalive_loop(sched);
     ohmyworkpanel_lib::metrics::start_perf_loop(db_path.clone());
-    // Cursor --list-models → live catalog (other adapters: TODO in model_catalog)
+    // Cursor --list-models → live catalog; other adapters currently use static catalogs.
     ohmyworkpanel_lib::model_catalog::start_cursor_model_sync_loop();
 
     // Codex Responses shim on :18888 — owned by this process (or reuse if already bound).
@@ -116,7 +122,12 @@ async fn main() {
     println!("ohMyWorkPanel Web Server -> http://{addr}");
     // Log server start
     if let Ok(conn) = db::open_db(&db_path) {
-        logger::info(&conn, "server", "ohMyWorkPanel Web Server started", Some(&format!("{{\"addr\":\"{}\"}}", addr)));
+        logger::info(
+            &conn,
+            "server",
+            "ohMyWorkPanel Web Server started",
+            Some(&format!("{{\"addr\":\"{}\"}}", addr)),
+        );
     }
     axum::serve(listener, app).await.expect("serve");
 }

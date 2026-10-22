@@ -2,8 +2,8 @@ use crate::adapters::{self, chatbot, AdapterKind};
 use crate::db::{
     create_task_run, get_agent_api_key, get_chat_context_summary, get_cli_session_id, get_group,
     get_members, get_messages_after_created_at, get_settings_from, id, insert_run_event,
-    member_from_row, message_from_row, now, open_db, run_from_row, set_cli_session_id, set_run_phase,
-    upsert_chat_context_summary, AppResult,
+    member_from_row, message_from_row, now, open_db, run_from_row, set_cli_session_id,
+    set_run_phase, upsert_chat_context_summary, AppResult,
 };
 use crate::event_sender::EventSender;
 use crate::logger;
@@ -11,9 +11,9 @@ use crate::memory;
 use crate::message_content::{apply_channel_delta, parts_to_plain_text};
 use crate::models::{ChatEvent, ExecutionContext, Experience, TaskRun};
 use crate::orchestrator;
-#[cfg(feature = "gui")]
-use tauri::Emitter;
 use rusqlite::{params, OptionalExtension};
+use std::path::PathBuf;
+use std::time::Duration;
 use std::{
     collections::{HashMap, HashSet},
     sync::{
@@ -21,8 +21,8 @@ use std::{
         Arc, Mutex,
     },
 };
-use std::path::PathBuf;
-use std::time::Duration;
+#[cfg(feature = "gui")]
+use tauri::Emitter;
 
 /// Common scheduler state available to both Tauri and Web modes
 #[derive(Clone, Debug)]
@@ -228,10 +228,10 @@ pub fn schedule_group(state: SchedulerState, group_id: String) {
                         phase: Some("starting".into()),
                         elapsed_ms: None,
                         total_ms: None,
-            seq: None,
-            delta_count: None,
-            rss_mib: None,
-        },
+                        seq: None,
+                        delta_count: None,
+                        rss_mib: None,
+                    },
                 );
                 let child_state = state.clone();
                 tokio::spawn(async move {
@@ -251,13 +251,13 @@ pub fn schedule_group(state: SchedulerState, group_id: String) {
                 error: Some(error),
                 channel: None,
                 replace: None,
-                        phase: None,
-                        elapsed_ms: None,
-                        total_ms: None,
-            seq: None,
-            delta_count: None,
-            rss_mib: None,
-        },
+                phase: None,
+                elapsed_ms: None,
+                total_ms: None,
+                seq: None,
+                delta_count: None,
+                rss_mib: None,
+            },
         ),
     }
 }
@@ -289,10 +289,8 @@ fn get_execution_context(state: &SchedulerState, run_id: &str) -> AppResult<Exec
         settings.context_message_limit,
         settings.chat_context_message_limit,
     );
-    let max_history_chars = crate::context_policy::effective_history_char_budget(
-        &group.group_kind,
-        &agent.kind,
-    );
+    let max_history_chars =
+        crate::context_policy::effective_history_char_budget(&group.group_kind, &agent.kind);
     let mut stmt = conn
         .prepare(
             "SELECT m.id,m.group_id,m.sender_member_id,m.parent_run_id,m.content,m.status,m.created_at FROM messages m WHERE m.group_id=?1 ORDER BY m.created_at DESC LIMIT ?2",
@@ -381,9 +379,17 @@ fn get_execution_context(state: &SchedulerState, run_id: &str) -> AppResult<Exec
     let experience_block = if experiences.is_empty() {
         String::new()
     } else {
-        let entries: Vec<String> = experiences.iter().map(|e|
-            format!("- ({}) {}: {}", e.title, e.tags, &e.content[..e.content.len().min(200)])
-        ).collect();
+        let entries: Vec<String> = experiences
+            .iter()
+            .map(|e| {
+                format!(
+                    "- ({}) {}: {}",
+                    e.title,
+                    e.tags,
+                    &e.content[..e.content.len().min(200)]
+                )
+            })
+            .collect();
         format!("\n相关经验记忆：\n{}", entries.join("\n"))
     };
 
@@ -396,22 +402,41 @@ fn get_execution_context(state: &SchedulerState, run_id: &str) -> AppResult<Exec
                 params![parent_id],
                 run_from_row,
             ).ok()?;
-            if parent.review_status.as_deref() == Some("pending") && parent.reviewer_member_id.as_deref() == Some(&agent.id) {
-                let parent_output = parent.output_message_id.as_ref().and_then(|mid| {
-                    conn.query_row("SELECT content FROM messages WHERE id=?1", params![mid], |r| r.get::<_,String>(0)).ok()
-                }).unwrap_or_default();
+            if parent.review_status.as_deref() == Some("pending")
+                && parent.reviewer_member_id.as_deref() == Some(&agent.id)
+            {
+                let parent_output = parent
+                    .output_message_id
+                    .as_ref()
+                    .and_then(|mid| {
+                        conn.query_row(
+                            "SELECT content FROM messages WHERE id=?1",
+                            params![mid],
+                            |r| r.get::<_, String>(0),
+                        )
+                        .ok()
+                    })
+                    .unwrap_or_default();
                 let parent_output = parts_to_plain_text(&parent_output);
                 // Get the original agent's display name
-                let orig_agent_name: String = conn.query_row(
-                    "SELECT display_name FROM members WHERE id=?1", params![parent.agent_member_id], |r| r.get::<_,String>(0)
-                ).unwrap_or_else(|_| parent.agent_member_id.clone());
+                let orig_agent_name: String = conn
+                    .query_row(
+                        "SELECT display_name FROM members WHERE id=?1",
+                        params![parent.agent_member_id],
+                        |r| r.get::<_, String>(0),
+                    )
+                    .unwrap_or_else(|_| parent.agent_member_id.clone());
                 Some(format!(
                     "\n\n❗ 当前任务是审查 @{} 的工作成果。请仔细审查以下内容，判断是否通过。\n- 如果通过，在回复中包含「**APPROVED**」\n- 如果需要修改，在回复中包含「CHANGES_REQUESTED: <修改建议>」\n\n待审查内容：\n{}",
                     orig_agent_name, parent_output
                 ))
-            } else { None }
+            } else {
+                None
+            }
         })()
-    } else { None };
+    } else {
+        None
+    };
 
     let announcement_block = format_announcement_block(&group.announcement, 4096);
     let epitaph_block = crate::context_seams::epitaph_handoff_block(
@@ -435,11 +460,8 @@ fn get_execution_context(state: &SchedulerState, run_id: &str) -> AppResult<Exec
         format!("\n{mem_excerpt}\n")
     };
     // Shared Wiki pack — same for Cursor/Codex/OpenClaw (fail-open).
-    let wiki_block = crate::wiki_context::wiki_context_block(
-        &group.name,
-        &root,
-        &group.announcement,
-    );
+    let wiki_block =
+        crate::wiki_context::wiki_context_block(&group.name, &root, &group.announcement);
     let sections: Vec<_> = [
         crate::context_seams::section("announcement", "group.announcement", &announcement_block),
         crate::context_seams::section("epitaph", "docs/epitaph", &epitaph_block),
@@ -601,7 +623,12 @@ async fn run_agent(
 
     // Fast path: HTTP chatbot (no CLI / no tools)
     if context.agent.kind == "chatbot" || chatbot::is_chatbot_adapter(adapter_name) {
-        emit_phase(state, &context.group.id, &context.run.id, "awaiting_first_token");
+        emit_phase(
+            state,
+            &context.group.id,
+            &context.run.id,
+            "awaiting_first_token",
+        );
         let conn = open_db(&state.db_path)?;
         let api_key = get_agent_api_key(&conn, &context.agent.id)?
             .filter(|k| !k.trim().is_empty())
@@ -637,10 +664,7 @@ async fn run_agent(
         );
         let model = context.agent.model.as_deref();
         let api_url = crate::db::get_agent_api_url(&conn, &context.agent.id)?;
-        let keep = context
-            .settings
-            .chat_context_message_limit
-            .clamp(5, 40) as usize;
+        let keep = context.settings.chat_context_message_limit.clamp(5, 40) as usize;
         let window = build_chatbot_rolling_window(
             state,
             &context.group.id,
@@ -653,12 +677,8 @@ async fn run_agent(
         )
         .await
         .unwrap_or_else(|_| context.recent_chat.clone());
-        let messages = chatbot::build_chat_messages(
-            &system,
-            &window,
-            &context.agent.display_name,
-            &root,
-        );
+        let messages =
+            chatbot::build_chat_messages(&system, &window, &context.agent.display_name, &root);
         // Live short replies: tighter completion budget (TTS < 50 汉字).
         // Non-live: allow longer narrative (e.g. TRPG scene openers).
         let max_tokens = if live_block.is_empty() { 1024 } else { 128 };
@@ -693,7 +713,8 @@ async fn run_agent(
         return Ok(());
     }
 
-    let spec = adapters::manifest::resolve_adapter(adapter_name)?;
+    // 只走内核服务：插件内核未装载时执行失败并给出明确错误，不静默换实现。
+    let spec = crate::plugins::require_adapter_catalog_service()?.resolve(adapter_name)?;
     let delta_count = Arc::new(AtomicU64::new(0));
     let hb_stop = Arc::new(AtomicBool::new(false));
     {
@@ -772,7 +793,10 @@ async fn run_agent(
         context.agent.workspace_path.as_deref(),
         context.group.is_system,
     )?;
-    let _ = memory::ensure_ohmyworkpanel_layout(std::path::Path::new(&context.group.workspace_path), Some(&context.agent.id));
+    let _ = memory::ensure_ohmyworkpanel_layout(
+        std::path::Path::new(&context.group.workspace_path),
+        Some(&context.agent.id),
+    );
 
     let model = context.agent.model.as_deref();
     // Member profile key is optional; adapters::codex::resolve_api_key also reads
@@ -784,7 +808,12 @@ async fn run_agent(
         None
     };
     let timeout = spec.timeout_secs(context.settings.run_timeout_seconds as u64);
-    emit_phase(state, &context.group.id, &context.run.id, "awaiting_first_token");
+    emit_phase(
+        state,
+        &context.group.id,
+        &context.run.id,
+        "awaiting_first_token",
+    );
     let result = adapters::run_streaming(
         spec.clone(),
         &executable,
@@ -937,6 +966,10 @@ fn extract_root_from_prompt(prompt: &str) -> String {
 
 /// Rolling summary for chatbot: when unsummarized messages exceed `keep_limit`, fold the
 /// overflow into `chat_context_summaries` (LLM, extractive fallback), then accumulate recent lines.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "chatbot context inputs will become a use-case request"
+)]
 async fn build_chatbot_rolling_window(
     state: &SchedulerState,
     group_id: &str,
@@ -954,19 +987,14 @@ async fn build_chatbot_rolling_window(
 
     let conn = open_db(&state.db_path)?;
     let existing = get_chat_context_summary(&conn, group_id)?;
-    let after = existing
-        .as_ref()
-        .map(|s| s.through_created_at)
-        .unwrap_or(0);
+    let after = existing.as_ref().map(|s| s.through_created_at).unwrap_or(0);
     let mut summary_text = existing
         .as_ref()
         .map(|s| s.summary_text.clone())
         .unwrap_or_default();
     let load_n = (keep_limit.saturating_add(CHAT_FOLD_BATCH)) as i64;
     let mut msgs = get_messages_after_created_at(&conn, group_id, after, load_n)?;
-    msgs.retain(|m| {
-        m.status != "streaming" && !parts_to_plain_text(&m.content).trim().is_empty()
-    });
+    msgs.retain(|m| m.status != "streaming" && !parts_to_plain_text(&m.content).trim().is_empty());
     let members = get_members(&conn, group_id)?;
     let display: HashMap<_, _> = members
         .iter()
@@ -1014,10 +1042,7 @@ async fn build_chatbot_rolling_window(
     let mut recent = keep.iter().map(line_of).collect::<Vec<_>>().join("\n");
     let budget = crate::context_policy::effective_history_char_budget("chat", "chatbot");
     if recent.chars().count() > budget {
-        recent = format!(
-            "…(前文已截断)\n{}",
-            truncate_chars_end(&recent, budget)
-        );
+        recent = format!("…(前文已截断)\n{}", truncate_chars_end(&recent, budget));
     }
     Ok(compose_window_with_summary(&summary_text, &recent))
 }
@@ -1082,7 +1107,8 @@ fn append_delta(
         params![next, output_id],
     )
     .map_err(|e| e.to_string())?;
-    let payload = serde_json::json!({ "channel": channel, "delta": delta, "replace": replace }).to_string();
+    let payload =
+        serde_json::json!({ "channel": channel, "delta": delta, "replace": replace }).to_string();
     insert_run_event(&conn, &run.id, "delta", &payload)?;
     // Lazy channels stay in DB only; UI fetches on expand (keeps WS/list payloads small).
     let lazy = crate::message_content::is_lazy_channel(channel);
@@ -1150,13 +1176,13 @@ async fn finish_failed(state: &SchedulerState, run_id: &str, error: &str) {
                 error: Some(error.into()),
                 channel: None,
                 replace: None,
-                        phase: None,
-                        elapsed_ms: None,
-                        total_ms: None,
-            seq: None,
-            delta_count: None,
-            rss_mib: None,
-        },
+                phase: None,
+                elapsed_ms: None,
+                total_ms: None,
+                seq: None,
+                delta_count: None,
+                rss_mib: None,
+            },
         );
         if let EventSender::Web(tx) = &state.event_sender {
             orchestrator::on_run_terminal(
@@ -1186,23 +1212,53 @@ async fn finish_completed(state: &SchedulerState, context: &ExecutionContext) {
                     params![parent_run_id],
                     run_from_row,
                 ).map_err(|e| e.to_string())?;
-                if parent.review_status.as_deref() == Some("pending") && parent.reviewer_member_id.as_deref() == Some(&context.agent.id) {
-                    let output_id = context.run.output_message_id.as_ref().ok_or_else(|| "缺少输出".to_string())?;
-                    let output_content: String = conn.query_row(
-                        "SELECT content FROM messages WHERE id=?1", params![output_id], |r| r.get::<_,String>(0)
-                    ).map_err(|e| e.to_string())?;
+                if parent.review_status.as_deref() == Some("pending")
+                    && parent.reviewer_member_id.as_deref() == Some(&context.agent.id)
+                {
+                    let output_id = context
+                        .run
+                        .output_message_id
+                        .as_ref()
+                        .ok_or_else(|| "缺少输出".to_string())?;
+                    let output_content: String = conn
+                        .query_row(
+                            "SELECT content FROM messages WHERE id=?1",
+                            params![output_id],
+                            |r| r.get::<_, String>(0),
+                        )
+                        .map_err(|e| e.to_string())?;
                     let approved = parts_to_plain_text(&output_content)
                         .to_uppercase()
                         .contains("APPROVED");
-                    let new_status = if approved { "completed" } else { "changes_requested" };
+                    let new_status = if approved {
+                        "completed"
+                    } else {
+                        "changes_requested"
+                    };
                     let new_review = if approved { "approved" } else { "rejected" };
                     conn.execute(
                         "UPDATE task_runs SET review_status=?1,status=?2 WHERE id=?3",
                         params![new_review, new_status, parent_run_id],
-                    ).map_err(|e| e.to_string())?;
-                    insert_run_event(&conn, parent_run_id, &format!("review_{}", new_review),
-                        &format!(r#"{{"reviewer":"{}","output":"{}"}}"#, context.agent.id, output_content))?;
-                    logger::info(&conn, "review", &format!("review {} by {} for run {}", new_review, context.agent.display_name, parent_run_id), None);
+                    )
+                    .map_err(|e| e.to_string())?;
+                    insert_run_event(
+                        &conn,
+                        parent_run_id,
+                        &format!("review_{}", new_review),
+                        &format!(
+                            r#"{{"reviewer":"{}","output":"{}"}}"#,
+                            context.agent.id, output_content
+                        ),
+                    )?;
+                    logger::info(
+                        &conn,
+                        "review",
+                        &format!(
+                            "review {} by {} for run {}",
+                            new_review, context.agent.display_name, parent_run_id
+                        ),
+                        None,
+                    );
                     return Ok(Some(new_status.into()));
                 }
                 Ok(None)
@@ -1229,11 +1285,13 @@ async fn finish_completed(state: &SchedulerState, context: &ExecutionContext) {
         let members = get_members(&conn, &context.group.id)?;
         let mut reviewer_id = None;
         for m in &members {
-            if m.kind == "agent" && m.is_active && m.id != context.agent.id {
-                if content.contains(&format!("!review @{}", m.display_name)) {
-                    reviewer_id = Some(m.id.clone());
-                    break;
-                }
+            if m.kind == "agent"
+                && m.is_active
+                && m.id != context.agent.id
+                && content.contains(&format!("!review @{}", m.display_name))
+            {
+                reviewer_id = Some(m.id.clone());
+                break;
             }
         }
         if let Some(ref rev_id) = reviewer_id {
@@ -1246,14 +1304,30 @@ async fn finish_completed(state: &SchedulerState, context: &ExecutionContext) {
                 "UPDATE messages SET content=CASE WHEN length(content)=0 THEN '已完成。' ELSE content END,status='completed' WHERE id=?1",
                 params![output_id],
             ).map_err(|e| e.to_string())?;
-            insert_run_event(&conn, &context.run.id, "awaiting_review",
-                &format!(r#"{{"reviewer":"{}"}}"#, rev_id))?;
+            insert_run_event(
+                &conn,
+                &context.run.id,
+                "awaiting_review",
+                &format!(r#"{{"reviewer":"{}"}}"#, rev_id),
+            )?;
             // Create review run for the reviewer
             let review_run_id = create_task_run(
-                &conn, &context.group.id, output_id, rev_id,
-                Some(&context.run.id), context.run.depth + 1,
+                &conn,
+                &context.group.id,
+                output_id,
+                rev_id,
+                Some(&context.run.id),
+                context.run.depth + 1,
             )?;
-            logger::info(&conn, "review", &format!("review requested by {}: run {} → {}", context.agent.display_name, context.run.id, review_run_id), None);
+            logger::info(
+                &conn,
+                "review",
+                &format!(
+                    "review requested by {}: run {} → {}",
+                    context.agent.display_name, context.run.id, review_run_id
+                ),
+                None,
+            );
             return Ok(Some((output_id.clone(), true)));
         }
         // No review: normal completion
@@ -1274,7 +1348,11 @@ async fn finish_completed(state: &SchedulerState, context: &ExecutionContext) {
         Ok(Some((output_id.clone(), false)))
     })();
     if let Ok(Some((message_id, is_review))) = result {
-        let status = if is_review { "awaiting_review" } else { "completed" };
+        let status = if is_review {
+            "awaiting_review"
+        } else {
+            "completed"
+        };
         emit(
             state,
             ChatEvent {
@@ -1287,13 +1365,13 @@ async fn finish_completed(state: &SchedulerState, context: &ExecutionContext) {
                 error: None,
                 channel: None,
                 replace: None,
-                        phase: None,
-                        elapsed_ms: None,
-                        total_ms: None,
-            seq: None,
-            delta_count: None,
-            rss_mib: None,
-        },
+                phase: None,
+                elapsed_ms: None,
+                total_ms: None,
+                seq: None,
+                delta_count: None,
+                rss_mib: None,
+            },
         );
         if !is_review {
             if let EventSender::Web(tx) = &state.event_sender {
@@ -1321,7 +1399,9 @@ async fn delegate_from_admin(
         let conn = open_db(&state.db_path)?;
         let group = get_group(&conn, &context.group.id)?;
         // Don't delegate further from review runs
-        if context.run.reviewer_member_id.is_some() || context.run.review_status.as_deref() == Some("pending") {
+        if context.run.reviewer_member_id.is_some()
+            || context.run.review_status.as_deref() == Some("pending")
+        {
             return Ok(vec![]);
         }
         if context.run.depth >= context.settings.max_delegation_depth {

@@ -1,6 +1,6 @@
 use crate::models::{
-    Experience, Feature, FeatureTask, Group, GroupState, JoinableUser, Member, Message, RoadmapItem,
-    RuntimeSettings, TaskRun,
+    Experience, Feature, FeatureTask, Group, GroupState, JoinableUser, Member, Message,
+    RoadmapItem, RuntimeSettings, TaskRun,
 };
 use chrono::Utc;
 use rand_core::{OsRng, RngCore};
@@ -23,7 +23,9 @@ pub fn open_db(path: &Path) -> AppResult<Connection> {
     let _ = KEY_FILE.set(path.with_extension("key"));
     let connection = Connection::open(path).map_err(|e| e.to_string())?;
     connection
-        .execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;")
+        .execute_batch(
+            "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;",
+        )
         .map_err(|e| e.to_string())?;
     Ok(connection)
 }
@@ -65,7 +67,7 @@ pub fn encrypt_secret(plain: &str) -> AppResult<String> {
     let mut nonce_bytes = [0u8; 12];
     OsRng.fill_bytes(&mut nonce_bytes);
     let ct = cipher
-        .encrypt(Nonce::from_slice(&nonce_bytes), plain.as_bytes())
+        .encrypt(&Nonce::from(nonce_bytes), plain.as_bytes())
         .map_err(|e| format!("secret encrypt failed: {e}"))?;
     let enc = base64::engine::general_purpose::STANDARD;
     Ok(format!("v1:{}:{}", enc.encode(nonce_bytes), enc.encode(ct)))
@@ -84,11 +86,16 @@ pub fn decrypt_secret(stored: &str) -> AppResult<String> {
     let nonce_b64 = parts.next().unwrap_or_default();
     let ct_b64 = parts.next().unwrap_or_default();
     let enc = base64::engine::general_purpose::STANDARD;
-    let nonce = enc.decode(nonce_b64).map_err(|e| format!("nonce decode: {e}"))?;
+    let nonce_bytes = enc
+        .decode(nonce_b64)
+        .map_err(|e| format!("nonce decode: {e}"))?;
+    let nonce: [u8; 12] = nonce_bytes
+        .try_into()
+        .map_err(|_| "nonce 长度非法".to_string())?;
     let ct = enc.decode(ct_b64).map_err(|e| format!("ct decode: {e}"))?;
     let cipher = Aes256Gcm::new_from_slice(&machine_key()).map_err(|e| e.to_string())?;
     let pt = cipher
-        .decrypt(Nonce::from_slice(&nonce), ct.as_ref())
+        .decrypt(&Nonce::from(nonce), ct.as_ref())
         .map_err(|e| format!("secret decrypt failed（key 文件被换？）: {e}"))?;
     String::from_utf8(pt).map_err(|e| e.to_string())
 }
@@ -216,9 +223,7 @@ pub fn get_connecter_cancel_target(
         )
         .optional()
         .map_err(|e| e.to_string())?;
-    if adapter.as_deref()
-        != Some(crate::agents::adapters::connecter_remote::ADAPTER_ID)
-    {
+    if adapter.as_deref() != Some(crate::agents::adapters::connecter_remote::ADAPTER_ID) {
         return Ok(None);
     }
     Ok(Some((
@@ -401,11 +406,13 @@ pub fn init_db(path: &Path) -> AppResult<()> {
         {"name":"OpenClaw","adapter":"openclaw","roleDescription":"产品设计、拉通对齐与运维","avatarColor":"#d69e2e"},
         {"name":"Cursor Agent","adapter":"cursor","roleDescription":"Cursor CLI（agent / cursor-agent）","avatarColor":"#38a169"}
     ]);
-    connection.execute(
-        "INSERT INTO app_settings(key, value) VALUES('preset_roles', ?1)
+    connection
+        .execute(
+            "INSERT INTO app_settings(key, value) VALUES('preset_roles', ?1)
          ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-        params![default_roles.to_string()],
-    ).map_err(|e| e.to_string())?;
+            params![default_roles.to_string()],
+        )
+        .map_err(|e| e.to_string())?;
     connection
         .execute(
             "UPDATE messages SET status='interrupted' WHERE status='streaming'",
@@ -594,12 +601,12 @@ pub fn assert_member_mutable(connection: &Connection, member_id: &str) -> AppRes
         )
         .unwrap_or(0);
     if locked != 0 {
-        return Err("平台锁定的自举 Agent（bootstrap-dsh / linlis-super-harness）不可修改或移除。".into());
+        return Err(
+            "平台锁定的自举 Agent（bootstrap-dsh / linlis-super-harness）不可修改或移除。".into(),
+        );
     }
     Ok(())
 }
-
-
 
 pub const GROUP_SELECT: &str = "SELECT id,name,workspace_path,owner_member_id,admin_member_id,created_at,COALESCE(announcement,''),announcement_updated_at,COALESCE(group_kind,'project'),COALESCE(archived,0),COALESCE(is_system,0) FROM groups";
 
@@ -663,7 +670,7 @@ pub fn member_from_row(row: &Row<'_>) -> rusqlite::Result<Member> {
         model: row.get(16).ok().flatten(),
         auth_user_id,
         invite_pending,
-          system_locked: row.get::<_, i64>(18).ok().unwrap_or(0) != 0,
+        system_locked: row.get::<_, i64>(18).ok().unwrap_or(0) != 0,
         api_url: row.get(19).ok().flatten(),
     })
 }
@@ -695,7 +702,10 @@ pub fn project_message_for_client(mut message: Message) -> Message {
 }
 
 pub fn project_messages_for_client(messages: Vec<Message>) -> Vec<Message> {
-    messages.into_iter().map(project_message_for_client).collect()
+    messages
+        .into_iter()
+        .map(project_message_for_client)
+        .collect()
 }
 
 pub fn get_message_channel_text(
@@ -711,7 +721,9 @@ pub fn get_message_channel_text(
             |row| row.get(0),
         )
         .map_err(|_| "消息不存在。".to_string())?;
-    Ok(crate::message_content::extract_channel_text(&content, channel))
+    Ok(crate::message_content::extract_channel_text(
+        &content, channel,
+    ))
 }
 
 pub fn run_from_row(row: &Row<'_>) -> rusqlite::Result<TaskRun> {
@@ -739,7 +751,9 @@ pub const RUN_SELECT: &str = "SELECT id,group_id,root_message_id,agent_member_id
 
 pub fn get_groups(connection: &Connection) -> AppResult<Vec<Group>> {
     let mut stmt = connection
-        .prepare(&format!("{GROUP_SELECT} ORDER BY archived ASC, created_at DESC"))
+        .prepare(&format!(
+            "{GROUP_SELECT} ORDER BY archived ASC, created_at DESC"
+        ))
         .map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([], group_from_row)
@@ -763,7 +777,10 @@ pub fn is_admin_user(connection: &Connection, user_id: &str) -> AppResult<bool> 
 }
 
 /// Users not already an active `kind=user` member of `group_id`.
-pub fn list_joinable_users(connection: &Connection, group_id: &str) -> AppResult<Vec<JoinableUser>> {
+pub fn list_joinable_users(
+    connection: &Connection,
+    group_id: &str,
+) -> AppResult<Vec<JoinableUser>> {
     let mut stmt = connection
         .prepare(
             "SELECT id, username FROM users
@@ -795,7 +812,10 @@ pub fn resolve_user_member_auth_id(
     login_username: Option<&str>,
     login_password: Option<&str>,
 ) -> AppResult<String> {
-    if let Some(uid) = existing_auth_user_id.map(str::trim).filter(|s| !s.is_empty()) {
+    if let Some(uid) = existing_auth_user_id
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         let username: String = connection
             .query_row(
                 "SELECT username FROM users WHERE id=?1",
@@ -872,26 +892,19 @@ pub fn get_groups_for_user(connection: &Connection, user_id: &str) -> AppResult<
         g.unread_count = count_group_unread(connection, user_id, &g.id)?;
     }
     // Unread first among non-archived; keep archived after (archived ASC already).
-    groups.sort_by(|a, b| {
-        match (a.archived, b.archived) {
-            (false, true) => std::cmp::Ordering::Less,
-            (true, false) => std::cmp::Ordering::Greater,
-            _ => {
-                let au = if a.unread_count > 0 { 1 } else { 0 };
-                let bu = if b.unread_count > 0 { 1 } else { 0 };
-                bu.cmp(&au)
-                    .then_with(|| b.created_at.cmp(&a.created_at))
-            }
+    groups.sort_by(|a, b| match (a.archived, b.archived) {
+        (false, true) => std::cmp::Ordering::Less,
+        (true, false) => std::cmp::Ordering::Greater,
+        _ => {
+            let au = if a.unread_count > 0 { 1 } else { 0 };
+            let bu = if b.unread_count > 0 { 1 } else { 0 };
+            bu.cmp(&au).then_with(|| b.created_at.cmp(&a.created_at))
         }
     });
     Ok(groups)
 }
 
-fn read_cursor_baseline(
-    connection: &Connection,
-    user_id: &str,
-    group_id: &str,
-) -> AppResult<i64> {
+fn read_cursor_baseline(connection: &Connection, user_id: &str, group_id: &str) -> AppResult<i64> {
     let cursor: Option<i64> = connection
         .query_row(
             "SELECT last_read_at FROM group_read_cursors WHERE user_id=?1 AND group_id=?2",
@@ -938,11 +951,7 @@ pub fn count_group_unread(
     Ok(n)
 }
 
-pub fn mark_group_read(
-    connection: &Connection,
-    user_id: &str,
-    group_id: &str,
-) -> AppResult<()> {
+pub fn mark_group_read(connection: &Connection, user_id: &str, group_id: &str) -> AppResult<()> {
     let ts = now();
     connection
         .execute(
@@ -955,7 +964,11 @@ pub fn mark_group_read(
     Ok(())
 }
 
-pub fn user_can_access_group(connection: &Connection, user_id: &str, group_id: &str) -> AppResult<bool> {
+pub fn user_can_access_group(
+    connection: &Connection,
+    user_id: &str,
+    group_id: &str,
+) -> AppResult<bool> {
     if is_admin_user(connection, user_id)? {
         return Ok(true);
     }
@@ -969,7 +982,11 @@ pub fn user_can_access_group(connection: &Connection, user_id: &str, group_id: &
     Ok(n > 0)
 }
 
-pub fn require_group_access(connection: &Connection, user_id: &str, group_id: &str) -> AppResult<()> {
+pub fn require_group_access(
+    connection: &Connection,
+    user_id: &str,
+    group_id: &str,
+) -> AppResult<()> {
     if user_can_access_group(connection, user_id, group_id)? {
         Ok(())
     } else {
@@ -997,7 +1014,11 @@ pub fn get_group(connection: &Connection, group_id: &str) -> AppResult<Group> {
         .ok_or_else(|| "找不到群聊。".to_string())
 }
 
-pub fn set_group_archived(connection: &Connection, group_id: &str, archived: bool) -> AppResult<Group> {
+pub fn set_group_archived(
+    connection: &Connection,
+    group_id: &str,
+    archived: bool,
+) -> AppResult<Group> {
     let n = connection
         .execute(
             "UPDATE groups SET archived=?1 WHERE id=?2",
@@ -1010,7 +1031,11 @@ pub fn set_group_archived(connection: &Connection, group_id: &str, archived: boo
     get_group(connection, group_id)
 }
 
-pub fn set_member_model(connection: &Connection, member_id: &str, model: Option<&str>) -> AppResult<()> {
+pub fn set_member_model(
+    connection: &Connection,
+    member_id: &str,
+    model: Option<&str>,
+) -> AppResult<()> {
     let value = model.map(str::trim).filter(|s| !s.is_empty());
     let n = connection
         .execute(
@@ -1071,7 +1096,9 @@ pub fn set_member_executable(
 
 /// All agent member profiles (id, group, adapter, display name, model, executable, key set, locked).
 /// Used by the agent-config import to provision existing members without creating new ones.
-pub fn list_agent_profiles(connection: &Connection) -> AppResult<Vec<crate::agent_config::AgentProfileRow>> {
+pub fn list_agent_profiles(
+    connection: &Connection,
+) -> AppResult<Vec<crate::agent_config::AgentProfileRow>> {
     let mut stmt = connection
         .prepare(
             "SELECT m.id, m.group_id, m.display_name, p.adapter, p.model, p.executable_path,
@@ -1104,14 +1131,14 @@ pub fn list_agent_profiles(connection: &Connection) -> AppResult<Vec<crate::agen
 
 /// Generic app_settings string read (None when absent).
 pub fn get_setting_str(connection: &Connection, key: &str) -> AppResult<Option<String>> {
-    Ok(connection
+    connection
         .query_row(
             "SELECT value FROM app_settings WHERE key=?1",
             params![key],
             |r| r.get::<_, String>(0),
         )
         .optional()
-        .map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())
 }
 
 /// Generic app_settings upsert.
@@ -1160,7 +1187,10 @@ pub fn update_group_workspace(
     get_group(connection, group_id)
 }
 
-pub fn list_run_phases(conn: &Connection, run_id: &str) -> AppResult<Vec<crate::models::RunPhaseEntry>> {
+pub fn list_run_phases(
+    conn: &Connection,
+    run_id: &str,
+) -> AppResult<Vec<crate::models::RunPhaseEntry>> {
     // 阶段时间线从 run_events 的 kind='phase' 事件投影（单一事件源），payload 形如
     // {"phase": "...", "elapsedMs": n, "totalMs": n}。
     let mut stmt = conn
@@ -1171,9 +1201,16 @@ pub fn list_run_phases(conn: &Connection, run_id: &str) -> AppResult<Vec<crate::
             let payload: String = row.get(0)?;
             let phase = serde_json::from_str::<serde_json::Value>(&payload)
                 .ok()
-                .and_then(|v| v.get("phase").and_then(|p| p.as_str().map(|s| s.to_string())))
+                .and_then(|v| {
+                    v.get("phase")
+                        .and_then(|p| p.as_str().map(|s| s.to_string()))
+                })
                 .unwrap_or_else(|| "?".to_string());
-            Ok(crate::models::RunPhaseEntry { phase, note: String::new(), created_at: row.get(1)? })
+            Ok(crate::models::RunPhaseEntry {
+                phase,
+                note: String::new(),
+                created_at: row.get(1)?,
+            })
         })
         .map_err(|e| e.to_string())?;
     let mut out = Vec::new();
@@ -1379,8 +1416,17 @@ pub fn preview_invite(connection: &Connection, token: &str) -> AppResult<InviteP
         )
         .optional()
         .map_err(|e| e.to_string())?;
-    let Some((_gid, _mid, expires_at, consumed_at, group_name, display_name, is_active, hidden, auth_uid)) =
-        row
+    let Some((
+        _gid,
+        _mid,
+        expires_at,
+        consumed_at,
+        group_name,
+        display_name,
+        is_active,
+        hidden,
+        auth_uid,
+    )) = row
     else {
         return Ok(InvitePreview {
             group_name: String::new(),
@@ -1468,7 +1514,11 @@ pub fn accept_invite(connection: &Connection, token: &str, user_id: &str) -> App
 
 /// Permanently remove a member from the group roster.
 /// Real DELETE when no message/run refs; otherwise `roster_hidden=1` to preserve history FKs.
-pub fn hard_delete_member(connection: &Connection, group_id: &str, member_id: &str) -> AppResult<()> {
+pub fn hard_delete_member(
+    connection: &Connection,
+    group_id: &str,
+    member_id: &str,
+) -> AppResult<()> {
     let group = get_group(connection, group_id)?;
     if group.owner_member_id == member_id {
         return Err("不能删除群主".into());
@@ -1483,7 +1533,10 @@ pub fn hard_delete_member(connection: &Connection, group_id: &str, member_id: &s
     if exists == 0 {
         return Err("找不到成员".into());
     }
-    let _ = connection.execute("DELETE FROM group_invites WHERE member_id=?1", params![member_id]);
+    let _ = connection.execute(
+        "DELETE FROM group_invites WHERE member_id=?1",
+        params![member_id],
+    );
     if group.admin_member_id.as_deref() == Some(member_id) {
         connection
             .execute(
@@ -1506,7 +1559,10 @@ pub fn hard_delete_member(connection: &Connection, group_id: &str, member_id: &s
             |r| r.get(0),
         )
         .map_err(|e| e.to_string())?;
-    let _ = connection.execute("DELETE FROM mentions WHERE member_id=?1", params![member_id]);
+    let _ = connection.execute(
+        "DELETE FROM mentions WHERE member_id=?1",
+        params![member_id],
+    );
     if msg_refs == 0 && run_refs == 0 {
         connection
             .execute(
@@ -1770,7 +1826,11 @@ pub fn get_cli_session_id(conn: &Connection, member_id: &str) -> AppResult<Optio
     Ok(value.flatten().filter(|s| !s.trim().is_empty()))
 }
 
-pub fn set_cli_session_id(conn: &Connection, member_id: &str, session_id: Option<&str>) -> AppResult<()> {
+pub fn set_cli_session_id(
+    conn: &Connection,
+    member_id: &str,
+    session_id: Option<&str>,
+) -> AppResult<()> {
     conn.execute(
         "UPDATE agent_profiles SET cli_session_id=?1, updated_at=?2 WHERE member_id=?3",
         params![session_id, now(), member_id],
@@ -1781,7 +1841,11 @@ pub fn set_cli_session_id(conn: &Connection, member_id: &str, session_id: Option
 
 pub fn get_preset_roles(connection: &Connection) -> AppResult<Vec<crate::models::PresetRole>> {
     let json: Option<String> = connection
-        .query_row("SELECT value FROM app_settings WHERE key='preset_roles'", [], |r| r.get(0))
+        .query_row(
+            "SELECT value FROM app_settings WHERE key='preset_roles'",
+            [],
+            |r| r.get(0),
+        )
         .optional()
         .map_err(|e| e.to_string())?;
     match json {
@@ -1842,7 +1906,11 @@ pub struct CancelRunInfo {
 /// 返回 None 表示任务不存在或不在可取消状态；Some 供 transport 发事件。
 pub fn cancel_run(conn: &Connection, run_id: &str) -> AppResult<Option<CancelRunInfo>> {
     let run: Option<TaskRun> = conn
-        .query_row(&format!("{} WHERE id=?1", RUN_SELECT), params![run_id], run_from_row)
+        .query_row(
+            &format!("{} WHERE id=?1", RUN_SELECT),
+            params![run_id],
+            run_from_row,
+        )
         .optional()
         .map_err(|e| e.to_string())?;
     let Some(run) = run else {
@@ -1872,7 +1940,11 @@ pub fn cancel_run(conn: &Connection, run_id: &str) -> AppResult<Option<CancelRun
 /// 重试任务：以原 root/agent 建新 run。返回 (new_id, group_id)；None 表示原任务不存在。
 pub fn retry_run(conn: &Connection, run_id: &str) -> AppResult<Option<(String, String)>> {
     let run: Option<TaskRun> = conn
-        .query_row(&format!("{} WHERE id=?1", RUN_SELECT), params![run_id], run_from_row)
+        .query_row(
+            &format!("{} WHERE id=?1", RUN_SELECT),
+            params![run_id],
+            run_from_row,
+        )
         .optional()
         .map_err(|e| e.to_string())?;
     let Some(run) = run else {
@@ -1953,253 +2025,291 @@ pub fn resolve_target_agent_ids(
     }
     Ok(agents)
 }
- 
- // === PM: Roadmap Items ===
- 
- pub fn roadmap_item_from_row(row: &Row<'_>) -> rusqlite::Result<RoadmapItem> {
-     Ok(RoadmapItem {
-         id: row.get(0)?,
-         group_id: row.get(1)?,
-         title: row.get(2)?,
-         description: row.get(3)?,
-         status: row.get(4)?,
-         priority: row.get(5)?,
-         target_date: row.get(6)?,
-         sort_order: row.get(7)?,
-         created_at: row.get(8)?,
-     })
- }
- 
- pub fn get_roadmap_items(conn: &Connection, group_id: &str) -> AppResult<Vec<RoadmapItem>> {
-     let mut stmt = conn
+
+// === PM: Roadmap Items ===
+
+pub fn roadmap_item_from_row(row: &Row<'_>) -> rusqlite::Result<RoadmapItem> {
+    Ok(RoadmapItem {
+        id: row.get(0)?,
+        group_id: row.get(1)?,
+        title: row.get(2)?,
+        description: row.get(3)?,
+        status: row.get(4)?,
+        priority: row.get(5)?,
+        target_date: row.get(6)?,
+        sort_order: row.get(7)?,
+        created_at: row.get(8)?,
+    })
+}
+
+pub fn get_roadmap_items(conn: &Connection, group_id: &str) -> AppResult<Vec<RoadmapItem>> {
+    let mut stmt = conn
          .prepare("SELECT id,group_id,title,description,status,priority,target_date,sort_order,created_at FROM roadmap_items WHERE group_id=?1 ORDER BY sort_order,created_at")
          .map_err(|e| e.to_string())?;
-     let rows = stmt
-         .query_map(params![group_id], roadmap_item_from_row)
-         .map_err(|e| e.to_string())?
-         .collect::<Result<Vec<_>, _>>()
-         .map_err(|e| e.to_string())?;
-     Ok(rows)
- }
- 
- pub fn create_roadmap_item_db(conn: &Connection, input: &crate::models::CreateRoadmapItemInput) -> AppResult<RoadmapItem> {
-     let item = RoadmapItem {
-         id: id(),
-         group_id: input.group_id.clone(),
-         title: input.title.clone(),
-         description: input.description.clone().unwrap_or_default(),
-         status: input.status.clone().unwrap_or_else(|| "backlog".into()),
-         priority: input.priority.clone().unwrap_or_else(|| "medium".into()),
-         target_date: input.target_date.clone(),
-         sort_order: 0,
-         created_at: now(),
-     };
-     conn.execute(
+    let rows = stmt
+        .query_map(params![group_id], roadmap_item_from_row)
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(rows)
+}
+
+pub fn create_roadmap_item_db(
+    conn: &Connection,
+    input: &crate::models::CreateRoadmapItemInput,
+) -> AppResult<RoadmapItem> {
+    let item = RoadmapItem {
+        id: id(),
+        group_id: input.group_id.clone(),
+        title: input.title.clone(),
+        description: input.description.clone().unwrap_or_default(),
+        status: input.status.clone().unwrap_or_else(|| "backlog".into()),
+        priority: input.priority.clone().unwrap_or_else(|| "medium".into()),
+        target_date: input.target_date.clone(),
+        sort_order: 0,
+        created_at: now(),
+    };
+    conn.execute(
          "INSERT INTO roadmap_items(id,group_id,title,description,status,priority,target_date,sort_order,created_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)",
          params![item.id, item.group_id, item.title, item.description, item.status, item.priority, item.target_date, item.sort_order, item.created_at],
      )
      .map_err(|e| e.to_string())?;
-     Ok(item)
- }
- 
- pub fn update_roadmap_item_db(conn: &Connection, id: &str, input: &crate::models::UpdateRoadmapItemInput) -> AppResult<RoadmapItem> {
-     let orig: RoadmapItem = conn
+    Ok(item)
+}
+
+pub fn update_roadmap_item_db(
+    conn: &Connection,
+    id: &str,
+    input: &crate::models::UpdateRoadmapItemInput,
+) -> AppResult<RoadmapItem> {
+    let orig: RoadmapItem = conn
          .query_row("SELECT id,group_id,title,description,status,priority,target_date,sort_order,created_at FROM roadmap_items WHERE id=?1", params![id], roadmap_item_from_row)
          .map_err(|e| format!("roadmap item not found: {e}"))?;
-     let updated = RoadmapItem {
-         title: input.title.clone().unwrap_or(orig.title),
-         description: input.description.clone().unwrap_or(orig.description),
-         status: input.status.clone().unwrap_or(orig.status),
-         priority: input.priority.clone().unwrap_or(orig.priority),
-         target_date: input.target_date.clone().or(orig.target_date),
-         sort_order: input.sort_order.unwrap_or(orig.sort_order),
-         ..orig
-     };
-     conn.execute(
+    let updated = RoadmapItem {
+        title: input.title.clone().unwrap_or(orig.title),
+        description: input.description.clone().unwrap_or(orig.description),
+        status: input.status.clone().unwrap_or(orig.status),
+        priority: input.priority.clone().unwrap_or(orig.priority),
+        target_date: input.target_date.clone().or(orig.target_date),
+        sort_order: input.sort_order.unwrap_or(orig.sort_order),
+        ..orig
+    };
+    conn.execute(
          "UPDATE roadmap_items SET title=?1,description=?2,status=?3,priority=?4,target_date=?5,sort_order=?6 WHERE id=?7",
          params![updated.title, updated.description, updated.status, updated.priority, updated.target_date, updated.sort_order, id],
      )
      .map_err(|e| e.to_string())?;
-     Ok(updated)
- }
- 
- pub fn delete_roadmap_item_db(conn: &Connection, id: &str) -> AppResult<()> {
-     conn.execute("DELETE FROM roadmap_items WHERE id=?1", params![id])
-         .map_err(|e| e.to_string())?;
-     Ok(())
- }
- 
- // === PM: Features ===
- 
- pub fn feature_from_row(row: &Row<'_>) -> rusqlite::Result<Feature> {
-     Ok(Feature {
-         id: row.get(0)?,
-         group_id: row.get(1)?,
-         title: row.get(2)?,
-         description: row.get(3)?,
-         status: row.get(4)?,
-         priority: row.get(5)?,
-         area: row.get(6)?,
-         assignee_member_id: row.get(7)?,
-         target_roadmap_item_id: row.get(8)?,
-         sort_order: row.get(9)?,
-         created_at: row.get(10)?,
-         updated_at: row.get(11)?,
-     })
- }
- 
- pub fn get_features(conn: &Connection, group_id: &str) -> AppResult<Vec<Feature>> {
-     let mut stmt = conn
+    Ok(updated)
+}
+
+pub fn delete_roadmap_item_db(conn: &Connection, id: &str) -> AppResult<()> {
+    conn.execute("DELETE FROM roadmap_items WHERE id=?1", params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// === PM: Features ===
+
+pub fn feature_from_row(row: &Row<'_>) -> rusqlite::Result<Feature> {
+    Ok(Feature {
+        id: row.get(0)?,
+        group_id: row.get(1)?,
+        title: row.get(2)?,
+        description: row.get(3)?,
+        status: row.get(4)?,
+        priority: row.get(5)?,
+        area: row.get(6)?,
+        assignee_member_id: row.get(7)?,
+        target_roadmap_item_id: row.get(8)?,
+        sort_order: row.get(9)?,
+        created_at: row.get(10)?,
+        updated_at: row.get(11)?,
+    })
+}
+
+pub fn get_features(conn: &Connection, group_id: &str) -> AppResult<Vec<Feature>> {
+    let mut stmt = conn
          .prepare("SELECT id,group_id,title,description,status,priority,area,assignee_member_id,target_roadmap_item_id,sort_order,created_at,updated_at FROM features WHERE group_id=?1 ORDER BY sort_order,created_at")
          .map_err(|e| e.to_string())?;
-     let rows = stmt
-         .query_map(params![group_id], feature_from_row)
-         .map_err(|e| e.to_string())?
-         .collect::<Result<Vec<_>, _>>()
-         .map_err(|e| e.to_string())?;
-     Ok(rows)
- }
- 
- pub fn create_feature_db(conn: &Connection, input: &crate::models::CreateFeatureInput) -> AppResult<Feature> {
-     let now_ts = now();
-     let feature = Feature {
-         id: id(),
-         group_id: input.group_id.clone(),
-         title: input.title.clone(),
-         description: input.description.clone().unwrap_or_default(),
-         status: input.status.clone().unwrap_or_else(|| "backlog".into()),
-         priority: input.priority.clone().unwrap_or_else(|| "medium".into()),
-         area: input.area.clone().unwrap_or_default(),
-         assignee_member_id: input.assignee_member_id.clone(),
-         target_roadmap_item_id: input.target_roadmap_item_id.clone(),
-         sort_order: 0,
-         created_at: now_ts,
-         updated_at: now_ts,
-     };
-     conn.execute(
+    let rows = stmt
+        .query_map(params![group_id], feature_from_row)
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(rows)
+}
+
+pub fn create_feature_db(
+    conn: &Connection,
+    input: &crate::models::CreateFeatureInput,
+) -> AppResult<Feature> {
+    let now_ts = now();
+    let feature = Feature {
+        id: id(),
+        group_id: input.group_id.clone(),
+        title: input.title.clone(),
+        description: input.description.clone().unwrap_or_default(),
+        status: input.status.clone().unwrap_or_else(|| "backlog".into()),
+        priority: input.priority.clone().unwrap_or_else(|| "medium".into()),
+        area: input.area.clone().unwrap_or_default(),
+        assignee_member_id: input.assignee_member_id.clone(),
+        target_roadmap_item_id: input.target_roadmap_item_id.clone(),
+        sort_order: 0,
+        created_at: now_ts,
+        updated_at: now_ts,
+    };
+    conn.execute(
          "INSERT INTO features(id,group_id,title,description,status,priority,area,assignee_member_id,target_roadmap_item_id,sort_order,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)",
          params![feature.id, feature.group_id, feature.title, feature.description, feature.status, feature.priority, feature.area, feature.assignee_member_id, feature.target_roadmap_item_id, feature.sort_order, feature.created_at, feature.updated_at],
      )
      .map_err(|e| e.to_string())?;
-     Ok(feature)
- }
- 
- pub fn update_feature_db(conn: &Connection, id: &str, input: &crate::models::UpdateFeatureInput) -> AppResult<Feature> {
-     let orig: Feature = conn
+    Ok(feature)
+}
+
+pub fn update_feature_db(
+    conn: &Connection,
+    id: &str,
+    input: &crate::models::UpdateFeatureInput,
+) -> AppResult<Feature> {
+    let orig: Feature = conn
          .query_row("SELECT id,group_id,title,description,status,priority,area,assignee_member_id,target_roadmap_item_id,sort_order,created_at,updated_at FROM features WHERE id=?1", params![id], feature_from_row)
          .map_err(|e| format!("feature not found: {e}"))?;
-     let updated = Feature {
-         title: input.title.clone().unwrap_or(orig.title),
-         description: input.description.clone().unwrap_or(orig.description),
-         status: input.status.clone().unwrap_or(orig.status),
-         priority: input.priority.clone().unwrap_or(orig.priority),
-         area: input.area.clone().unwrap_or(orig.area),
-         assignee_member_id: input.assignee_member_id.clone().or(orig.assignee_member_id),
-         target_roadmap_item_id: input.target_roadmap_item_id.clone().or(orig.target_roadmap_item_id),
-         sort_order: input.sort_order.unwrap_or(orig.sort_order),
-         updated_at: now(),
-         ..orig
-     };
-     conn.execute(
+    let updated = Feature {
+        title: input.title.clone().unwrap_or(orig.title),
+        description: input.description.clone().unwrap_or(orig.description),
+        status: input.status.clone().unwrap_or(orig.status),
+        priority: input.priority.clone().unwrap_or(orig.priority),
+        area: input.area.clone().unwrap_or(orig.area),
+        assignee_member_id: input.assignee_member_id.clone().or(orig.assignee_member_id),
+        target_roadmap_item_id: input
+            .target_roadmap_item_id
+            .clone()
+            .or(orig.target_roadmap_item_id),
+        sort_order: input.sort_order.unwrap_or(orig.sort_order),
+        updated_at: now(),
+        ..orig
+    };
+    conn.execute(
          "UPDATE features SET title=?1,description=?2,status=?3,priority=?4,area=?5,assignee_member_id=?6,target_roadmap_item_id=?7,sort_order=?8,updated_at=?9 WHERE id=?10",
          params![updated.title, updated.description, updated.status, updated.priority, updated.area, updated.assignee_member_id, updated.target_roadmap_item_id, updated.sort_order, updated.updated_at, id],
      )
      .map_err(|e| e.to_string())?;
-     Ok(updated)
- }
- 
- pub fn delete_feature_db(conn: &Connection, id: &str) -> AppResult<()> {
-     conn.execute("DELETE FROM features WHERE id=?1", params![id])
-         .map_err(|e| e.to_string())?;
-     Ok(())
- }
- 
- // === PM: Feature Tasks ===
- 
- pub fn feature_task_from_row(row: &Row<'_>) -> rusqlite::Result<FeatureTask> {
-     Ok(FeatureTask {
-         id: row.get(0)?,
-         feature_id: row.get(1)?,
-         title: row.get(2)?,
-         done: row.get::<_, i64>(3)? != 0,
-         sort_order: row.get(4)?,
-         created_at: row.get(5)?,
-     })
- }
- 
- pub fn get_feature_tasks(conn: &Connection, feature_id: &str) -> AppResult<Vec<FeatureTask>> {
-     let mut stmt = conn
+    Ok(updated)
+}
+
+pub fn delete_feature_db(conn: &Connection, id: &str) -> AppResult<()> {
+    conn.execute("DELETE FROM features WHERE id=?1", params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// === PM: Feature Tasks ===
+
+pub fn feature_task_from_row(row: &Row<'_>) -> rusqlite::Result<FeatureTask> {
+    Ok(FeatureTask {
+        id: row.get(0)?,
+        feature_id: row.get(1)?,
+        title: row.get(2)?,
+        done: row.get::<_, i64>(3)? != 0,
+        sort_order: row.get(4)?,
+        created_at: row.get(5)?,
+    })
+}
+
+pub fn get_feature_tasks(conn: &Connection, feature_id: &str) -> AppResult<Vec<FeatureTask>> {
+    let mut stmt = conn
          .prepare("SELECT id,feature_id,title,done,sort_order,created_at FROM feature_tasks WHERE feature_id=?1 ORDER BY sort_order,created_at")
          .map_err(|e| e.to_string())?;
-     let rows = stmt
-         .query_map(params![feature_id], feature_task_from_row)
-         .map_err(|e| e.to_string())?
-         .collect::<Result<Vec<_>, _>>()
-         .map_err(|e| e.to_string())?;
-     Ok(rows)
- }
- 
- pub fn create_feature_task_db(conn: &Connection, input: &crate::models::CreateFeatureTaskInput) -> AppResult<FeatureTask> {
-     let task = FeatureTask {
-         id: id(),
-         feature_id: input.feature_id.clone(),
-         title: input.title.clone(),
-         done: false,
-         sort_order: 0,
-         created_at: now(),
-     };
-     conn.execute(
+    let rows = stmt
+        .query_map(params![feature_id], feature_task_from_row)
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(rows)
+}
+
+pub fn create_feature_task_db(
+    conn: &Connection,
+    input: &crate::models::CreateFeatureTaskInput,
+) -> AppResult<FeatureTask> {
+    let task = FeatureTask {
+        id: id(),
+        feature_id: input.feature_id.clone(),
+        title: input.title.clone(),
+        done: false,
+        sort_order: 0,
+        created_at: now(),
+    };
+    conn.execute(
          "INSERT INTO feature_tasks(id,feature_id,title,done,sort_order,created_at) VALUES(?1,?2,?3,?4,?5,?6)",
          params![task.id, task.feature_id, task.title, 0i64, task.sort_order, task.created_at],
      )
      .map_err(|e| e.to_string())?;
-     Ok(task)
- }
- 
- pub fn update_feature_task_db(conn: &Connection, id: &str, input: &crate::models::UpdateFeatureTaskInput) -> AppResult<FeatureTask> {
-     let orig: FeatureTask = conn
-         .query_row("SELECT id,feature_id,title,done,sort_order,created_at FROM feature_tasks WHERE id=?1", params![id], feature_task_from_row)
-         .map_err(|e| format!("task not found: {e}"))?;
-     let updated = FeatureTask {
-         title: input.title.clone().unwrap_or(orig.title),
-         done: input.done.unwrap_or(orig.done),
-         sort_order: input.sort_order.unwrap_or(orig.sort_order),
-         ..orig
-     };
-     conn.execute(
-         "UPDATE feature_tasks SET title=?1,done=?2,sort_order=?3 WHERE id=?4",
-         params![updated.title, updated.done as i64, updated.sort_order, id],
-     )
-     .map_err(|e| e.to_string())?;
-     Ok(updated)
- }
- 
- pub fn delete_feature_task_db(conn: &Connection, id: &str) -> AppResult<()> {
-     conn.execute("DELETE FROM feature_tasks WHERE id=?1", params![id])
-         .map_err(|e| e.to_string())?;
-     Ok(())
- }
- 
- // === PM: Aggregated State ===
- 
- pub fn get_roadmap_state_db(conn: &Connection, group_id: &str) -> AppResult<crate::models::RoadmapState> {
-     let features = get_features(conn, group_id)?;
-     let all_task_ids: Vec<String> = features.iter().map(|f| f.id.clone()).collect();
-     let mut all_tasks = Vec::new();
-     for fid in &all_task_ids {
-         all_tasks.extend(get_feature_tasks(conn, fid)?);
-     }
-     Ok(crate::models::RoadmapState {
-         group_id: group_id.into(),
-         items: get_roadmap_items(conn, group_id)?,
-         features,
-         tasks: all_tasks,
-     })
- }
+    Ok(task)
+}
+
+pub fn update_feature_task_db(
+    conn: &Connection,
+    id: &str,
+    input: &crate::models::UpdateFeatureTaskInput,
+) -> AppResult<FeatureTask> {
+    let orig: FeatureTask = conn
+        .query_row(
+            "SELECT id,feature_id,title,done,sort_order,created_at FROM feature_tasks WHERE id=?1",
+            params![id],
+            feature_task_from_row,
+        )
+        .map_err(|e| format!("task not found: {e}"))?;
+    let updated = FeatureTask {
+        title: input.title.clone().unwrap_or(orig.title),
+        done: input.done.unwrap_or(orig.done),
+        sort_order: input.sort_order.unwrap_or(orig.sort_order),
+        ..orig
+    };
+    conn.execute(
+        "UPDATE feature_tasks SET title=?1,done=?2,sort_order=?3 WHERE id=?4",
+        params![updated.title, updated.done as i64, updated.sort_order, id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(updated)
+}
+
+pub fn delete_feature_task_db(conn: &Connection, id: &str) -> AppResult<()> {
+    conn.execute("DELETE FROM feature_tasks WHERE id=?1", params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// === PM: Aggregated State ===
+
+pub fn get_roadmap_state_db(
+    conn: &Connection,
+    group_id: &str,
+) -> AppResult<crate::models::RoadmapState> {
+    let features = get_features(conn, group_id)?;
+    let all_task_ids: Vec<String> = features.iter().map(|f| f.id.clone()).collect();
+    let mut all_tasks = Vec::new();
+    for fid in &all_task_ids {
+        all_tasks.extend(get_feature_tasks(conn, fid)?);
+    }
+    Ok(crate::models::RoadmapState {
+        group_id: group_id.into(),
+        items: get_roadmap_items(conn, group_id)?,
+        features,
+        tasks: all_tasks,
+    })
+}
 
 // === Shared Memory: Experiences ===
 
-pub fn save_experience(conn: &Connection, group_id: &str, source_member_id: &str, title: &str, content: &str, tags: &str) -> AppResult<String> {
+pub fn save_experience(
+    conn: &Connection,
+    group_id: &str,
+    source_member_id: &str,
+    title: &str,
+    content: &str,
+    tags: &str,
+) -> AppResult<String> {
     let eid = id();
     let now_ts = now();
     conn.execute(
@@ -2225,24 +2335,31 @@ pub fn save_experience(conn: &Connection, group_id: &str, source_member_id: &str
     Ok(eid)
 }
 
-pub fn query_experiences(conn: &Connection, group_id: &str, query: &str, limit: i64) -> AppResult<Vec<Experience>> {
-    let limit = limit.min(50).max(1);
+pub fn query_experiences(
+    conn: &Connection,
+    group_id: &str,
+    query: &str,
+    limit: i64,
+) -> AppResult<Vec<Experience>> {
+    let limit = limit.clamp(1, 50);
     let pattern = format!("%{}%", query);
     let mut stmt = conn.prepare(
         "SELECT id,group_id,source_member_id,title,content,tags,created_at,updated_at FROM experiences WHERE group_id=?1 AND (content LIKE ?2 OR title LIKE ?3 OR tags LIKE ?4) ORDER BY created_at DESC LIMIT ?5"
     ).map_err(|e| e.to_string())?;
-    let rows = stmt.query_map(params![group_id, pattern, pattern, pattern, limit], |r| {
-        Ok(Experience {
-            id: r.get(0)?,
-            group_id: r.get(1)?,
-            source_member_id: r.get(2)?,
-            title: r.get(3)?,
-            content: r.get(4)?,
-            tags: r.get(5)?,
-            created_at: r.get(6)?,
-            updated_at: r.get(7)?,
+    let rows = stmt
+        .query_map(params![group_id, pattern, pattern, pattern, limit], |r| {
+            Ok(Experience {
+                id: r.get(0)?,
+                group_id: r.get(1)?,
+                source_member_id: r.get(2)?,
+                title: r.get(3)?,
+                content: r.get(4)?,
+                tags: r.get(5)?,
+                created_at: r.get(6)?,
+                updated_at: r.get(7)?,
+            })
         })
-    }).map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?;
     let mut results = Vec::new();
     for row in rows {
         results.push(row.map_err(|e| e.to_string())?);
@@ -2251,14 +2368,20 @@ pub fn query_experiences(conn: &Connection, group_id: &str, query: &str, limit: 
 }
 
 pub fn delete_experience(conn: &Connection, id: &str) -> AppResult<bool> {
-    let n = conn.execute("DELETE FROM experiences WHERE id=?1", params![id]).map_err(|e| e.to_string())?;
+    let n = conn
+        .execute("DELETE FROM experiences WHERE id=?1", params![id])
+        .map_err(|e| e.to_string())?;
     Ok(n > 0)
 }
 
-
 /// 裁决处于 pending 审查的任务（人类批准/拒绝与调度器内部 Agent 裁决共用同一状态机）。
 /// 返回是否真正发生了变更（只有 pending → approved/rejected 才算）。
-pub fn set_run_review(conn: &Connection, run_id: &str, review: &str, status: &str) -> AppResult<bool> {
+pub fn set_run_review(
+    conn: &Connection,
+    run_id: &str,
+    review: &str,
+    status: &str,
+) -> AppResult<bool> {
     let changed = conn.execute(
         "UPDATE task_runs SET review_status=?1, status=?2 WHERE id=?3 AND review_status='pending'",
         params![review, status, run_id],
@@ -2266,22 +2389,43 @@ pub fn set_run_review(conn: &Connection, run_id: &str, review: &str, status: &st
     Ok(changed > 0)
 }
 
-fn feedback_counts(conn: &Connection, message_id: &str, member_id: &str) -> AppResult<(i64, i64, Option<String>)> {
+fn feedback_counts(
+    conn: &Connection,
+    message_id: &str,
+    member_id: &str,
+) -> AppResult<(i64, i64, Option<String>)> {
     let up: i64 = conn
-        .query_row("SELECT COUNT(*) FROM message_feedback WHERE message_id=?1 AND vote='up'", params![message_id], |r| r.get(0))
+        .query_row(
+            "SELECT COUNT(*) FROM message_feedback WHERE message_id=?1 AND vote='up'",
+            params![message_id],
+            |r| r.get(0),
+        )
         .map_err(|e| e.to_string())?;
     let down: i64 = conn
-        .query_row("SELECT COUNT(*) FROM message_feedback WHERE message_id=?1 AND vote='down'", params![message_id], |r| r.get(0))
+        .query_row(
+            "SELECT COUNT(*) FROM message_feedback WHERE message_id=?1 AND vote='down'",
+            params![message_id],
+            |r| r.get(0),
+        )
         .map_err(|e| e.to_string())?;
     let mine: Option<String> = conn
-        .query_row("SELECT vote FROM message_feedback WHERE message_id=?1 AND member_id=?2", params![message_id, member_id], |r| r.get(0))
+        .query_row(
+            "SELECT vote FROM message_feedback WHERE message_id=?1 AND member_id=?2",
+            params![message_id, member_id],
+            |r| r.get(0),
+        )
         .optional()
         .map_err(|e| e.to_string())?;
     Ok((up, down, mine))
 }
 
 /// 投票/取消投票：vote=Some("up"|"down") 覆盖；None 清除。返回聚合 (up, down, my_vote)。
-pub fn vote_message(conn: &Connection, message_id: &str, member_id: &str, vote: Option<&str>) -> AppResult<(i64, i64, Option<String>)> {
+pub fn vote_message(
+    conn: &Connection,
+    message_id: &str,
+    member_id: &str,
+    vote: Option<&str>,
+) -> AppResult<(i64, i64, Option<String>)> {
     match vote {
         Some(v) if v == "up" || v == "down" => {
             conn.execute(
@@ -2294,14 +2438,19 @@ pub fn vote_message(conn: &Connection, message_id: &str, member_id: &str, vote: 
             conn.execute(
                 "DELETE FROM message_feedback WHERE message_id=?1 AND member_id=?2",
                 params![message_id, member_id],
-            ).map_err(|e| e.to_string())?;
+            )
+            .map_err(|e| e.to_string())?;
         }
     }
     feedback_counts(conn, message_id, member_id)
 }
 
 /// 读取反馈聚合（不写）。
-pub fn get_message_feedback(conn: &Connection, message_id: &str, member_id: &str) -> AppResult<(i64, i64, Option<String>)> {
+pub fn get_message_feedback(
+    conn: &Connection,
+    message_id: &str,
+    member_id: &str,
+) -> AppResult<(i64, i64, Option<String>)> {
     feedback_counts(conn, message_id, member_id)
 }
 
@@ -2326,7 +2475,11 @@ mod tests {
             "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,tags) VALUES('a','g','agent','a','#000','',1,1,'')",
             [],
         ).unwrap();
-        conn.execute("INSERT INTO messages VALUES('m','g','u',NULL,'x','completed',1)", []).unwrap();
+        conn.execute(
+            "INSERT INTO messages VALUES('m','g','u',NULL,'x','completed',1)",
+            [],
+        )
+        .unwrap();
 
         let (up, down, mine) = vote_message(&conn, "m", "u", Some("up")).unwrap();
         assert_eq!((up, down), (1, 0));
@@ -2359,7 +2512,10 @@ mod tests {
         assert!(!enc.contains(plain));
 
         // 2) 旧明文直通（存量兼容）
-        assert_eq!(decrypt_secret("sk-legacy-plain").unwrap(), "sk-legacy-plain");
+        assert_eq!(
+            decrypt_secret("sk-legacy-plain").unwrap(),
+            "sk-legacy-plain"
+        );
 
         // 3) 经 set/get 全链路（真实表）
         let file = tempfile::NamedTempFile::new().unwrap();
@@ -2370,10 +2526,19 @@ mod tests {
         conn.execute("INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at) VALUES('a','mock',NULL,'ready',1)", []).unwrap();
         set_member_api_key(&conn, "a", Some("sk-real-99887766")).unwrap();
         // 落库原始值为 v1 密文
-        let stored: String = conn.query_row("SELECT api_key FROM agent_profiles WHERE member_id='a'", [], |r| r.get(0)).unwrap();
+        let stored: String = conn
+            .query_row(
+                "SELECT api_key FROM agent_profiles WHERE member_id='a'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
         assert!(stored.starts_with("v1:"));
         // 读回解出原文
-        assert_eq!(get_agent_api_key(&conn, "a").unwrap().as_deref(), Some("sk-real-99887766"));
+        assert_eq!(
+            get_agent_api_key(&conn, "a").unwrap().as_deref(),
+            Some("sk-real-99887766")
+        );
         // 清空
         set_member_api_key(&conn, "a", None).unwrap();
         assert!(get_agent_api_key(&conn, "a").unwrap().is_none());
@@ -2425,10 +2590,7 @@ mod tests {
         );
         assert!(set_task_run_provider_dispatch_id(&conn, "r", "dispatch-2").is_err());
         assert_eq!(
-            get_connecter_cancel_target(&conn, "r")
-                .unwrap()
-                .unwrap()
-                .1,
+            get_connecter_cancel_target(&conn, "r").unwrap().unwrap().1,
             "dispatch-1"
         );
 
@@ -2454,13 +2616,21 @@ mod tests {
         conn.execute("INSERT INTO groups(id,name,workspace_path,owner_member_id,admin_member_id,created_at) VALUES('g','g','.','u',NULL,1)", []).unwrap();
         conn.execute("INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,tags) VALUES('u','g','user','u','#000','',1,1,'')", []).unwrap();
         conn.execute("INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,tags) VALUES('a','g','agent','a','#000','',1,1,'')", []).unwrap();
-        conn.execute("INSERT INTO messages VALUES('m','g','u',NULL,'x','completed',1)", []).unwrap();
+        conn.execute(
+            "INSERT INTO messages VALUES('m','g','u',NULL,'x','completed',1)",
+            [],
+        )
+        .unwrap();
         conn.execute("INSERT INTO task_runs(id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,created_at) VALUES('r','g','m','a',NULL,0,'running',1)", []).unwrap();
 
         // cancel：running → cancelled，返回 group/输出
         let info = cancel_run(&conn, "r").unwrap().unwrap();
         assert_eq!(info.group_id, "g");
-        let status: String = conn.query_row("SELECT status FROM task_runs WHERE id='r'", [], |r| r.get(0)).unwrap();
+        let status: String = conn
+            .query_row("SELECT status FROM task_runs WHERE id='r'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
         assert_eq!(status, "cancelled");
         // 已取消 → None（幂等）
         assert!(cancel_run(&conn, "r").unwrap().is_none());
@@ -2469,7 +2639,13 @@ mod tests {
         let (new_id, group_id) = retry_run(&conn, "r").unwrap().unwrap();
         assert_eq!(group_id, "g");
         assert_ne!(new_id, "r");
-        let new_status: String = conn.query_row("SELECT status FROM task_runs WHERE id=?1", params![new_id], |r| r.get(0)).unwrap();
+        let new_status: String = conn
+            .query_row(
+                "SELECT status FROM task_runs WHERE id=?1",
+                params![new_id],
+                |r| r.get(0),
+            )
+            .unwrap();
         assert_eq!(new_status, "queued");
         // 不存在 → None
         assert!(retry_run(&conn, "no-such").unwrap().is_none());
@@ -2492,7 +2668,11 @@ mod tests {
             "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,tags) VALUES('a','g','agent','a','#000','',1,1,'')",
             [],
         ).unwrap();
-        conn.execute("INSERT INTO messages VALUES('m','g','u',NULL,'x','completed',1)", []).unwrap();
+        conn.execute(
+            "INSERT INTO messages VALUES('m','g','u',NULL,'x','completed',1)",
+            [],
+        )
+        .unwrap();
         conn.execute(
             "INSERT INTO task_runs(id,group_id,root_message_id,agent_member_id,parent_run_id,depth,status,created_at) VALUES('r','g','m','a',NULL,0,'running',1)",
             [],
@@ -2546,9 +2726,11 @@ mod tests {
         // 批准 pending → 持久化
         assert!(set_run_review(&conn, "r", "approved", "completed").unwrap());
         let (review, status): (String, String) = conn
-            .query_row("SELECT review_status,status FROM task_runs WHERE id='r'", [], |row| {
-                Ok((row.get(0)?, row.get(1)?))
-            })
+            .query_row(
+                "SELECT review_status,status FROM task_runs WHERE id='r'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
             .unwrap();
         assert_eq!(review, "approved");
         assert_eq!(status, "completed");
@@ -2596,7 +2778,9 @@ mod tests {
         init_db(file.path()).unwrap();
         let conn = open_db(file.path()).unwrap();
         let status: String = conn
-            .query_row("SELECT status FROM task_runs WHERE id='r'", [], |r| r.get(0))
+            .query_row("SELECT status FROM task_runs WHERE id='r'", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         let phase: Option<String> = conn
             .query_row("SELECT phase FROM task_runs WHERE id='r'", [], |r| r.get(0))
@@ -2674,7 +2858,8 @@ mod tests {
         assert_eq!(linked, "u2");
         let err = resolve_user_member_auth_id(&conn, "g1", Some("u1"), None, None).unwrap_err();
         assert!(err.contains("已是本群"));
-        let taken = resolve_user_member_auth_id(&conn, "g1", None, Some("alice"), Some("pw")).unwrap_err();
+        let taken =
+            resolve_user_member_auth_id(&conn, "g1", None, Some("alice"), Some("pw")).unwrap_err();
         assert!(taken.contains("已被占用"));
     }
 
@@ -2704,7 +2889,8 @@ mod tests {
         assert_eq!(recent.len(), 5);
         assert_eq!(recent.first().unwrap().id, "m11");
         assert_eq!(recent.last().unwrap().id, "m15");
-        let older = get_messages_before(&conn, "g", recent[0].created_at, &recent[0].id, 3).unwrap();
+        let older =
+            get_messages_before(&conn, "g", recent[0].created_at, &recent[0].id, 3).unwrap();
         assert_eq!(older.len(), 3);
         assert_eq!(older.last().unwrap().id, "m10");
         let state = group_state(&conn, "g").unwrap();
@@ -2933,7 +3119,9 @@ mod tests {
         .unwrap();
         hard_delete_member(&conn, "g1", "m-tmp").unwrap();
         let n: i64 = conn
-            .query_row("SELECT COUNT(*) FROM members WHERE id='m-tmp'", [], |r| r.get(0))
+            .query_row("SELECT COUNT(*) FROM members WHERE id='m-tmp'", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(n, 0);
 

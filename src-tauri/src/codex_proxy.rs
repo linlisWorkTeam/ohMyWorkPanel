@@ -159,7 +159,9 @@ pub fn extract_text(content: &serde_json::Value) -> String {
             .filter_map(|c| {
                 let ty = c.get("type").and_then(|t| t.as_str()).unwrap_or("");
                 if ty == "input_text" || ty == "output_text" {
-                    c.get("text").and_then(|t| t.as_str()).map(|s| s.to_string())
+                    c.get("text")
+                        .and_then(|t| t.as_str())
+                        .map(|s| s.to_string())
                 } else {
                     None
                 }

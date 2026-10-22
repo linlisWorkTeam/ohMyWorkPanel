@@ -1,6 +1,6 @@
 use axum::{
-    extract::{Path, Query, State, WebSocketUpgrade},
     extract::ws::{Message as WsMessage, WebSocket},
+    extract::{Path, Query, State, WebSocketUpgrade},
     http::{Request, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
@@ -15,34 +15,42 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 
 use crate::auth::Claims;
-use crate::logger::{self, LogEntry, LogQuery};
-use crate::presence::PresenceRegistry;
-use crate::scheduler::{self, SchedulerState};
-    use crate::db::{
-    create_feature_db, create_feature_task_db,
-    create_roadmap_item_db, create_task_run, delete_feature_db,
-    delete_feature_task_db, delete_roadmap_item_db, get_features,
-    get_feature_tasks, get_groups_for_user,
-    get_group as db_get_group, get_members,
-    get_preset_roles, get_roadmap_items, get_roadmap_state_db, get_runs,
-    get_messages_before, get_settings_from, group_state, id, is_admin_user, mark_group_read,
-    member_from_row, now, open_db, require_admin, require_group_access, resolve_target_agent_ids,
-    set_group_announcement, update_feature_db, update_feature_task_db, update_group_workspace,
-    update_roadmap_item_db,
+use crate::db::{
+    create_feature_db, create_feature_task_db, create_roadmap_item_db, create_task_run,
+    delete_feature_db, delete_feature_task_db, delete_roadmap_item_db, get_feature_tasks,
+    get_features, get_group as db_get_group, get_groups_for_user, get_members, get_messages_before,
+    get_preset_roles, get_roadmap_items, get_roadmap_state_db, get_runs, get_settings_from,
+    group_state, id, is_admin_user, mark_group_read, member_from_row, now, open_db, require_admin,
+    require_group_access, resolve_target_agent_ids, set_group_announcement, update_feature_db,
+    update_feature_task_db, update_group_workspace, update_roadmap_item_db,
 };
 use crate::fs_browse::{self, DirListing};
-use crate::ops;
+use crate::logger::{self, LogEntry, LogQuery};
 use crate::models::{
-    CreateFeatureInput, CreateFeatureTaskInput, CreateRoadmapItemInput, Experience,
-    Feature, FeatureTask, Group, GroupState, Member, Message, PresetRole, RoadmapItem,
-    RoadmapState, RuntimeSettings, TaskRun, UpdateFeatureInput, UpdateFeatureTaskInput,
-    UpdateRoadmapItemInput,
+    CreateFeatureInput, CreateFeatureTaskInput, CreateRoadmapItemInput, Experience, Feature,
+    FeatureTask, Group, GroupState, Member, Message, PresetRole, RoadmapItem, RoadmapState,
+    RuntimeSettings, TaskRun, UpdateFeatureInput, UpdateFeatureTaskInput, UpdateRoadmapItemInput,
 };
+use crate::ops;
+use crate::presence::PresenceRegistry;
+use crate::scheduler::{self, SchedulerState};
 // Helper to emit events to WebSocket clients
-fn web_emit(tx: &broadcast::Sender<String>, group_id: &str, kind: &str, message_id: Option<&str>, run_id: Option<&str>, status: Option<&str>, error: Option<&str>) {
+fn web_emit(
+    tx: &broadcast::Sender<String>,
+    group_id: &str,
+    kind: &str,
+    message_id: Option<&str>,
+    run_id: Option<&str>,
+    status: Option<&str>,
+    error: Option<&str>,
+) {
     web_emit_delta(tx, group_id, kind, message_id, run_id, status, error, None);
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "temporary transport helper replaced by typed events"
+)]
 fn web_emit_delta(
     tx: &broadcast::Sender<String>,
     group_id: &str,
@@ -66,10 +74,10 @@ fn web_emit_delta(
         phase: None,
         elapsed_ms: None,
         total_ms: None,
-            seq: None,
-            delta_count: None,
-            rss_mib: None,
-        };
+        seq: None,
+        delta_count: None,
+        rss_mib: None,
+    };
     if let Ok(payload) = serde_json::to_string(&event) {
         let _ = tx.send(payload);
     }
@@ -102,8 +110,8 @@ where
             .and_then(|v| v.to_str().ok())
             .and_then(|v| v.strip_prefix("Bearer "))
             .ok_or((StatusCode::UNAUTHORIZED, "Missing token"))?;
-        let claims =
-            crate::auth::validate_jwt(auth).map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token"))?;
+        let claims = crate::auth::validate_jwt(auth)
+            .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token"))?;
         Ok(ClaimsExtractor(claims))
     }
 }
@@ -147,7 +155,10 @@ async fn request_id_middleware(req: Request<axum::body::Body>, next: Next) -> Re
     let header = axum::http::HeaderValue::from_str(&request_id)
         .unwrap_or_else(|_| axum::http::HeaderValue::from_static("-"));
     res.headers_mut().insert("X-Request-Id", header);
-    eprintln!("[http] rid={request_id} {method} {path} -> {}", res.status().as_u16());
+    eprintln!(
+        "[http] rid={request_id} {method} {path} -> {}",
+        res.status().as_u16()
+    );
     res
 }
 
@@ -176,24 +187,36 @@ fn map_acl_err(e: String) -> (StatusCode, String) {
     }
 }
 
+/// 插件内核未装载：显式 503，而不是悄悄回退到另一套实现。
+fn kernel_unavailable(e: String) -> (StatusCode, String) {
+    (StatusCode::SERVICE_UNAVAILABLE, e)
+}
+
 async fn register(
     State(state): State<Arc<AppState>>,
     Json(input): Json<RegisterInput>,
 ) -> Result<Json<AuthResponse>, (StatusCode, String)> {
     if input.username.trim().is_empty() || input.password.is_empty() {
-        return Err((StatusCode::BAD_REQUEST, "username and password required".into()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "username and password required".into(),
+        ));
     }
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     if conn
-        .query_row("SELECT id FROM users WHERE username=?1", params![input.username], |_| Ok(()))
+        .query_row(
+            "SELECT id FROM users WHERE username=?1",
+            params![input.username],
+            |_| Ok(()),
+        )
         .is_ok()
     {
         return Err((StatusCode::CONFLICT, "username taken".into()));
     }
 
     let user_id = id();
-    let password_hash =
-        crate::auth::hash_password(&input.password).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let password_hash = crate::auth::hash_password(&input.password)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     conn.execute(
         "INSERT INTO users(id,username,password_hash,created_at,is_admin) VALUES(?1,?2,?3,?4,0)",
         params![user_id, input.username.trim(), password_hash, now()],
@@ -203,7 +226,12 @@ async fn register(
     let token = crate::auth::create_jwt(&user_id, input.username.trim())
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
-    logger::info(&conn, "auth", &format!("user registered: {}", input.username), None);
+    logger::info(
+        &conn,
+        "auth",
+        &format!("user registered: {}", input.username),
+        None,
+    );
     Ok(Json(AuthResponse {
         token,
         user_id,
@@ -224,21 +252,36 @@ async fn login(
             |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .map_err(|_| {
-            logger::warn(&conn, "auth", &format!("failed login attempt for user: {}", input.username), None);
+            logger::warn(
+                &conn,
+                "auth",
+                &format!("failed login attempt for user: {}", input.username),
+                None,
+            );
             (StatusCode::UNAUTHORIZED, "bad credentials".into())
         })?;
 
     if !crate::auth::verify_password(&input.password, &hash)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
     {
-        logger::warn(&conn, "auth", &format!("wrong password for user: {}", input.username), None);
+        logger::warn(
+            &conn,
+            "auth",
+            &format!("wrong password for user: {}", input.username),
+            None,
+        );
         return Err((StatusCode::UNAUTHORIZED, "bad credentials".into()));
     }
 
     let token = crate::auth::create_jwt(&uid, &input.username)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     let is_admin = is_admin_user(&conn, &uid).unwrap_or(false);
-    logger::info(&conn, "auth", &format!("user logged in: {}", input.username), None);
+    logger::info(
+        &conn,
+        "auth",
+        &format!("user logged in: {}", input.username),
+        None,
+    );
     Ok(Json(AuthResponse {
         token,
         user_id: uid,
@@ -289,7 +332,9 @@ async fn get_group(
     require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
     // Entering a group clears unread for this user.
     let _ = mark_group_read(&conn, &claims.sub, &group_id);
-    group_state(&conn, &group_id).map(Json).map_err(|e| (StatusCode::NOT_FOUND, e))
+    group_state(&conn, &group_id)
+        .map(Json)
+        .map_err(|e| (StatusCode::NOT_FOUND, e))
 }
 
 async fn mark_group_read_web(
@@ -397,37 +442,53 @@ async fn create_group_web(
     )
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-     // Auto-create agent members from selected preset roles
-     if let Some(role_names) = &input.preset_roles {
-         let json_val: String = conn
-             .query_row("SELECT value FROM app_settings WHERE key='preset_roles'", [], |r| r.get(0))
-             .unwrap_or_else(|_| "[]".into());
-         if let Ok(all_roles) = serde_json::from_str::<Vec<serde_json::Value>>(&json_val) {
-             for role in all_roles {
-                 let rname = role["name"].as_str().unwrap_or("");
-                 if !role_names.iter().any(|n| n == rname) { continue; }
-                 let mid = id();
-                 let adapter = role["adapter"].as_str().unwrap_or("mock");
-                 let avatar = role["avatarColor"].as_str().unwrap_or("#17a673");
-                 let desc = role["roleDescription"].as_str().unwrap_or("");
-                 conn.execute(
+    // Auto-create agent members from selected preset roles
+    if let Some(role_names) = &input.preset_roles {
+        let json_val: String = conn
+            .query_row(
+                "SELECT value FROM app_settings WHERE key='preset_roles'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap_or_else(|_| "[]".into());
+        if let Ok(all_roles) = serde_json::from_str::<Vec<serde_json::Value>>(&json_val) {
+            for role in all_roles {
+                let rname = role["name"].as_str().unwrap_or("");
+                if !role_names.iter().any(|n| n == rname) {
+                    continue;
+                }
+                let mid = id();
+                let adapter = role["adapter"].as_str().unwrap_or("mock");
+                let avatar = role["avatarColor"].as_str().unwrap_or("#17a673");
+                let desc = role["roleDescription"].as_str().unwrap_or("");
+                conn.execute(
                      "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at) VALUES(?1,?2,'agent',?3,?4,?5,1,?6)",
                      params![mid, group_id, rname, avatar, desc, created_at],
                  ).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-                 conn.execute(
+                conn.execute(
                      "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at) VALUES(?1,?2,NULL,'unknown',?3)",
                      params![mid, adapter, created_at],
                  ).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-             }
-         }
-     }
-       // 普通项目群预制极简 bootstrap-dsh（不可修改；chat 群不建）
-       crate::db::ensure_minimal_bootstrap_dsh(&conn, &group_id, &group_kind)
-           .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+            }
+        }
+    }
+    // 普通项目群预制极简 bootstrap-dsh（不可修改；chat 群不建）
+    crate::db::ensure_minimal_bootstrap_dsh(&conn, &group_id, &group_kind)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
-    logger::info(&conn, "group", &format!("group created: {} (id: {})", input.name, group_id), None);
+    logger::info(
+        &conn,
+        "group",
+        &format!("group created: {} (id: {})", input.name, group_id),
+        None,
+    );
     group_state(&conn, &group_id).map(Json).map_err(|e| {
-        logger::error(&conn, "group", &format!("failed to get group state after creation: {e}"), None);
+        logger::error(
+            &conn,
+            "group",
+            &format!("failed to get group state after creation: {e}"),
+            None,
+        );
         (StatusCode::INTERNAL_SERVER_ERROR, e)
     })
 }
@@ -454,34 +515,33 @@ async fn send_message_web(
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     require_group_access(&conn, &claims.sub, &input.group_id).map_err(map_acl_err)?;
 
-     // Validate sender is active member in this group
-     let sender_count = conn
-         .query_row(
-             "SELECT COUNT(*) FROM members WHERE id=?1 AND group_id=?2 AND is_active=1",
-             params![input.sender_member_id, input.group_id],
-             |r| r.get::<_, i64>(0),
-         )
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-     if sender_count != 1 {
-         return Err((StatusCode::FORBIDDEN, "sender not in group".into()));
-     }
-     // Scoped users may only send as their linked member.
-     if !is_admin_user(&conn, &claims.sub).unwrap_or(false) {
-         let owned: i64 = conn
+    // Validate sender is active member in this group
+    let sender_count = conn
+        .query_row(
+            "SELECT COUNT(*) FROM members WHERE id=?1 AND group_id=?2 AND is_active=1",
+            params![input.sender_member_id, input.group_id],
+            |r| r.get::<_, i64>(0),
+        )
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if sender_count != 1 {
+        return Err((StatusCode::FORBIDDEN, "sender not in group".into()));
+    }
+    // Scoped users may only send as their linked member.
+    if !is_admin_user(&conn, &claims.sub).unwrap_or(false) {
+        let owned: i64 = conn
              .query_row(
                  "SELECT COUNT(*) FROM members WHERE id=?1 AND group_id=?2 AND auth_user_id=?3 AND is_active=1",
                  params![input.sender_member_id, input.group_id, claims.sub],
                  |r| r.get(0),
              )
              .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-         if owned != 1 {
-             return Err((StatusCode::FORBIDDEN, "只能以本人成员身份发言".into()));
-         }
-     }
+        if owned != 1 {
+            return Err((StatusCode::FORBIDDEN, "只能以本人成员身份发言".into()));
+        }
+    }
 
-     // Validate group exists
-     let group = db_get_group(&conn, &input.group_id)
-         .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    // Validate group exists
+    let group = db_get_group(&conn, &input.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
 
     let msg = Message {
         id: id(),
@@ -500,119 +560,149 @@ async fn send_message_web(
     )
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-     // Insert mentions
-     for mentioned in &input.mention_member_ids {
-         let _ = conn.execute(
+    // Insert mentions
+    for mentioned in &input.mention_member_ids {
+        let _ = conn.execute(
              "INSERT OR IGNORE INTO mentions(message_id,member_id) SELECT ?1,id FROM members WHERE id=?2 AND group_id=?3",
              params![msg.id, mentioned, input.group_id],
          );
-     }
+    }
 
-     // 斜杠命令（项目群 + 用户成员）：/board /approve /wave <标题> → 回显结果，不派发 Agent
-     let mut slash_reply: Option<(String, String)> = None; // (reply_id, 文本)
-     let group_kind: String = conn
-         .query_row("SELECT group_kind FROM groups WHERE id=?1", params![&input.group_id], |r| r.get(0))
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-     let sender_kind: String = conn
-         .query_row("SELECT kind FROM members WHERE id=?1 AND group_id=?2", params![&msg.sender_member_id, &input.group_id], |r| r.get(0))
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-     let reply_text =
-         crate::workflow::try_slash_command(&conn, &input.group_id, &group_kind, &sender_kind, &msg.content)
-             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     if let Some(text) = reply_text {
-         let reply = Message {
-             id: id(),
-             group_id: input.group_id.clone(),
-             sender_member_id: group.admin_member_id.clone().unwrap_or_else(|| msg.sender_member_id.clone()),
-             parent_run_id: None,
-             content: text,
-             status: "completed".into(),
-             created_at: now(),
-             has_thinking: false,
-             has_artifact: false,
-         };
-         conn.execute(
+    // 斜杠命令（项目群 + 用户成员）：/board /approve /wave <标题> → 回显结果，不派发 Agent
+    let mut slash_reply: Option<(String, String)> = None; // (reply_id, 文本)
+    let group_kind: String = conn
+        .query_row(
+            "SELECT group_kind FROM groups WHERE id=?1",
+            params![&input.group_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let sender_kind: String = conn
+        .query_row(
+            "SELECT kind FROM members WHERE id=?1 AND group_id=?2",
+            params![&msg.sender_member_id, &input.group_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let reply_text = crate::workflow::try_slash_command(
+        &conn,
+        &input.group_id,
+        &group_kind,
+        &sender_kind,
+        &msg.content,
+    )
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    if let Some(text) = reply_text {
+        let reply = Message {
+            id: id(),
+            group_id: input.group_id.clone(),
+            sender_member_id: group
+                .admin_member_id
+                .clone()
+                .unwrap_or_else(|| msg.sender_member_id.clone()),
+            parent_run_id: None,
+            content: text,
+            status: "completed".into(),
+            created_at: now(),
+            has_thinking: false,
+            has_artifact: false,
+        };
+        conn.execute(
              "INSERT INTO messages(id,group_id,sender_member_id,parent_run_id,content,status,created_at) VALUES(?1,?2,?3,NULL,?4,'completed',?5)",
              params![reply.id, reply.group_id, reply.sender_member_id, reply.content, reply.created_at],
          )
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-         slash_reply = Some((reply.id.clone(), reply.sender_member_id.clone()));
-         logger::info(&conn, "slash", &format!("slash command handled: {}", msg.content), None);
-     }
+        slash_reply = Some((reply.id.clone(), reply.sender_member_id.clone()));
+        logger::info(
+            &conn,
+            "slash",
+            &format!("slash command handled: {}", msg.content),
+            None,
+        );
+    }
 
-     // Find target agents: only @agent/@chatbot run.
-     // If the message @mentioned someone but no agent was tagged (e.g. only @user),
-     // do NOT fall back to the group admin agent.
-     let target_agents: Vec<String> = if slash_reply.is_none() {
-         resolve_target_agent_ids(
-             &conn,
-             &input.group_id,
-             group.admin_member_id.as_deref(),
-             &input.mention_member_ids,
-         )
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
-     } else {
-         Vec::new()
-     };
+    // Find target agents: only @agent/@chatbot run.
+    // If the message @mentioned someone but no agent was tagged (e.g. only @user),
+    // do NOT fall back to the group admin agent.
+    let target_agents: Vec<String> = if slash_reply.is_none() {
+        resolve_target_agent_ids(
+            &conn,
+            &input.group_id,
+            group.admin_member_id.as_deref(),
+            &input.mention_member_ids,
+        )
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
+    } else {
+        Vec::new()
+    };
 
-     // Create task runs for target agents (Ask-gate: ignore idle chatter toward admin)
-     let drain_active = crate::release_drain::is_enabled(&conn).unwrap_or(false);
-     let mut run_ids: Vec<String> = Vec::new();
-     if !drain_active {
-         for agent_id in target_agents {
-             let allowed = crate::workflow::ask_allows_agent_run(
-                 &conn,
-                 &input.group_id,
-                 &msg.sender_member_id,
-                 &agent_id,
-                 &input.mention_member_ids,
-                 false,
-             )
-             .unwrap_or(true);
-             if !allowed {
-                 continue;
-             }
-             match create_task_run(&conn, &input.group_id, &msg.id, &agent_id, None, 0) {
-                 Ok(rid) => run_ids.push(rid),
-                 Err(_) => {}
-             }
-         }
-     }
+    // Create task runs for target agents (Ask-gate: ignore idle chatter toward admin)
+    let drain_active = crate::release_drain::is_enabled(&conn).unwrap_or(false);
+    let mut run_ids: Vec<String> = Vec::new();
+    if !drain_active {
+        for agent_id in target_agents {
+            let allowed = crate::workflow::ask_allows_agent_run(
+                &conn,
+                &input.group_id,
+                &msg.sender_member_id,
+                &agent_id,
+                &input.mention_member_ids,
+                false,
+            )
+            .unwrap_or(true);
+            if !allowed {
+                continue;
+            }
+            if let Ok(rid) = create_task_run(&conn, &input.group_id, &msg.id, &agent_id, None, 0) {
+                run_ids.push(rid);
+            }
+        }
+    }
 
-     logger::info(&conn, "message", &format!("message sent to group {}: {} chars, {} agents triggered", &input.group_id, input.content.len(), run_ids.len()), None);
+    logger::info(
+        &conn,
+        "message",
+        &format!(
+            "message sent to group {}: {} chars, {} agents triggered",
+            input.group_id,
+            input.content.len(),
+            run_ids.len()
+        ),
+        None,
+    );
 
-     // Emit via WebSocket broadcast
-     web_emit(
-         &state.tx,
-         &input.group_id,
-         "message_created",
-         Some(&msg.id),
-         None,
-         Some("completed"),
-         None,
-     );
+    // Emit via WebSocket broadcast
+    web_emit(
+        &state.tx,
+        &input.group_id,
+        "message_created",
+        Some(&msg.id),
+        None,
+        Some("completed"),
+        None,
+    );
 
-     if let Some((reply_id, _sender)) = slash_reply {
-         web_emit(
-             &state.tx,
-             &input.group_id,
-             "message_created",
-             Some(&reply_id),
-             None,
-             Some("completed"),
-             None,
-         );
-     }
+    if let Some((reply_id, _sender)) = slash_reply {
+        web_emit(
+            &state.tx,
+            &input.group_id,
+            "message_created",
+            Some(&reply_id),
+            None,
+            Some("completed"),
+            None,
+        );
+    }
 
-     if !run_ids.is_empty() {
-         scheduler::schedule_group(state.sched.clone(), input.group_id.clone());
-     }
+    if !run_ids.is_empty() {
+        scheduler::schedule_group(state.sched.clone(), input.group_id.clone());
+    }
 
-     Ok(Json(json!({
-         "message": msg,
-         "runIds": run_ids,
-         "drainActive": drain_active,
-     })))
+    Ok(Json(json!({
+        "message": msg,
+        "runIds": run_ids,
+        "drainActive": drain_active,
+    })))
 }
 
 // === WebSocket ===
@@ -651,9 +741,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, user_id: Opt
             "onlineUserIds": state.presence.online_user_ids(),
             "ts": now(),
         });
-        let _ = socket
-            .send(WsMessage::Text(snap.to_string().into()))
-            .await;
+        let _ = socket.send(WsMessage::Text(snap.to_string().into())).await;
     }
     // Keep proxies from idle-closing the socket; browsers deliver Text frames to JS.
     let mut beat = tokio::time::interval(std::time::Duration::from_secs(25));
@@ -698,17 +786,15 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, user_id: Opt
                     Some(Ok(WsMessage::Ping(payload))) => {
                         if socket.send(WsMessage::Pong(payload)).await.is_err() { break; }
                     }
-                    Some(Ok(WsMessage::Text(text))) => {
+                    Some(Ok(WsMessage::Text(text))) if text.contains("heartbeat") => {
                         // Client heartbeat / ignore; optional ack keeps NAT mappings warm.
-                        if text.contains("heartbeat") {
-                            let ack = json!({ "kind": "heartbeat", "ts": now() });
-                            if socket
-                                .send(WsMessage::Text(ack.to_string().into()))
-                                .await
-                                .is_err()
-                            {
-                                break;
-                            }
+                        let ack = json!({ "kind": "heartbeat", "ts": now() });
+                        if socket
+                            .send(WsMessage::Text(ack.to_string().into()))
+                            .await
+                            .is_err()
+                        {
+                            break;
                         }
                     }
                     _ => {}
@@ -723,141 +809,150 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, user_id: Opt
     }
 }
 
- // === Members CRUD ===
+// === Members CRUD ===
 
- #[derive(Debug, Deserialize)]
- #[serde(rename_all = "camelCase")]
- struct AddMemberInputWeb {
-     group_id: String,
-     kind: String,
-     display_name: String,
-     role_description: String,
-     avatar_color: Option<String>,
-     adapter: Option<String>,
-     executable_path: Option<String>,
-     connecter_base_url: Option<String>,
-     connecter_env: Option<String>,
-     connecter_group_ref: Option<String>,
-     connecter_target_subject_id: Option<String>,
-     connecter_bearer: Option<String>,
-     chatbot_provider: Option<String>,
-     api_key: Option<String>,
-     /// 自定义 OpenAI-compatible base URL（provider=custom）
-     api_url: Option<String>,
-     model: Option<String>,
-     login_username: Option<String>,
-     login_password: Option<String>,
-     existing_auth_user_id: Option<String>,
-     /// kind=user：创建待接受邀请占位成员 + 24h 链接
-     invite: Option<bool>,
- }
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AddMemberInputWeb {
+    group_id: String,
+    kind: String,
+    display_name: String,
+    role_description: String,
+    avatar_color: Option<String>,
+    adapter: Option<String>,
+    executable_path: Option<String>,
+    connecter_base_url: Option<String>,
+    connecter_env: Option<String>,
+    connecter_group_ref: Option<String>,
+    connecter_target_subject_id: Option<String>,
+    connecter_bearer: Option<String>,
+    chatbot_provider: Option<String>,
+    api_key: Option<String>,
+    /// 自定义 OpenAI-compatible base URL（provider=custom）
+    api_url: Option<String>,
+    model: Option<String>,
+    login_username: Option<String>,
+    login_password: Option<String>,
+    existing_auth_user_id: Option<String>,
+    /// kind=user：创建待接受邀请占位成员 + 24h 链接
+    invite: Option<bool>,
+}
 
- #[derive(Debug, Serialize)]
- #[serde(rename_all = "camelCase")]
- struct MemberWithInvite {
-     #[serde(flatten)]
-     member: Member,
-     #[serde(skip_serializing_if = "Option::is_none")]
-     invite_token: Option<String>,
-     #[serde(skip_serializing_if = "Option::is_none")]
-     invite_url: Option<String>,
-     #[serde(skip_serializing_if = "Option::is_none")]
-     invite_expires_at: Option<i64>,
- }
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MemberWithInvite {
+    #[serde(flatten)]
+    member: Member,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    invite_token: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    invite_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    invite_expires_at: Option<i64>,
+}
 
- async fn list_joinable_users_web(
-     State(state): State<Arc<AppState>>,
-     ClaimsExtractor(claims): ClaimsExtractor,
-     axum::extract::Query(q): axum::extract::Query<std::collections::HashMap<String, String>>,
- ) -> Result<Json<Vec<crate::models::JoinableUser>>, (StatusCode, String)> {
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
-     let group_id = q
-         .get("groupId")
-         .map(|s| s.as_str())
-         .filter(|s| !s.is_empty())
-         .ok_or_else(|| (StatusCode::BAD_REQUEST, "缺少 groupId".into()))?;
-     db_get_group(&conn, group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
-     crate::db::list_joinable_users(&conn, group_id)
-         .map(Json)
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
- }
+async fn list_joinable_users_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    axum::extract::Query(q): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Result<Json<Vec<crate::models::JoinableUser>>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
+    let group_id = q
+        .get("groupId")
+        .map(|s| s.as_str())
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| (StatusCode::BAD_REQUEST, "缺少 groupId".into()))?;
+    db_get_group(&conn, group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    crate::db::list_joinable_users(&conn, group_id)
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
 
- async fn add_member_web(
-     State(state): State<Arc<AppState>>,
-     ClaimsExtractor(claims): ClaimsExtractor,
-     Json(input): Json<AddMemberInputWeb>,
- ) -> Result<Json<MemberWithInvite>, (StatusCode, String)> {
-     if !matches!(input.kind.as_str(), "user" | "agent" | "chatbot") || input.display_name.trim().is_empty() {
-         return Err((StatusCode::BAD_REQUEST, "invalid member kind or name".into()));
-     }
-     let invite_mode = input.invite.unwrap_or(false);
-     if invite_mode && input.kind != "user" {
-         return Err((StatusCode::BAD_REQUEST, "仅用户成员支持邀请链接".into()));
-     }
-     let requested_adapter = input.adapter.as_deref().unwrap_or("mock");
-     let connecter_profile = if input.kind == "agent"
-         && crate::agents::adapters::connecter_remote::is_connecter_remote(requested_adapter)
-     {
-         Some(
-             crate::agents::adapters::connecter_remote::validate_profile_input(
-                 input.connecter_base_url.as_deref(),
-                 input.connecter_bearer.as_deref(),
-                 input.connecter_group_ref.as_deref(),
-                 input.connecter_target_subject_id.as_deref(),
-                 input.connecter_env.as_deref(),
-             )
-             .map_err(|e| (StatusCode::BAD_REQUEST, e))?,
-         )
-     } else {
-         None
-     };
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
-     let group = db_get_group(&conn, &input.group_id)
-         .map_err(|e| (StatusCode::NOT_FOUND, e))?;
-     if input.kind == "chatbot" && group.group_kind != "chat" {
-         let exists: i64 = conn
-             .query_row(
-                 "SELECT COUNT(*) FROM members WHERE group_id=?1 AND kind='chatbot' AND is_active=1",
-                 params![input.group_id],
-                 |r| r.get(0),
-             )
-             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-         if exists > 0 {
-             return Err((StatusCode::CONFLICT, "项目群只能添加一个聊天机器人；聊天群可添加多个。".into()));
-         }
-     }
-     let member_id = id();
-     let created_at = now();
-     let color = input.avatar_color.unwrap_or_else(|| match input.kind.as_str() {
-         "agent" => "#17a673".into(),
-         "chatbot" => "#0ea5a0".into(),
-         _ => "#5167f6".into(),
-     });
-     let mut auth_user_id: Option<String> = None;
-     if input.kind == "user" && !invite_mode {
-         auth_user_id = Some(
-             crate::db::resolve_user_member_auth_id(
-                 &conn,
-                 &input.group_id,
-                 input.existing_auth_user_id.as_deref(),
-                 input.login_username.as_deref(),
-                 input.login_password.as_deref(),
-             )
-             .map_err(|e| {
-                 let status = if e.contains("已被占用") || e.contains("已是本群") {
-                     StatusCode::CONFLICT
-                 } else if e.contains("不存在") {
-                     StatusCode::NOT_FOUND
-                 } else {
-                     StatusCode::BAD_REQUEST
-                 };
-                 (status, e)
-             })?,
-         );
-     }
-     conn.execute(
+async fn add_member_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Json(input): Json<AddMemberInputWeb>,
+) -> Result<Json<MemberWithInvite>, (StatusCode, String)> {
+    if !matches!(input.kind.as_str(), "user" | "agent" | "chatbot")
+        || input.display_name.trim().is_empty()
+    {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "invalid member kind or name".into(),
+        ));
+    }
+    let invite_mode = input.invite.unwrap_or(false);
+    if invite_mode && input.kind != "user" {
+        return Err((StatusCode::BAD_REQUEST, "仅用户成员支持邀请链接".into()));
+    }
+    let requested_adapter = input.adapter.as_deref().unwrap_or("mock");
+    let connecter_profile = if input.kind == "agent"
+        && crate::agents::adapters::connecter_remote::is_connecter_remote(requested_adapter)
+    {
+        Some(
+            crate::agents::adapters::connecter_remote::validate_profile_input(
+                input.connecter_base_url.as_deref(),
+                input.connecter_bearer.as_deref(),
+                input.connecter_group_ref.as_deref(),
+                input.connecter_target_subject_id.as_deref(),
+                input.connecter_env.as_deref(),
+            )
+            .map_err(|e| (StatusCode::BAD_REQUEST, e))?,
+        )
+    } else {
+        None
+    };
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
+    let group = db_get_group(&conn, &input.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    if input.kind == "chatbot" && group.group_kind != "chat" {
+        let exists: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM members WHERE group_id=?1 AND kind='chatbot' AND is_active=1",
+                params![input.group_id],
+                |r| r.get(0),
+            )
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        if exists > 0 {
+            return Err((
+                StatusCode::CONFLICT,
+                "项目群只能添加一个聊天机器人；聊天群可添加多个。".into(),
+            ));
+        }
+    }
+    let member_id = id();
+    let created_at = now();
+    let color = input
+        .avatar_color
+        .unwrap_or_else(|| match input.kind.as_str() {
+            "agent" => "#17a673".into(),
+            "chatbot" => "#0ea5a0".into(),
+            _ => "#5167f6".into(),
+        });
+    let mut auth_user_id: Option<String> = None;
+    if input.kind == "user" && !invite_mode {
+        auth_user_id = Some(
+            crate::db::resolve_user_member_auth_id(
+                &conn,
+                &input.group_id,
+                input.existing_auth_user_id.as_deref(),
+                input.login_username.as_deref(),
+                input.login_password.as_deref(),
+            )
+            .map_err(|e| {
+                let status = if e.contains("已被占用") || e.contains("已是本群") {
+                    StatusCode::CONFLICT
+                } else if e.contains("不存在") {
+                    StatusCode::NOT_FOUND
+                } else {
+                    StatusCode::BAD_REQUEST
+                };
+                (status, e)
+            })?,
+        );
+    }
+    conn.execute(
          "INSERT INTO members(id,group_id,kind,display_name,avatar_color,role_description,is_active,created_at,auth_user_id) VALUES(?1,?2,?3,?4,?5,?6,1,?7,?8)",
          params![
              member_id,
@@ -871,34 +966,34 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, user_id: Opt
          ],
      )
      .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-     if input.kind == "agent" {
-         let adapter = input.adapter.unwrap_or_else(|| "mock".into());
-         if !crate::agents::adapters::connecter_remote::is_connecter_remote(&adapter) {
-             crate::adapters::manifest::resolve_adapter(&adapter)
-                 .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
-         }
-         let default_ws = if group.workspace_path.trim().is_empty() {
-             None
-         } else {
-             let _ = crate::memory::ensure_ohmyworkpanel_layout(
-                 std::path::Path::new(&group.workspace_path),
-                 Some(&member_id),
-             );
-             Some(
-                 crate::memory::default_agent_workspace(
-                     std::path::Path::new(&group.workspace_path),
-                     &member_id,
-                 )
-                 .to_string_lossy()
-                 .into_owned(),
-             )
-         };
-         let model = input
-             .model
-             .as_deref()
-             .map(str::trim)
-             .filter(|s| !s.is_empty());
-         conn.execute(
+    if input.kind == "agent" {
+        let adapter = input.adapter.unwrap_or_else(|| "mock".into());
+        if !crate::agents::adapters::connecter_remote::is_connecter_remote(&adapter) {
+            crate::adapters::manifest::resolve_adapter(&adapter)
+                .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+        }
+        let default_ws = if group.workspace_path.trim().is_empty() {
+            None
+        } else {
+            let _ = crate::memory::ensure_ohmyworkpanel_layout(
+                std::path::Path::new(&group.workspace_path),
+                Some(&member_id),
+            );
+            Some(
+                crate::memory::default_agent_workspace(
+                    std::path::Path::new(&group.workspace_path),
+                    &member_id,
+                )
+                .to_string_lossy()
+                .into_owned(),
+            )
+        };
+        let model = input
+            .model
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        conn.execute(
              "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at,workspace_path,warm_status,model) VALUES(?1,?2,?3,'unknown',?4,?5,'cold',?6)",
              params![
                  member_id,
@@ -910,198 +1005,257 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, user_id: Opt
              ],
          )
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-         if let Some(profile) = connecter_profile {
-             crate::db::insert_connecter_provider_profile(
-                 &conn,
-                 &crate::db::ConnecterProviderProfile {
-                     member_id: member_id.clone(),
-                     base_url: profile.base_url,
-                     bearer_token: profile.bearer_token,
-                     group_ref: profile.group_ref,
-                     target_subject_id: profile.target_subject_id,
-                     env: profile.env,
-                 },
-             )
-             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-         }
-     } else if input.kind == "chatbot" {
-         let provider = input
-             .chatbot_provider
-             .as_deref()
-             .unwrap_or("opencode-go");
-         let adapter = crate::adapters::chatbot::normalize_adapter(provider)
-             .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
-         let api_key = input
-             .api_key
-             .as_deref()
-             .map(str::trim)
-             .filter(|s| !s.is_empty())
-             .ok_or_else(|| (StatusCode::BAD_REQUEST, "聊天机器人必须填写 API Key".into()))?;
-         let model = input
-             .model
-             .as_deref()
-             .map(str::trim)
-             .filter(|s| !s.is_empty())
-             .unwrap_or("deepseek-chat");
-         let api_url = input
-             .api_url
-             .as_deref()
-             .map(str::trim)
-             .filter(|s| !s.is_empty())
-             .map(str::to_string);
-         crate::adapters::chatbot::validate_api_url(api_url.as_deref())
-             .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
-         conn.execute(
+        if let Some(profile) = connecter_profile {
+            crate::db::insert_connecter_provider_profile(
+                &conn,
+                &crate::db::ConnecterProviderProfile {
+                    member_id: member_id.clone(),
+                    base_url: profile.base_url,
+                    bearer_token: profile.bearer_token,
+                    group_ref: profile.group_ref,
+                    target_subject_id: profile.target_subject_id,
+                    env: profile.env,
+                },
+            )
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+        }
+    } else if input.kind == "chatbot" {
+        let provider = input.chatbot_provider.as_deref().unwrap_or("opencode-go");
+        let adapter = crate::adapters::chatbot::normalize_adapter(provider)
+            .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+        let api_key = input
+            .api_key
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| (StatusCode::BAD_REQUEST, "聊天机器人必须填写 API Key".into()))?;
+        let model = input
+            .model
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("deepseek-chat");
+        let api_url = input
+            .api_url
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
+        crate::adapters::chatbot::validate_api_url(api_url.as_deref())
+            .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+        conn.execute(
              "INSERT INTO agent_profiles(member_id,adapter,executable_path,runtime_status,updated_at,api_key,warm_status,model,api_url) VALUES(?1,?2,NULL,'ready',?3,?4,'cold',?5,?6)",
              params![member_id, adapter, created_at, crate::db::encrypt_secret(api_key).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?, model, api_url],
          )
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-     }
-     let member = crate::db::get_member(&conn, &member_id)
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     let mut invite_token = None;
-     let mut invite_url = None;
-     let mut invite_expires_at = None;
-     if invite_mode {
-         let inv = crate::db::create_group_invite(&conn, &input.group_id, &member_id, Some(&claims.sub))
-             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-         invite_url = Some(format!("/invite/{}", inv.token));
-         invite_token = Some(inv.token);
-         invite_expires_at = Some(inv.expires_at);
-     }
-     logger::info(&conn, "member", &format!("member added: {} ({}) in group {}", input.display_name, input.kind, input.group_id), None);
-     web_emit(&state.tx, &input.group_id, "member_added", None, None, None, None);
-     Ok(Json(MemberWithInvite {
-         member,
-         invite_token,
-         invite_url,
-         invite_expires_at,
-     }))
- }
+    }
+    let member = crate::db::get_member(&conn, &member_id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let mut invite_token = None;
+    let mut invite_url = None;
+    let mut invite_expires_at = None;
+    if invite_mode {
+        let inv =
+            crate::db::create_group_invite(&conn, &input.group_id, &member_id, Some(&claims.sub))
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+        invite_url = Some(format!("/invite/{}", inv.token));
+        invite_token = Some(inv.token);
+        invite_expires_at = Some(inv.expires_at);
+    }
+    logger::info(
+        &conn,
+        "member",
+        &format!(
+            "member added: {} ({}) in group {}",
+            input.display_name, input.kind, input.group_id
+        ),
+        None,
+    );
+    web_emit(
+        &state.tx,
+        &input.group_id,
+        "member_added",
+        None,
+        None,
+        None,
+        None,
+    );
+    Ok(Json(MemberWithInvite {
+        member,
+        invite_token,
+        invite_url,
+        invite_expires_at,
+    }))
+}
 
- async fn remove_member_web(
-     State(state): State<Arc<AppState>>,
-     ClaimsExtractor(claims): ClaimsExtractor,
-     Path((group_id, member_id)): Path<(String, String)>,
- ) -> Result<Json<()>, (StatusCode, String)> {
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
-      crate::db::assert_member_mutable(&conn, &member_id).map_err(map_acl_err)?;
-     let group = db_get_group(&conn, &group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
-     if group.owner_member_id == member_id {
-         return Err((StatusCode::FORBIDDEN, "cannot remove owner".into()));
-     }
-     conn.execute("UPDATE members SET is_active=0 WHERE id=?1", params![member_id])
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-     logger::warn(&conn, "member", &format!("member {} removed from group {}", member_id, group_id), None);
-     web_emit(&state.tx, &group_id, "member_removed", None, None, None, None);
-     Ok(Json(()))
- }
+async fn remove_member_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path((group_id, member_id)): Path<(String, String)>,
+) -> Result<Json<()>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
+    crate::db::assert_member_mutable(&conn, &member_id).map_err(map_acl_err)?;
+    let group = db_get_group(&conn, &group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    if group.owner_member_id == member_id {
+        return Err((StatusCode::FORBIDDEN, "cannot remove owner".into()));
+    }
+    conn.execute(
+        "UPDATE members SET is_active=0 WHERE id=?1",
+        params![member_id],
+    )
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    logger::warn(
+        &conn,
+        "member",
+        &format!("member {} removed from group {}", member_id, group_id),
+        None,
+    );
+    web_emit(
+        &state.tx,
+        &group_id,
+        "member_removed",
+        None,
+        None,
+        None,
+        None,
+    );
+    Ok(Json(()))
+}
 
- async fn purge_member_web(
-     State(state): State<Arc<AppState>>,
-     ClaimsExtractor(claims): ClaimsExtractor,
-     Path((group_id, member_id)): Path<(String, String)>,
- ) -> Result<Json<()>, (StatusCode, String)> {
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-      crate::db::assert_member_mutable(&conn, &member_id).map_err(map_acl_err)?;
-     require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
-     crate::db::hard_delete_member(&conn, &group_id, &member_id).map_err(|e| {
-         let status = if e.contains("群主") {
-             StatusCode::FORBIDDEN
-         } else if e.contains("找不到") {
-             StatusCode::NOT_FOUND
-         } else {
-             StatusCode::BAD_REQUEST
-         };
-         (status, e)
-     })?;
-     logger::warn(
-         &conn,
-         "member",
-         &format!("member {} purged from group {}", member_id, group_id),
-         None,
-     );
-     web_emit(&state.tx, &group_id, "member_removed", None, None, None, None);
-     Ok(Json(()))
- }
+async fn purge_member_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path((group_id, member_id)): Path<(String, String)>,
+) -> Result<Json<()>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    crate::db::assert_member_mutable(&conn, &member_id).map_err(map_acl_err)?;
+    require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
+    crate::db::hard_delete_member(&conn, &group_id, &member_id).map_err(|e| {
+        let status = if e.contains("群主") {
+            StatusCode::FORBIDDEN
+        } else if e.contains("找不到") {
+            StatusCode::NOT_FOUND
+        } else {
+            StatusCode::BAD_REQUEST
+        };
+        (status, e)
+    })?;
+    logger::warn(
+        &conn,
+        "member",
+        &format!("member {} purged from group {}", member_id, group_id),
+        None,
+    );
+    web_emit(
+        &state.tx,
+        &group_id,
+        "member_removed",
+        None,
+        None,
+        None,
+        None,
+    );
+    Ok(Json(()))
+}
 
- async fn preview_invite_web(
-     State(state): State<Arc<AppState>>,
-     Path(token): Path<String>,
- ) -> Result<Json<crate::db::InvitePreview>, (StatusCode, String)> {
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     crate::db::preview_invite(&conn, &token)
-         .map(Json)
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
- }
+async fn preview_invite_web(
+    State(state): State<Arc<AppState>>,
+    Path(token): Path<String>,
+) -> Result<Json<crate::db::InvitePreview>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    crate::db::preview_invite(&conn, &token)
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
 
- async fn accept_invite_web(
-     State(state): State<Arc<AppState>>,
-     ClaimsExtractor(claims): ClaimsExtractor,
-     Path(token): Path<String>,
- ) -> Result<Json<Member>, (StatusCode, String)> {
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     let member = crate::db::accept_invite(&conn, &token, &claims.sub).map_err(|e| {
-         let status = if e.contains("已是本群") {
-             StatusCode::CONFLICT
-         } else if e.contains("过期") || e.contains("无效") || e.contains("已使用") || e.contains("已移除") {
-             StatusCode::GONE
-         } else {
-             StatusCode::BAD_REQUEST
-         };
-         (status, e)
-     })?;
-     web_emit(&state.tx, &member.group_id, "member_updated", None, None, None, None);
-     Ok(Json(member))
- }
+async fn accept_invite_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(token): Path<String>,
+) -> Result<Json<Member>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let member = crate::db::accept_invite(&conn, &token, &claims.sub).map_err(|e| {
+        let status = if e.contains("已是本群") {
+            StatusCode::CONFLICT
+        } else if e.contains("过期")
+            || e.contains("无效")
+            || e.contains("已使用")
+            || e.contains("已移除")
+        {
+            StatusCode::GONE
+        } else {
+            StatusCode::BAD_REQUEST
+        };
+        (status, e)
+    })?;
+    web_emit(
+        &state.tx,
+        &member.group_id,
+        "member_updated",
+        None,
+        None,
+        None,
+        None,
+    );
+    Ok(Json(member))
+}
 
- async fn set_admin_web(
-     State(state): State<Arc<AppState>>,
-     ClaimsExtractor(claims): ClaimsExtractor,
-     Path(group_id): Path<String>,
-     Json(body): Json<serde_json::Value>,
- ) -> Result<Json<GroupState>, (StatusCode, String)> {
-     let member_id = body
-         .get("memberId")
-         .or_else(|| body.get("member_id"))
-         .and_then(|v| v.as_str());
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
-     let _ = db_get_group(&conn, &group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
-      if let Some(id) = member_id { crate::db::assert_member_mutable(&conn, id).map_err(map_acl_err)?; }
-     if let Some(id) = member_id {
-         let ok = crate::db::member_is_default_responder_candidate(&conn, &group_id, id)
-             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-         if !ok {
-             return Err((
-                 StatusCode::BAD_REQUEST,
-                 "默认响应者必须是本群活跃的 Agent 或聊天机器人".into(),
-             ));
-         }
-     }
-     conn.execute("UPDATE groups SET admin_member_id=?1 WHERE id=?2", params![member_id, group_id])
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-     // Only admin *agent* gets keep-alive; chatbots stay cold / fast HTTP.
-     conn.execute(
+async fn set_admin_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(group_id): Path<String>,
+    Json(body): Json<serde_json::Value>,
+) -> Result<Json<GroupState>, (StatusCode, String)> {
+    let member_id = body
+        .get("memberId")
+        .or_else(|| body.get("member_id"))
+        .and_then(|v| v.as_str());
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
+    let _ = db_get_group(&conn, &group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    if let Some(id) = member_id {
+        crate::db::assert_member_mutable(&conn, id).map_err(map_acl_err)?;
+    }
+    if let Some(id) = member_id {
+        let ok = crate::db::member_is_default_responder_candidate(&conn, &group_id, id)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+        if !ok {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                "默认响应者必须是本群活跃的 Agent 或聊天机器人".into(),
+            ));
+        }
+    }
+    conn.execute(
+        "UPDATE groups SET admin_member_id=?1 WHERE id=?2",
+        params![member_id, group_id],
+    )
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    // Only admin *agent* gets keep-alive; chatbots stay cold / fast HTTP.
+    conn.execute(
          "UPDATE agent_profiles SET keep_alive=0, updated_at=?1 WHERE member_id IN (SELECT id FROM members WHERE group_id=?2 AND kind='agent')",
          params![now(), group_id],
      )
      .ok();
-     if let Some(id) = member_id {
-         let kind: String = conn
-             .query_row("SELECT kind FROM members WHERE id=?1", params![id], |r| r.get(0))
-             .unwrap_or_default();
-         if kind == "agent" {
-             conn.execute(
+    if let Some(id) = member_id {
+        let kind: String = conn
+            .query_row("SELECT kind FROM members WHERE id=?1", params![id], |r| {
+                r.get(0)
+            })
+            .unwrap_or_default();
+        if kind == "agent" {
+            conn.execute(
                  "UPDATE agent_profiles SET keep_alive=1, warm_status='warming', updated_at=?1 WHERE member_id=?2",
                  params![now(), id],
              )
              .ok();
-         }
-     }
-     group_state(&conn, &group_id).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
- }
+        }
+    }
+    group_state(&conn, &group_id)
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1134,7 +1288,7 @@ async fn put_member_model_web(
     Json(body): Json<MemberModelBody>,
 ) -> Result<Json<Member>, (StatusCode, String)> {
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-      crate::db::assert_member_mutable(&conn, &member_id).map_err(map_acl_err)?;
+    crate::db::assert_member_mutable(&conn, &member_id).map_err(map_acl_err)?;
     crate::db::set_member_model(&conn, &member_id, body.model.as_deref())
         .map_err(|e| (StatusCode::NOT_FOUND, e))?;
     conn.query_row(
@@ -1243,613 +1397,735 @@ async fn get_message_channel_part_web(
     }))
 }
 
- // === Runs ===
+// === Runs ===
 
- async fn list_runs_web(
-     State(state): State<Arc<AppState>>,
-     Path(group_id): Path<String>,
- ) -> Result<Json<Vec<TaskRun>>, (StatusCode, String)> {
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     get_runs(&conn, &group_id).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
- }
+async fn list_runs_web(
+    State(state): State<Arc<AppState>>,
+    Path(group_id): Path<String>,
+) -> Result<Json<Vec<TaskRun>>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    get_runs(&conn, &group_id)
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
 
- async fn cancel_run_web(
-     State(state): State<Arc<AppState>>,
-     Path(run_id): Path<String>,
- ) -> Result<Json<()>, (StatusCode, String)> {
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     let Some(info) = crate::db::cancel_run(&conn, &run_id)
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
-     else {
-         return Ok(Json(()));
-     };
-     let remote_cancel = crate::db::get_connecter_cancel_target(&conn, &run_id)
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     let live_worker = {
-         let tokens = state
-             .sched
-             .cancellations
-             .lock()
-             .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "取消锁不可用".into()))?;
-         if let Some(token) = tokens.get(&run_id) {
-             token.store(true, std::sync::atomic::Ordering::SeqCst);
-             true
-         } else {
-             false
-         }
-     };
-     logger::warn(&conn, "run", &format!("run {} cancelled", run_id), None);
-     drop(conn);
-     if !live_worker {
-         if let Some((profile, dispatch_id)) = remote_cancel {
-             let _ = crate::agents::adapters::connecter_remote::cancel_dispatch(
-                 &profile,
-                 &dispatch_id,
-             )
-             .await;
-         }
-     }
-     web_emit(&state.tx, &info.group_id, "run_status", None, Some(&run_id), Some("cancelled"), None);
-     Ok(Json(()))
- }
+async fn cancel_run_web(
+    State(state): State<Arc<AppState>>,
+    Path(run_id): Path<String>,
+) -> Result<Json<()>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let Some(info) = crate::db::cancel_run(&conn, &run_id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
+    else {
+        return Ok(Json(()));
+    };
+    let remote_cancel = crate::db::get_connecter_cancel_target(&conn, &run_id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let live_worker = {
+        let tokens = state
+            .sched
+            .cancellations
+            .lock()
+            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "取消锁不可用".into()))?;
+        if let Some(token) = tokens.get(&run_id) {
+            token.store(true, std::sync::atomic::Ordering::SeqCst);
+            true
+        } else {
+            false
+        }
+    };
+    logger::warn(&conn, "run", &format!("run {} cancelled", run_id), None);
+    drop(conn);
+    if !live_worker {
+        if let Some((profile, dispatch_id)) = remote_cancel {
+            let _ =
+                crate::agents::adapters::connecter_remote::cancel_dispatch(&profile, &dispatch_id)
+                    .await;
+        }
+    }
+    web_emit(
+        &state.tx,
+        &info.group_id,
+        "run_status",
+        None,
+        Some(&run_id),
+        Some("cancelled"),
+        None,
+    );
+    Ok(Json(()))
+}
 
- async fn retry_run_web(
-     State(state): State<Arc<AppState>>,
-     Path(run_id): Path<String>,
- ) -> Result<Json<String>, (StatusCode, String)> {
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     let Some((new_id, _group_id)) = crate::db::retry_run(&conn, &run_id)
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
-     else {
-         return Err((StatusCode::NOT_FOUND, "run not found".into()));
-     };
-     logger::info(&conn, "run", &format!("run {} retried as {}", run_id, new_id), None);
-     Ok(Json(new_id))
- }
+async fn retry_run_web(
+    State(state): State<Arc<AppState>>,
+    Path(run_id): Path<String>,
+) -> Result<Json<String>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let Some((new_id, _group_id)) =
+        crate::db::retry_run(&conn, &run_id).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
+    else {
+        return Err((StatusCode::NOT_FOUND, "run not found".into()));
+    };
+    logger::info(
+        &conn,
+        "run",
+        &format!("run {} retried as {}", run_id, new_id),
+        None,
+    );
+    Ok(Json(new_id))
+}
 
- #[derive(serde::Deserialize)]
- struct SetRunReviewBody {
-     decision: String,
- }
+#[derive(serde::Deserialize)]
+struct SetRunReviewBody {
+    decision: String,
+}
 
- async fn set_run_review_web(
-     State(state): State<Arc<AppState>>,
-     ClaimsExtractor(_claims): ClaimsExtractor,
-     Path(run_id): Path<String>,
-     Json(body): Json<SetRunReviewBody>,
- ) -> Result<Json<(String, String)>, (StatusCode, String)> {
-     let review = match body.decision.as_str() {
-         "approved" | "rejected" => body.decision,
-         _ => return Err((StatusCode::BAD_REQUEST, "decision 仅支持 approved / rejected".into())),
-     };
-     let status = if review == "approved" { "completed" } else { "changes_requested" };
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     let (group_id, current_status): (String, String) = conn
-         .query_row(
-             "SELECT group_id,status FROM task_runs WHERE id=?1",
-             params![run_id],
-             |row| Ok((row.get(0)?, row.get(1)?)),
-         )
-         .map_err(|e| (StatusCode::NOT_FOUND, format!("run not found: {e}")))?;
-     if current_status != "awaiting_review" {
-         return Err((StatusCode::CONFLICT, format!("run {} 不在待审批状态", run_id)));
-     }
-     if !crate::db::set_run_review(&conn, &run_id, &review, status)
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
-     {
-         return Err((StatusCode::CONFLICT, "该任务不在待审批状态（可能已被处理）".into()));
-     }
-     web_emit(&state.tx, &group_id, "run_status", None, Some(&run_id), Some(status), None);
-     logger::info(&conn, "run", &format!("run {} human review: {}", run_id, review), None);
-     Ok(Json((review.to_string(), status.to_string())))
- }
+async fn set_run_review_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(_claims): ClaimsExtractor,
+    Path(run_id): Path<String>,
+    Json(body): Json<SetRunReviewBody>,
+) -> Result<Json<(String, String)>, (StatusCode, String)> {
+    let review = match body.decision.as_str() {
+        "approved" | "rejected" => body.decision,
+        _ => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                "decision 仅支持 approved / rejected".into(),
+            ))
+        }
+    };
+    let status = if review == "approved" {
+        "completed"
+    } else {
+        "changes_requested"
+    };
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let (group_id, current_status): (String, String) = conn
+        .query_row(
+            "SELECT group_id,status FROM task_runs WHERE id=?1",
+            params![run_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|e| (StatusCode::NOT_FOUND, format!("run not found: {e}")))?;
+    if current_status != "awaiting_review" {
+        return Err((
+            StatusCode::CONFLICT,
+            format!("run {} 不在待审批状态", run_id),
+        ));
+    }
+    if !crate::db::set_run_review(&conn, &run_id, &review, status)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
+    {
+        return Err((
+            StatusCode::CONFLICT,
+            "该任务不在待审批状态（可能已被处理）".into(),
+        ));
+    }
+    web_emit(
+        &state.tx,
+        &group_id,
+        "run_status",
+        None,
+        Some(&run_id),
+        Some(status),
+        None,
+    );
+    logger::info(
+        &conn,
+        "run",
+        &format!("run {} human review: {}", run_id, review),
+        None,
+    );
+    Ok(Json((review.to_string(), status.to_string())))
+}
 
- #[derive(serde::Deserialize)]
- struct VoteMessageBody {
-     member_id: String,
-     vote: Option<String>,
- }
+#[derive(serde::Deserialize)]
+struct VoteMessageBody {
+    member_id: String,
+    vote: Option<String>,
+}
 
- #[derive(serde::Deserialize)]
- struct FeedbackQuery {
-     member_id: String,
- }
+#[derive(serde::Deserialize)]
+struct FeedbackQuery {
+    member_id: String,
+}
 
- fn to_feedback(res: (i64, i64, Option<String>)) -> crate::models::MessageFeedback {
-     crate::models::MessageFeedback { up: res.0, down: res.1, my_vote: res.2 }
- }
+fn to_feedback(res: (i64, i64, Option<String>)) -> crate::models::MessageFeedback {
+    crate::models::MessageFeedback {
+        up: res.0,
+        down: res.1,
+        my_vote: res.2,
+    }
+}
 
- async fn vote_message_web(
-     State(state): State<Arc<AppState>>,
-     ClaimsExtractor(_claims): ClaimsExtractor,
-     Path(message_id): Path<String>,
-     Json(body): Json<VoteMessageBody>,
- ) -> Result<Json<crate::models::MessageFeedback>, (StatusCode, String)> {
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     let vote = body.vote.as_deref();
-     if let Some(v) = vote {
-         if v != "up" && v != "down" {
-             return Err((StatusCode::BAD_REQUEST, "vote 仅支持 up / down / 空".into()));
-         }
-     }
-     let res = crate::db::vote_message(&conn, &message_id, &body.member_id, vote)
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     Ok(Json(to_feedback(res)))
- }
+async fn vote_message_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(_claims): ClaimsExtractor,
+    Path(message_id): Path<String>,
+    Json(body): Json<VoteMessageBody>,
+) -> Result<Json<crate::models::MessageFeedback>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let vote = body.vote.as_deref();
+    if let Some(v) = vote {
+        if v != "up" && v != "down" {
+            return Err((StatusCode::BAD_REQUEST, "vote 仅支持 up / down / 空".into()));
+        }
+    }
+    let res = crate::db::vote_message(&conn, &message_id, &body.member_id, vote)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    Ok(Json(to_feedback(res)))
+}
 
- async fn get_message_feedback_web(
-     State(state): State<Arc<AppState>>,
-     ClaimsExtractor(_claims): ClaimsExtractor,
-     Path(message_id): Path<String>,
-     axum::extract::Query(query): axum::extract::Query<FeedbackQuery>,
- ) -> Result<Json<crate::models::MessageFeedback>, (StatusCode, String)> {
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     let res = crate::db::get_message_feedback(&conn, &message_id, &query.member_id)
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     Ok(Json(to_feedback(res)))
- }
+async fn get_message_feedback_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(_claims): ClaimsExtractor,
+    Path(message_id): Path<String>,
+    axum::extract::Query(query): axum::extract::Query<FeedbackQuery>,
+) -> Result<Json<crate::models::MessageFeedback>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let res = crate::db::get_message_feedback(&conn, &message_id, &query.member_id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    Ok(Json(to_feedback(res)))
+}
 
- async fn get_run_phases_web(
-     State(state): State<Arc<AppState>>,
-     ClaimsExtractor(_claims): ClaimsExtractor,
-     Path(run_id): Path<String>,
- ) -> Result<Json<Vec<crate::models::RunPhaseEntry>>, (StatusCode, String)> {
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     crate::db::list_run_phases(&conn, &run_id)
-         .map(Json)
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
- }
+async fn get_run_phases_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(_claims): ClaimsExtractor,
+    Path(run_id): Path<String>,
+) -> Result<Json<Vec<crate::models::RunPhaseEntry>>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    crate::db::list_run_phases(&conn, &run_id)
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
 
- // === Settings ===
+// === Settings ===
 
- async fn get_agent_models_web(
-     ClaimsExtractor(_claims): ClaimsExtractor,
- ) -> Result<Json<crate::model_catalog::AgentModelsResponse>, (StatusCode, String)> {
-     Ok(Json(crate::model_catalog::catalog_response()))
- }
+async fn get_agent_models_web(
+    ClaimsExtractor(_claims): ClaimsExtractor,
+) -> Result<Json<crate::model_catalog::AgentModelsResponse>, (StatusCode, String)> {
+    Ok(Json(crate::model_catalog::catalog_response()))
+}
 
- async fn list_cli_adapters_web(
-     ClaimsExtractor(_claims): ClaimsExtractor,
- ) -> Json<Vec<crate::adapters::manifest::AdapterCatalogItem>> {
-     Json(crate::adapters::manifest::catalog())
- }
+async fn list_cli_adapters_web(
+    ClaimsExtractor(_claims): ClaimsExtractor,
+) -> Result<Json<Vec<crate::adapters::manifest::AdapterCatalogItem>>, (StatusCode, String)> {
+    let catalog = crate::plugins::require_adapter_catalog_service().map_err(kernel_unavailable)?;
+    Ok(Json(catalog.list()))
+}
 
- async fn refresh_agent_models_web(
-     State(state): State<Arc<AppState>>,
-     ClaimsExtractor(claims): ClaimsExtractor,
- ) -> Result<Json<crate::model_catalog::AgentModelsResponse>, (StatusCode, String)> {
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
-     match tokio::task::spawn_blocking(crate::model_catalog::refresh_cursor_blocking).await {
-         Ok(Ok(_)) => {}
-         Ok(Err(e)) => {
-             // Still return catalog (fallback); surface warning in source field already
-             let _ = e;
-         }
-         Err(e) => {
-             return Err((
-                 StatusCode::INTERNAL_SERVER_ERROR,
-                 format!("refresh join error: {e}"),
-             ))
-         }
-     }
-     Ok(Json(crate::model_catalog::catalog_response()))
- }
+async fn refresh_agent_models_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+) -> Result<Json<crate::model_catalog::AgentModelsResponse>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
+    match tokio::task::spawn_blocking(crate::model_catalog::refresh_cursor_blocking).await {
+        Ok(Ok(_)) => {}
+        Ok(Err(e)) => {
+            // Still return catalog (fallback); surface warning in source field already
+            let _ = e;
+        }
+        Err(e) => {
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("refresh join error: {e}"),
+            ))
+        }
+    }
+    Ok(Json(crate::model_catalog::catalog_response()))
+}
 
- async fn get_settings_web(
-     State(state): State<Arc<AppState>>,
- ) -> Result<Json<RuntimeSettings>, (StatusCode, String)> {
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     get_settings_from(&conn).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
- }
+async fn get_settings_web(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<RuntimeSettings>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    get_settings_from(&conn)
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
 
- async fn update_settings_web(
-     State(state): State<Arc<AppState>>,
-     Json(settings): Json<RuntimeSettings>,
- ) -> Result<Json<RuntimeSettings>, (StatusCode, String)> {
-     if settings.max_concurrent_runs < 1
-         || settings.run_timeout_seconds < 30
-         || settings.context_message_limit < 5
-         || !(5..=40).contains(&settings.chat_context_message_limit)
-         || !(0..=4).contains(&settings.max_delegation_depth)
-     {
-         return Err((StatusCode::BAD_REQUEST, "settings out of range".into()));
-     }
-     if !(1..=30).contains(&settings.heartbeat_focus_seconds)
-         || !(1..=60).contains(&settings.heartbeat_background_seconds)
-     {
-         return Err((StatusCode::BAD_REQUEST, "heartbeat settings out of range".into()));
-     }
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     for (key, value) in [
-         ("max_concurrent_runs", settings.max_concurrent_runs),
-         ("run_timeout_seconds", settings.run_timeout_seconds),
-         ("context_message_limit", settings.context_message_limit),
-         (
-             "chat_context_message_limit",
-             settings.chat_context_message_limit,
-         ),
-         ("max_delegation_depth", settings.max_delegation_depth),
-         (
-             "heartbeat_auto",
-             if settings.heartbeat_auto { 1 } else { 0 },
-         ),
-         ("heartbeat_focus_seconds", settings.heartbeat_focus_seconds),
-         (
-             "heartbeat_background_seconds",
-             settings.heartbeat_background_seconds,
-         ),
-     ] {
-         conn.execute(
+async fn update_settings_web(
+    State(state): State<Arc<AppState>>,
+    Json(settings): Json<RuntimeSettings>,
+) -> Result<Json<RuntimeSettings>, (StatusCode, String)> {
+    if settings.max_concurrent_runs < 1
+        || settings.run_timeout_seconds < 30
+        || settings.context_message_limit < 5
+        || !(5..=40).contains(&settings.chat_context_message_limit)
+        || !(0..=4).contains(&settings.max_delegation_depth)
+    {
+        return Err((StatusCode::BAD_REQUEST, "settings out of range".into()));
+    }
+    if !(1..=30).contains(&settings.heartbeat_focus_seconds)
+        || !(1..=60).contains(&settings.heartbeat_background_seconds)
+    {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "heartbeat settings out of range".into(),
+        ));
+    }
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    for (key, value) in [
+        ("max_concurrent_runs", settings.max_concurrent_runs),
+        ("run_timeout_seconds", settings.run_timeout_seconds),
+        ("context_message_limit", settings.context_message_limit),
+        (
+            "chat_context_message_limit",
+            settings.chat_context_message_limit,
+        ),
+        ("max_delegation_depth", settings.max_delegation_depth),
+        (
+            "heartbeat_auto",
+            if settings.heartbeat_auto { 1 } else { 0 },
+        ),
+        ("heartbeat_focus_seconds", settings.heartbeat_focus_seconds),
+        (
+            "heartbeat_background_seconds",
+            settings.heartbeat_background_seconds,
+        ),
+    ] {
+        conn.execute(
              "INSERT INTO app_settings(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
              params![key, value.to_string()],
          )
          .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-     }
-     get_settings_from(&conn).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
- }
-
- async fn health_web() -> Json<serde_json::Value> {
-     Json(serde_json::json!({ "ok": true, "service": "ohmyworkpanel" }))
- }
-
- // === Agent Config（一键导入 / 导出 / 自检 / 安装）===
-
- async fn agent_config_status_web(
-     State(state): State<Arc<AppState>>,
-     ClaimsExtractor(claims): ClaimsExtractor,
- ) -> Result<Json<crate::agent_config::AgentEnvStatus>, (StatusCode, String)> {
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
-     Ok(Json(crate::agent_config::status(&state.db_path)))
- }
-
- #[derive(Debug, Deserialize)]
- #[serde(rename_all = "camelCase")]
- struct AgentConfigExportBody {
-     #[serde(default)]
-     include_secrets: bool,
- }
-
- async fn agent_config_export_web(
-     State(state): State<Arc<AppState>>,
-     ClaimsExtractor(claims): ClaimsExtractor,
-     Json(body): Json<AgentConfigExportBody>,
- ) -> Result<Json<crate::agent_config::AgentConfigBundle>, (StatusCode, String)> {
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
-     let mut bundle = crate::agent_config::build_bundle(&state.db_path, body.include_secrets)
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     bundle.exported_at = Some(crate::db::now());
-     bundle.exported_by = Some(claims.username.clone());
-     Ok(Json(bundle))
- }
-
- #[derive(Debug, Deserialize)]
- #[serde(rename_all = "camelCase")]
- struct AgentConfigImportBody {
-     bundle: crate::agent_config::AgentConfigBundle,
-     #[serde(default)]
-     auto_install: Option<bool>,
-     #[serde(default)]
-     overwrite: Option<bool>,
- }
-
- async fn agent_config_import_web(
-     State(state): State<Arc<AppState>>,
-     ClaimsExtractor(claims): ClaimsExtractor,
-     Json(body): Json<AgentConfigImportBody>,
- ) -> Result<(StatusCode, Json<crate::agent_config::ImportReport>), (StatusCode, String)> {
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
-     let report =
-         crate::agent_config::import(&state.db_path, body.bundle, body.auto_install, body.overwrite)
-             .await;
-     let status = if report.ok {
-         StatusCode::OK
-     } else {
-         StatusCode::BAD_REQUEST
-     };
-     Ok((status, Json(report)))
- }
-
- async fn agent_config_install_web(
-     State(state): State<Arc<AppState>>,
-     ClaimsExtractor(claims): ClaimsExtractor,
-     Path(cli): Path<String>,
- ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
-     let (ok, detail) = crate::agent_config::run_install(&cli).await;
-     Ok(Json(json!({
-         "cli": cli,
-         "ok": ok,
-         "detail": detail,
-     })))
- }
-
- async fn metrics_latest_web(
-     State(state): State<Arc<AppState>>,
- ) -> Result<Json<crate::metrics::Sample>, (StatusCode, String)> {
-     crate::metrics::latest_or_from_db(&state.db_path)
-         .map(Json)
-         .ok_or((StatusCode::NOT_FOUND, "no metrics sample yet".into()))
- }
-
- async fn list_active_runs_web(
-     State(state): State<Arc<AppState>>,
-     ClaimsExtractor(claims): ClaimsExtractor,
-     Path(group_id): Path<String>,
- ) -> Result<Json<Vec<TaskRun>>, (StatusCode, String)> {
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
-     let runs = get_runs(&conn, &group_id).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     Ok(Json(
-         runs.into_iter()
-             .filter(|r| r.status == "queued" || r.status == "running")
-             .collect(),
-     ))
- }
-
- // === OCR ===
-
- async fn ocr_image_web(
-     Json(input): Json<serde_json::Value>,
- ) -> Result<Json<String>, (StatusCode, String)> {
-     let path = input
-         .get("imagePath")
-         .or_else(|| input.get("image_path"))
-         .and_then(|v| v.as_str())
-         .ok_or((StatusCode::BAD_REQUEST, "missing imagePath".into()))?;
-     crate::ocr::ocr_image(path).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
- }
-
- async fn ocr_base64_web(
-     Json(input): Json<serde_json::Value>,
- ) -> Result<Json<String>, (StatusCode, String)> {
-     let data = input
-         .get("base64Data")
-         .or_else(|| input.get("base64_data"))
-         .and_then(|v| v.as_str())
-         .ok_or((StatusCode::BAD_REQUEST, "missing base64Data".into()))?;
-     crate::ocr::ocr_image_base64(data).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
- }
-
- // === Preset Roles ===
-
- async fn get_preset_roles_web(
-     State(state): State<Arc<AppState>>,
- ) -> Result<Json<Vec<PresetRole>>, (StatusCode, String)> {
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-    get_preset_roles(&conn).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+    }
+    get_settings_from(&conn)
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
 }
 
- // === PM: Roadmap Items ===
+async fn health_web() -> Json<serde_json::Value> {
+    Json(serde_json::json!({ "ok": true, "service": "ohmyworkpanel" }))
+}
 
- async fn list_roadmap_items_web(
-     State(state): State<Arc<AppState>>,
-     Path(group_id): Path<String>,
- ) -> Result<Json<Vec<RoadmapItem>>, (StatusCode, String)> {
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     get_roadmap_items(&conn, &group_id).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
- }
+// === Agent Config（一键导入 / 导出 / 自检 / 安装）===
 
- async fn create_roadmap_item_web(
-     State(state): State<Arc<AppState>>,
-     Json(input): Json<CreateRoadmapItemInput>,
- ) -> Result<Json<RoadmapItem>, (StatusCode, String)> {
-     if input.title.trim().is_empty() { return Err((StatusCode::BAD_REQUEST, "title required".into())); }
-     create_roadmap_item_db(&open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?, &input)
-         .map(Json)
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
- }
+async fn agent_config_status_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+) -> Result<Json<crate::agent_config::AgentEnvStatus>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
+    Ok(Json(crate::agent_config::status(&state.db_path)))
+}
 
- async fn update_roadmap_item_web(
-     State(state): State<Arc<AppState>>,
-     Path(id): Path<String>,
-     Json(input): Json<UpdateRoadmapItemInput>,
- ) -> Result<Json<RoadmapItem>, (StatusCode, String)> {
-     update_roadmap_item_db(&open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?, &id, &input)
-         .map(Json)
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
- }
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentConfigExportBody {
+    #[serde(default)]
+    include_secrets: bool,
+}
 
- async fn delete_roadmap_item_web(
-     State(state): State<Arc<AppState>>,
-     Path(id): Path<String>,
- ) -> Result<Json<()>, (StatusCode, String)> {
-     delete_roadmap_item_db(&open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?, &id)
-         .map(|_| Json(()))
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
- }
+async fn agent_config_export_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Json(body): Json<AgentConfigExportBody>,
+) -> Result<Json<crate::agent_config::AgentConfigBundle>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
+    let mut bundle = crate::agent_config::build_bundle(&state.db_path, body.include_secrets)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    bundle.exported_at = Some(crate::db::now());
+    bundle.exported_by = Some(claims.username.clone());
+    Ok(Json(bundle))
+}
 
- // === PM: Features ===
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentConfigImportBody {
+    bundle: crate::agent_config::AgentConfigBundle,
+    #[serde(default)]
+    auto_install: Option<bool>,
+    #[serde(default)]
+    overwrite: Option<bool>,
+}
 
- async fn list_features_web(
-     State(state): State<Arc<AppState>>,
-     Path(group_id): Path<String>,
- ) -> Result<Json<Vec<Feature>>, (StatusCode, String)> {
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     get_features(&conn, &group_id).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
- }
+async fn agent_config_import_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Json(body): Json<AgentConfigImportBody>,
+) -> Result<(StatusCode, Json<crate::agent_config::ImportReport>), (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
+    let report = crate::agent_config::import(
+        &state.db_path,
+        body.bundle,
+        body.auto_install,
+        body.overwrite,
+    )
+    .await;
+    let status = if report.ok {
+        StatusCode::OK
+    } else {
+        StatusCode::BAD_REQUEST
+    };
+    Ok((status, Json(report)))
+}
 
- async fn create_feature_web(
-     State(state): State<Arc<AppState>>,
-     Json(input): Json<CreateFeatureInput>,
- ) -> Result<Json<Feature>, (StatusCode, String)> {
-     if input.title.trim().is_empty() { return Err((StatusCode::BAD_REQUEST, "title required".into())); }
-     create_feature_db(&open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?, &input)
-         .map(Json)
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
- }
+async fn agent_config_install_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(cli): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
+    let (ok, detail) = crate::agent_config::run_install(&cli).await;
+    Ok(Json(json!({
+        "cli": cli,
+        "ok": ok,
+        "detail": detail,
+    })))
+}
 
- async fn update_feature_web(
-     State(state): State<Arc<AppState>>,
-     Path(id): Path<String>,
-     Json(input): Json<UpdateFeatureInput>,
- ) -> Result<Json<Feature>, (StatusCode, String)> {
-     update_feature_db(&open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?, &id, &input)
-         .map(Json)
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
- }
+async fn metrics_latest_web(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<crate::metrics::Sample>, (StatusCode, String)> {
+    crate::metrics::latest_or_from_db(&state.db_path)
+        .map(Json)
+        .ok_or((StatusCode::NOT_FOUND, "no metrics sample yet".into()))
+}
 
- async fn delete_feature_web(
-     State(state): State<Arc<AppState>>,
-     Path(id): Path<String>,
- ) -> Result<Json<()>, (StatusCode, String)> {
-     delete_feature_db(&open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?, &id)
-         .map(|_| Json(()))
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
- }
+async fn list_active_runs_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(group_id): Path<String>,
+) -> Result<Json<Vec<TaskRun>>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
+    let runs = get_runs(&conn, &group_id).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    Ok(Json(
+        runs.into_iter()
+            .filter(|r| r.status == "queued" || r.status == "running")
+            .collect(),
+    ))
+}
 
- // === PM: Feature Tasks ===
+// === OCR ===
 
- async fn list_feature_tasks_web(
-     State(state): State<Arc<AppState>>,
-     Path(feature_id): Path<String>,
- ) -> Result<Json<Vec<FeatureTask>>, (StatusCode, String)> {
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     get_feature_tasks(&conn, &feature_id).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
- }
+async fn ocr_image_web(
+    Json(input): Json<serde_json::Value>,
+) -> Result<Json<String>, (StatusCode, String)> {
+    let path = input
+        .get("imagePath")
+        .or_else(|| input.get("image_path"))
+        .and_then(|v| v.as_str())
+        .ok_or((StatusCode::BAD_REQUEST, "missing imagePath".into()))?;
+    crate::ocr::ocr_image(path)
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
 
- async fn create_feature_task_web(
-     State(state): State<Arc<AppState>>,
-     Json(input): Json<CreateFeatureTaskInput>,
- ) -> Result<Json<FeatureTask>, (StatusCode, String)> {
-     if input.title.trim().is_empty() { return Err((StatusCode::BAD_REQUEST, "title required".into())); }
-     create_feature_task_db(&open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?, &input)
-         .map(Json)
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
- }
+async fn ocr_base64_web(
+    Json(input): Json<serde_json::Value>,
+) -> Result<Json<String>, (StatusCode, String)> {
+    let data = input
+        .get("base64Data")
+        .or_else(|| input.get("base64_data"))
+        .and_then(|v| v.as_str())
+        .ok_or((StatusCode::BAD_REQUEST, "missing base64Data".into()))?;
+    crate::ocr::ocr_image_base64(data)
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
 
- async fn update_feature_task_web(
-     State(state): State<Arc<AppState>>,
-     Path(id): Path<String>,
-     Json(input): Json<UpdateFeatureTaskInput>,
- ) -> Result<Json<FeatureTask>, (StatusCode, String)> {
-     update_feature_task_db(&open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?, &id, &input)
-         .map(Json)
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
- }
+// === Preset Roles ===
 
- async fn delete_feature_task_web(
-     State(state): State<Arc<AppState>>,
-     Path(id): Path<String>,
- ) -> Result<Json<()>, (StatusCode, String)> {
-     delete_feature_task_db(&open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?, &id)
-         .map(|_| Json(()))
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
- }
+async fn get_preset_roles_web(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<PresetRole>>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    get_preset_roles(&conn)
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
 
- // === PM: Aggregated State ===
+// === PM: Roadmap Items ===
 
- async fn get_roadmap_state_web(
-     State(state): State<Arc<AppState>>,
-     Path(group_id): Path<String>,
- ) -> Result<Json<RoadmapState>, (StatusCode, String)> {
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     get_roadmap_state_db(&conn, &group_id).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
- }
+async fn list_roadmap_items_web(
+    State(state): State<Arc<AppState>>,
+    Path(group_id): Path<String>,
+) -> Result<Json<Vec<RoadmapItem>>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    get_roadmap_items(&conn, &group_id)
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
 
- // === Logs ===
+async fn create_roadmap_item_web(
+    State(state): State<Arc<AppState>>,
+    Json(input): Json<CreateRoadmapItemInput>,
+) -> Result<Json<RoadmapItem>, (StatusCode, String)> {
+    if input.title.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "title required".into()));
+    }
+    create_roadmap_item_db(
+        &open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?,
+        &input,
+    )
+    .map(Json)
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
 
- async fn list_logs_web(
-     State(state): State<Arc<AppState>>,
-     axum::extract::Query(q): axum::extract::Query<LogQuery>,
- ) -> Result<Json<Vec<LogEntry>>, (StatusCode, String)> {
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     logger::query_logs(&conn, &q).map(Json).map_err(|e| {
-         logger::error(&conn, "logs", &format!("failed to query logs: {e}"), None);
-         (StatusCode::INTERNAL_SERVER_ERROR, e)
-     })
- }
+async fn update_roadmap_item_web(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(input): Json<UpdateRoadmapItemInput>,
+) -> Result<Json<RoadmapItem>, (StatusCode, String)> {
+    update_roadmap_item_db(
+        &open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?,
+        &id,
+        &input,
+    )
+    .map(Json)
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
 
- async fn count_logs_web(
-     State(state): State<Arc<AppState>>,
-     axum::extract::Query(q): axum::extract::Query<LogQuery>,
- ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     let count = logger::count_logs(&conn, q.level.as_deref(), q.source.as_deref()).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     Ok(Json(serde_json::json!({"count": count})))
- }
+async fn delete_roadmap_item_web(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<()>, (StatusCode, String)> {
+    delete_roadmap_item_db(
+        &open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?,
+        &id,
+    )
+    .map(|_| Json(()))
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
 
- async fn clear_logs_web(
-     State(state): State<Arc<AppState>>,
- ) -> Result<Json<()>, (StatusCode, String)> {
-     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     logger::clear_logs(&conn).map_err(|e| {
-         logger::error(&conn, "logs", &format!("failed to clear logs: {e}"), None);
-         (StatusCode::INTERNAL_SERVER_ERROR, e)
-     })?;
-     logger::info(&conn, "logs", "logs cleared by user", None);
-     Ok(Json(()))
- }
+// === PM: Features ===
 
- // === Shared Memory (Experiences) ===
+async fn list_features_web(
+    State(state): State<Arc<AppState>>,
+    Path(group_id): Path<String>,
+) -> Result<Json<Vec<Feature>>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    get_features(&conn, &group_id)
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
 
- #[derive(Deserialize)]
- #[serde(rename_all = "camelCase")]
- struct SaveExperienceInput {
-     group_id: String,
-     title: String,
-     content: String,
-     #[serde(default)]
-     tags: String,
-     /// Optional group member id as the recorded source; falls back to the logged-in user.
-     source_member_id: Option<String>,
- }
+async fn create_feature_web(
+    State(state): State<Arc<AppState>>,
+    Json(input): Json<CreateFeatureInput>,
+) -> Result<Json<Feature>, (StatusCode, String)> {
+    if input.title.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "title required".into()));
+    }
+    create_feature_db(
+        &open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?,
+        &input,
+    )
+    .map(Json)
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
 
- #[derive(Deserialize)]
- #[serde(rename_all = "camelCase")]
- struct QueryExperienceInput {
-     #[serde(default = "default_group")]
-     group_id: String,
-     #[serde(default)]
-     query: String,
-     #[serde(default = "default_limit")]
-     limit: i64,
- }
+async fn update_feature_web(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(input): Json<UpdateFeatureInput>,
+) -> Result<Json<Feature>, (StatusCode, String)> {
+    update_feature_db(
+        &open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?,
+        &id,
+        &input,
+    )
+    .map(Json)
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
 
- fn default_group() -> String { String::new() }
- fn default_limit() -> i64 { 20 }
+async fn delete_feature_web(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<()>, (StatusCode, String)> {
+    delete_feature_db(
+        &open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?,
+        &id,
+    )
+    .map(|_| Json(()))
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
 
- async fn save_experience_web(
-     ClaimsExtractor(claims): ClaimsExtractor,
-     State(state): State<Arc<AppState>>,
-     Json(input): Json<SaveExperienceInput>,
- ) -> Result<Json<String>, (StatusCode, String)> {
-     let conn = crate::db::open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     let source_id = input
-         .source_member_id
-         .as_deref()
-         .filter(|value| !value.trim().is_empty())
-         .unwrap_or(&claims.sub);
-     let eid = crate::db::save_experience(&conn, &input.group_id, source_id, &input.title, &input.content, &input.tags)
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     Ok(Json(eid))
- }
+// === PM: Feature Tasks ===
 
- async fn query_experiences_web(
-     State(state): State<Arc<AppState>>,
-     axum::extract::Query(input): axum::extract::Query<QueryExperienceInput>,
- ) -> Result<Json<Vec<Experience>>, (StatusCode, String)> {
-     let conn = crate::db::open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     let results = crate::db::query_experiences(&conn, &input.group_id, &input.query, input.limit)
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     Ok(Json(results))
- }
+async fn list_feature_tasks_web(
+    State(state): State<Arc<AppState>>,
+    Path(feature_id): Path<String>,
+) -> Result<Json<Vec<FeatureTask>>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    get_feature_tasks(&conn, &feature_id)
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
 
- async fn delete_experience_web(
-     Path(id): Path<String>,
-     State(state): State<Arc<AppState>>,
- ) -> Result<Json<bool>, (StatusCode, String)> {
-     let conn = crate::db::open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     let ok = crate::db::delete_experience(&conn, &id)
-         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-     Ok(Json(ok))
- }
+async fn create_feature_task_web(
+    State(state): State<Arc<AppState>>,
+    Json(input): Json<CreateFeatureTaskInput>,
+) -> Result<Json<FeatureTask>, (StatusCode, String)> {
+    if input.title.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "title required".into()));
+    }
+    create_feature_task_db(
+        &open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?,
+        &input,
+    )
+    .map(Json)
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
 
- // === Router Builder ===
+async fn update_feature_task_web(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(input): Json<UpdateFeatureTaskInput>,
+) -> Result<Json<FeatureTask>, (StatusCode, String)> {
+    update_feature_task_db(
+        &open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?,
+        &id,
+        &input,
+    )
+    .map(Json)
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
+
+async fn delete_feature_task_web(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<()>, (StatusCode, String)> {
+    delete_feature_task_db(
+        &open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?,
+        &id,
+    )
+    .map(|_| Json(()))
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
+
+// === PM: Aggregated State ===
+
+async fn get_roadmap_state_web(
+    State(state): State<Arc<AppState>>,
+    Path(group_id): Path<String>,
+) -> Result<Json<RoadmapState>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    get_roadmap_state_db(&conn, &group_id)
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
+
+// === Logs ===
+
+async fn list_logs_web(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Query(q): axum::extract::Query<LogQuery>,
+) -> Result<Json<Vec<LogEntry>>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    logger::query_logs(&conn, &q).map(Json).map_err(|e| {
+        logger::error(&conn, "logs", &format!("failed to query logs: {e}"), None);
+        (StatusCode::INTERNAL_SERVER_ERROR, e)
+    })
+}
+
+async fn count_logs_web(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Query(q): axum::extract::Query<LogQuery>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let count = logger::count_logs(&conn, q.level.as_deref(), q.source.as_deref())
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    Ok(Json(serde_json::json!({"count": count})))
+}
+
+async fn clear_logs_web(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<()>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    logger::clear_logs(&conn).map_err(|e| {
+        logger::error(&conn, "logs", &format!("failed to clear logs: {e}"), None);
+        (StatusCode::INTERNAL_SERVER_ERROR, e)
+    })?;
+    logger::info(&conn, "logs", "logs cleared by user", None);
+    Ok(Json(()))
+}
+
+// === Shared Memory (Experiences) ===
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SaveExperienceInput {
+    group_id: String,
+    title: String,
+    content: String,
+    #[serde(default)]
+    tags: String,
+    /// Optional group member id as the recorded source; falls back to the logged-in user.
+    source_member_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct QueryExperienceInput {
+    #[serde(default = "default_group")]
+    group_id: String,
+    #[serde(default)]
+    query: String,
+    #[serde(default = "default_limit")]
+    limit: i64,
+}
+
+fn default_group() -> String {
+    String::new()
+}
+fn default_limit() -> i64 {
+    20
+}
+
+async fn save_experience_web(
+    ClaimsExtractor(claims): ClaimsExtractor,
+    State(state): State<Arc<AppState>>,
+    Json(input): Json<SaveExperienceInput>,
+) -> Result<Json<String>, (StatusCode, String)> {
+    let conn =
+        crate::db::open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let source_id = input
+        .source_member_id
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or(&claims.sub);
+    let eid = crate::db::save_experience(
+        &conn,
+        &input.group_id,
+        source_id,
+        &input.title,
+        &input.content,
+        &input.tags,
+    )
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    Ok(Json(eid))
+}
+
+async fn query_experiences_web(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Query(input): axum::extract::Query<QueryExperienceInput>,
+) -> Result<Json<Vec<Experience>>, (StatusCode, String)> {
+    let conn =
+        crate::db::open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let results = crate::db::query_experiences(&conn, &input.group_id, &input.query, input.limit)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    Ok(Json(results))
+}
+
+async fn delete_experience_web(
+    Path(id): Path<String>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<bool>, (StatusCode, String)> {
+    let conn =
+        crate::db::open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let ok = crate::db::delete_experience(&conn, &id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    Ok(Json(ok))
+}
+
+// === Router Builder ===
 
 /// Start a background task that polls for queued runs periodically
 pub fn start_scheduler_background(state: SchedulerState) {
@@ -1859,8 +2135,11 @@ pub fn start_scheduler_background(state: SchedulerState) {
         // Get all group IDs
         let groups: Vec<String> = match (|| -> Result<Vec<String>, String> {
             let conn = crate::db::open_db(&state.db_path)?;
-            let mut stmt = conn.prepare("SELECT id FROM groups").map_err(|e| e.to_string())?;
-            let ids = stmt.query_map([], |r| r.get::<_, String>(0))
+            let mut stmt = conn
+                .prepare("SELECT id FROM groups")
+                .map_err(|e| e.to_string())?;
+            let ids = stmt
+                .query_map([], |r| r.get::<_, String>(0))
                 .map_err(|e| e.to_string())?
                 .filter_map(|r| r.ok())
                 .collect();
@@ -1877,8 +2156,11 @@ pub fn start_scheduler_background(state: SchedulerState) {
             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
             let groups: Vec<String> = match (|| -> Result<Vec<String>, String> {
                 let conn = crate::db::open_db(&state.db_path)?;
-                let mut stmt = conn.prepare("SELECT DISTINCT group_id FROM task_runs WHERE status='queued'").map_err(|e| e.to_string())?;
-                let ids = stmt.query_map([], |r| r.get::<_, String>(0))
+                let mut stmt = conn
+                    .prepare("SELECT DISTINCT group_id FROM task_runs WHERE status='queued'")
+                    .map_err(|e| e.to_string())?;
+                let ids = stmt
+                    .query_map([], |r| r.get::<_, String>(0))
                     .map_err(|e| e.to_string())?
                     .filter_map(|r| r.ok())
                     .collect();
@@ -1947,10 +2229,8 @@ async fn put_announcement_web(
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     let g = set_group_announcement(&conn, &group_id, body.announcement.trim())
         .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
-    let _ = fs_browse::sync_announcement_rule(
-        std::path::Path::new(&g.workspace_path),
-        &g.announcement,
-    );
+    let _ =
+        fs_browse::sync_announcement_rule(std::path::Path::new(&g.workspace_path), &g.announcement);
     Ok(Json(g))
 }
 
@@ -2005,7 +2285,10 @@ async fn put_extension_web(
         .map(Json)
         .map_err(|e| {
             if e.starts_with("CONFLICT:") {
-                (StatusCode::CONFLICT, e.trim_start_matches("CONFLICT:").to_string())
+                (
+                    StatusCode::CONFLICT,
+                    e.trim_start_matches("CONFLICT:").to_string(),
+                )
             } else if e.starts_with("未知扩展") {
                 (StatusCode::NOT_FOUND, e)
             } else {
@@ -2037,11 +2320,13 @@ async fn proxy_extension(
     headers: axum::http::HeaderMap,
     body: axum::body::Bytes,
 ) -> Result<Response, (StatusCode, String)> {
-    let sanitized = crate::extensions::sanitize_proxy_path(&path)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    let sanitized =
+        crate::extensions::sanitize_proxy_path(&path).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
     let upstream_path = crate::extensions::with_proxy_query(sanitized.as_str(), uri.query())
         .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
-    let disc = crate::extensions::find_extension(&ext_id)
+    let disc = crate::plugins::require_extension_host_service()
+        .map_err(kernel_unavailable)?
+        .find(&ext_id)
         .map_err(|e| (StatusCode::NOT_FOUND, e))?;
     let port = disc.manifest.runtime.default_port;
     let ct = headers
@@ -2057,7 +2342,10 @@ async fn proxy_extension(
             StatusCode::NO_CONTENT,
             [
                 (axum::http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"),
-                (axum::http::header::ACCESS_CONTROL_ALLOW_METHODS, "GET,POST,OPTIONS"),
+                (
+                    axum::http::header::ACCESS_CONTROL_ALLOW_METHODS,
+                    "GET,POST,OPTIONS",
+                ),
                 (
                     axum::http::header::ACCESS_CONTROL_ALLOW_HEADERS,
                     "Content-Type,X-Panellive-Token,X-Linlis-Group-Id",
@@ -2140,7 +2428,10 @@ async fn panellive_events_web(
     // Events whitelist: transcribe + session signals (A1: no chat persistence).
     if !matches!(
         body.skill.as_str(),
-        "live.transcribe.result" | "live.session.start" | "live.session.stop" | "live.session.cancel"
+        "live.transcribe.result"
+            | "live.session.start"
+            | "live.session.stop"
+            | "live.session.cancel"
     ) {
         return Err((StatusCode::BAD_REQUEST, "events 入口不接受此 skill".into()));
     }
@@ -2181,25 +2472,20 @@ async fn dispatch_a2a_web(
         return Err((StatusCode::BAD_REQUEST, "groupId 必填".into()));
     }
     // Skills must be declared by a discovered extension; that extension must be enabled for the group.
-    let declared_by = crate::extensions::discover_extensions()
-        .into_iter()
-        .find(|d| {
-            crate::extensions::skill_allowed(&d.manifest.contributes.a2a_skills, &envelope.skill)
-        });
+    let discovered = crate::plugins::require_extension_host_service()
+        .map_err(kernel_unavailable)?
+        .discover();
+    let declared_by = discovered.into_iter().find(|d| {
+        crate::extensions::skill_allowed(&d.manifest.contributes.a2a_skills, &envelope.skill)
+    });
     if let Some(disc) = declared_by {
-        let enabled = crate::extensions::is_extension_enabled(
-            &conn,
-            &envelope.group_id,
-            &disc.manifest.id,
-        )
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+        let enabled =
+            crate::extensions::is_extension_enabled(&conn, &envelope.group_id, &disc.manifest.id)
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
         if !enabled {
             return Err((
                 StatusCode::CONFLICT,
-                format!(
-                    "扩展 {} 未 load：请在运行设置中开启",
-                    disc.manifest.name
-                ),
+                format!("扩展 {} 未 load：请在运行设置中开启", disc.manifest.name),
             ));
         }
     } else if envelope.skill.starts_with("live.") {
@@ -2260,7 +2546,9 @@ async fn ops_drain_get_web(
 ) -> Result<Json<crate::release_drain::DrainStatus>, (StatusCode, String)> {
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     require_admin(&conn, &claims.sub).map_err(map_acl_err)?;
-    crate::release_drain::status(&conn).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+    crate::release_drain::status(&conn)
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
 }
 
 async fn ops_drain_put_web(
@@ -2358,7 +2646,11 @@ async fn version_board_web(
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
     let group = db_get_group(&conn, &group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
-    crate::workflow::board_for_group(&state.db_path, &group)
+    // 优先走内核服务；未装载时回退自由函数。
+    let board = crate::plugins::require_workflow_service()
+        .map_err(kernel_unavailable)?
+        .board(&state.db_path, &group);
+    board
         .map(Json)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
 }
@@ -2372,9 +2664,11 @@ async fn create_version_web(
     require_group_access(&conn, &claims.sub, &input.group_id).map_err(map_acl_err)?;
     let group = db_get_group(&conn, &input.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_version_manager(&conn, &claims.sub, &group)?;
-    crate::workflow::create_version(&conn, &group, &input)
-        .map(Json)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+    // 优先走内核服务；未装载时回退自由函数。
+    let created = crate::plugins::require_workflow_service()
+        .map_err(kernel_unavailable)?
+        .create_version(&state.db_path, &group, &input);
+    created.map(Json).map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
 
 async fn update_version_roadmap_web(
@@ -2384,14 +2678,16 @@ async fn update_version_roadmap_web(
     Json(input): Json<crate::workflow::UpdateRoadmapInput>,
 ) -> Result<Json<crate::workflow::ProjectVersion>, (StatusCode, String)> {
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-    let v = crate::workflow::get_version(&conn, &version_id)
-        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    let v =
+        crate::workflow::get_version(&conn, &version_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_group_access(&conn, &claims.sub, &v.group_id).map_err(map_acl_err)?;
     let group = db_get_group(&conn, &v.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_version_manager(&conn, &claims.sub, &group)?;
-    crate::workflow::update_roadmap(&conn, &version_id, &input)
-        .map(Json)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+    // 优先走内核服务；未装载时回退自由函数。
+    let updated = crate::plugins::require_workflow_service()
+        .map_err(kernel_unavailable)?
+        .update_roadmap(&state.db_path, &version_id, &input);
+    updated.map(Json).map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
 
 #[derive(Deserialize)]
@@ -2407,12 +2703,14 @@ async fn start_ask_web(
     Json(body): Json<StartAskBody>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-    let v0 = crate::workflow::get_version(&conn, &version_id)
-        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    let v0 =
+        crate::workflow::get_version(&conn, &version_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_group_access(&conn, &claims.sub, &v0.group_id).map_err(map_acl_err)?;
     let group = db_get_group(&conn, &v0.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_version_manager(&conn, &claims.sub, &group)?;
-    let v = crate::workflow::start_ask(&conn, &group, &version_id)
+    let v = crate::plugins::require_workflow_service()
+        .map_err(kernel_unavailable)?
+        .start_ask(&state.db_path, &group, &version_id)
         .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
     let prompt = crate::workflow::build_ask_kickoff_prompt(&v);
     let content = format!(
@@ -2441,12 +2739,15 @@ async fn cancel_ask_web(
     Path(version_id): Path<String>,
 ) -> Result<Json<crate::workflow::ProjectVersion>, (StatusCode, String)> {
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-    let v = crate::workflow::get_version(&conn, &version_id)
-        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    let v =
+        crate::workflow::get_version(&conn, &version_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_group_access(&conn, &claims.sub, &v.group_id).map_err(map_acl_err)?;
     let group = db_get_group(&conn, &v.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_version_manager(&conn, &claims.sub, &group)?;
-    crate::workflow::cancel_ask(&conn, &version_id)
+    let cancelled = crate::plugins::require_workflow_service()
+        .map_err(kernel_unavailable)?
+        .cancel_ask(&state.db_path, &version_id);
+    cancelled
         .map(Json)
         .map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
@@ -2458,8 +2759,8 @@ async fn approve_waves_web(
     Json(mut input): Json<crate::workflow::ApproveWavesInput>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-    let v = crate::workflow::get_version(&conn, &version_id)
-        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    let v =
+        crate::workflow::get_version(&conn, &version_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_group_access(&conn, &claims.sub, &v.group_id).map_err(map_acl_err)?;
     let group = db_get_group(&conn, &v.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_version_manager(&conn, &claims.sub, &group)?;
@@ -2488,7 +2789,10 @@ async fn play_wave_web(
     require_group_access(&conn, &claims.sub, &w0.group_id).map_err(map_acl_err)?;
     let group = db_get_group(&conn, &w0.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_version_manager(&conn, &claims.sub, &group)?;
-    let w = crate::workflow::play_wave(&conn, &wave_id).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    let w = crate::plugins::require_workflow_service()
+        .map_err(kernel_unavailable)?
+        .play_wave(&state.db_path, &wave_id)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
     let v = crate::workflow::get_version(&conn, &w.version_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     let prompt = crate::workflow::build_wave_kickoff_prompt(&v, &w);
@@ -2524,9 +2828,10 @@ async fn pause_wave_web(
     require_group_access(&conn, &claims.sub, &w0.group_id).map_err(map_acl_err)?;
     let group = db_get_group(&conn, &w0.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_version_manager(&conn, &claims.sub, &group)?;
-    crate::workflow::pause_wave(&conn, &wave_id)
-        .map(Json)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+    let paused = crate::plugins::require_workflow_service()
+        .map_err(kernel_unavailable)?
+        .pause_wave(&state.db_path, &wave_id);
+    paused.map(Json).map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
 
 async fn advance_wave_web(
@@ -2551,8 +2856,8 @@ async fn play_version_web(
     Json(body): Json<WavePlayBody>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-    let v = crate::workflow::get_version(&conn, &version_id)
-        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    let v =
+        crate::workflow::get_version(&conn, &version_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_group_access(&conn, &claims.sub, &v.group_id).map_err(map_acl_err)?;
     let group = db_get_group(&conn, &v.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_version_manager(&conn, &claims.sub, &group)?;
@@ -2592,8 +2897,8 @@ async fn pause_version_web(
     Path(version_id): Path<String>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-    let v = crate::workflow::get_version(&conn, &version_id)
-        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    let v =
+        crate::workflow::get_version(&conn, &version_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_group_access(&conn, &claims.sub, &v.group_id).map_err(map_acl_err)?;
     let group = db_get_group(&conn, &v.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_version_manager(&conn, &claims.sub, &group)?;
@@ -2615,14 +2920,16 @@ async fn release_version_web(
     Json(body): Json<ReleaseBody>,
 ) -> Result<Json<crate::workflow::ProjectVersion>, (StatusCode, String)> {
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-    let v = crate::workflow::get_version(&conn, &version_id)
-        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    let v =
+        crate::workflow::get_version(&conn, &version_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_group_access(&conn, &claims.sub, &v.group_id).map_err(map_acl_err)?;
     let group = db_get_group(&conn, &v.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_version_manager(&conn, &claims.sub, &group)?;
-    crate::workflow::mark_released(&conn, &version_id, body.git_tag)
-        .map(Json)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+    // 优先走内核服务；未装载时回退自由函数。
+    let released = crate::plugins::require_workflow_service()
+        .map_err(kernel_unavailable)?
+        .mark_released(&state.db_path, &version_id, body.git_tag);
+    released.map(Json).map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
 
 async fn ops_job_web(
@@ -2732,7 +3039,10 @@ fn require_claims_actor(
             )
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         if owned != 1 {
-            return Err((StatusCode::FORBIDDEN, "只能以本人成员身份操作 Campaign".into()));
+            return Err((
+                StatusCode::FORBIDDEN,
+                "只能以本人成员身份操作 Campaign".into(),
+            ));
         }
     }
     Ok(())
@@ -2750,9 +3060,11 @@ async fn create_marketing_campaign_web(
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     require_claims_actor(&conn, &claims, &input.group_id, &input.requested_by)?;
     drop(conn);
-    crate::marketing::create_campaign(&state.db_path, state.sched.clone(), input)
-        .map(Json)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+    // 优先走内核服务；未装载时回退自由函数。
+    let created = crate::plugins::require_marketing_service()
+        .map_err(kernel_unavailable)?
+        .create(&state.db_path, state.sched.clone(), input);
+    created.map(Json).map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
 
 async fn list_marketing_campaigns_web(
@@ -2762,7 +3074,11 @@ async fn list_marketing_campaigns_web(
 ) -> Result<Json<Vec<crate::marketing::ContentCampaign>>, (StatusCode, String)> {
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
-    crate::marketing::list_campaigns(&conn, &group_id)
+    // 优先走内核服务；未装载时回退自由函数。
+    let campaigns = crate::plugins::require_marketing_service()
+        .map_err(kernel_unavailable)?
+        .list(&state.db_path, &group_id);
+    campaigns
         .map(Json)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
 }
@@ -2773,7 +3089,9 @@ async fn get_marketing_campaign_web(
     Path(campaign_id): Path<String>,
 ) -> Result<Json<crate::marketing::ContentCampaign>, (StatusCode, String)> {
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-    let campaign = crate::marketing::get_campaign(&conn, &campaign_id)
+    let campaign = crate::plugins::require_marketing_service()
+        .map_err(kernel_unavailable)?
+        .get(&state.db_path, &campaign_id)
         .map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_group_access(&conn, &claims.sub, &campaign.group_id).map_err(map_acl_err)?;
     Ok(Json(campaign))
@@ -2790,9 +3108,11 @@ async fn revise_marketing_campaign_web(
         .map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_claims_actor(&conn, &claims, &campaign.group_id, &input.actor_member_id)?;
     drop(conn);
-    crate::marketing::revise_campaign(&state.db_path, state.sched.clone(), &campaign_id, input)
-        .map(Json)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+    // 优先走内核服务；未装载时回退自由函数。
+    let revised = crate::plugins::require_marketing_service()
+        .map_err(kernel_unavailable)?
+        .revise(&state.db_path, state.sched.clone(), &campaign_id, input);
+    revised.map(Json).map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
 
 async fn approve_marketing_campaign_web(
@@ -2806,9 +3126,11 @@ async fn approve_marketing_campaign_web(
         .map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_claims_actor(&conn, &claims, &campaign.group_id, &input.actor_member_id)?;
     drop(conn);
-    crate::marketing::approve_campaign(&state.db_path, &campaign_id, input)
-        .map(Json)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+    // 优先走内核服务；未装载时回退自由函数。
+    let approved = crate::plugins::require_marketing_service()
+        .map_err(kernel_unavailable)?
+        .approve(&state.db_path, &campaign_id, input);
+    approved.map(Json).map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
 
 async fn export_marketing_campaign_web(
@@ -2820,9 +3142,11 @@ async fn export_marketing_campaign_web(
     let campaign = crate::marketing::get_campaign(&conn, &campaign_id)
         .map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_group_access(&conn, &claims.sub, &campaign.group_id).map_err(map_acl_err)?;
-    crate::marketing::export_campaign(&conn, &campaign_id)
-        .map(Json)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+    // 优先走内核服务；未装载时回退自由函数。
+    let exported = crate::plugins::require_marketing_service()
+        .map_err(kernel_unavailable)?
+        .export(&state.db_path, &campaign_id);
+    exported.map(Json).map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
 
 pub fn build_router(state: Arc<AppState>) -> Router {
@@ -2834,17 +3158,23 @@ pub fn build_router(state: Arc<AppState>) -> Router {
 
     let protected = Router::new()
         .route("/api/auth/verify", get(verify))
-         // Groups
+        // Groups
         .route("/api/groups", get(list_groups))
-         .route("/api/groups", post(create_group_web))
+        .route("/api/groups", post(create_group_web))
         .route("/api/groups/{id}", get(get_group))
         .route("/api/groups/{id}/read", put(mark_group_read_web))
         .route("/api/presence", get(list_presence_web))
         .route("/api/presence/heartbeat", post(heartbeat_presence_web))
-        .route("/api/groups/{id}/announcement", get(get_announcement_web).put(put_announcement_web))
+        .route(
+            "/api/groups/{id}/announcement",
+            get(get_announcement_web).put(put_announcement_web),
+        )
         .route("/api/groups/{id}/workspace", put(put_workspace_web))
         .route("/api/groups/{id}/archive", put(put_group_archive_web))
-        .route("/api/groups/{id}/extensions", get(list_group_extensions_web))
+        .route(
+            "/api/groups/{id}/extensions",
+            get(list_group_extensions_web),
+        )
         .route(
             "/api/groups/{id}/extensions/{ext_id}",
             put(put_extension_web),
@@ -2858,25 +3188,34 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/api/fs/list", get(list_server_dir_web))
         .route("/api/fs/mkdir", post(create_server_dir_web))
         .route("/api/ops/release-status", get(ops_release_status_web))
-        .route("/api/ops/drain", get(ops_drain_get_web).put(ops_drain_put_web))
+        .route(
+            "/api/ops/drain",
+            get(ops_drain_get_web).put(ops_drain_put_web),
+        )
         .route("/api/ops/job", get(ops_job_web))
         .route("/api/ops/test-gate", post(ops_test_gate_web))
         .route("/api/ops/deploy-canary", post(ops_deploy_canary_web))
-         // Members
-         .route(
-             "/api/groups/{group_id}/members",
-             get(list_group_members_web).post(add_member_web),
-         )
-         .route("/api/groups/{group_id}/members/{member_id}", delete(remove_member_web))
-         .route(
-             "/api/groups/{group_id}/members/{member_id}/purge",
-             delete(purge_member_web),
-         )
-         .route("/api/invites/{token}/accept", post(accept_invite_web))
-         .route("/api/users/joinable", get(list_joinable_users_web))
-         .route("/api/members/{member_id}/workspace", put(put_member_workspace_web))
-         .route("/api/groups/{group_id}/admin", put(set_admin_web))
-         // Messages
+        // Members
+        .route(
+            "/api/groups/{group_id}/members",
+            get(list_group_members_web).post(add_member_web),
+        )
+        .route(
+            "/api/groups/{group_id}/members/{member_id}",
+            delete(remove_member_web),
+        )
+        .route(
+            "/api/groups/{group_id}/members/{member_id}/purge",
+            delete(purge_member_web),
+        )
+        .route("/api/invites/{token}/accept", post(accept_invite_web))
+        .route("/api/users/joinable", get(list_joinable_users_web))
+        .route(
+            "/api/members/{member_id}/workspace",
+            put(put_member_workspace_web),
+        )
+        .route("/api/groups/{group_id}/admin", put(set_admin_web))
+        // Messages
         .route("/api/messages", post(send_message_web))
         .route("/api/groups/{group_id}/messages", get(list_messages_web))
         .route(
@@ -2884,87 +3223,177 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             get(get_message_channel_part_web),
         )
         .route("/api/messages/{message_id}/vote", post(vote_message_web))
-        .route("/api/messages/{message_id}/feedback", get(get_message_feedback_web))
-         // Runs
-         .route("/api/groups/{group_id}/runs", get(list_runs_web))
-         .route("/api/groups/{group_id}/runs/active", get(list_active_runs_web))
-         .route("/api/runs/{run_id}/cancel", post(cancel_run_web))
-         .route("/api/runs/{run_id}/retry", post(retry_run_web))
-         .route("/api/runs/{run_id}/review", post(set_run_review_web))
-         .route("/api/runs/{run_id}/phases", get(get_run_phases_web))
-         // Settings / metrics
-         .route("/api/settings", get(get_settings_web))
-         .route("/api/settings", put(update_settings_web))
-         .route("/api/agent-models", get(get_agent_models_web))
-         .route("/api/adapters", get(list_cli_adapters_web))
-         .route("/api/agent-models/refresh", post(refresh_agent_models_web))
-         .route("/api/metrics/latest", get(metrics_latest_web))
-         // Agent Config（一键导入 / 导出 / 自检 / 安装；仅管理员）
-         .route("/api/agent-config/status", get(agent_config_status_web))
-         .route("/api/agent-config/export", post(agent_config_export_web))
-         .route("/api/agent-config/import", post(agent_config_import_web))
-         .route("/api/agent-config/install/{cli}", post(agent_config_install_web))
-         // OCR
-         .route("/api/ocr", post(ocr_image_web))
-         .route("/api/ocr/base64", post(ocr_base64_web))
-         // Preset Roles
-         .route("/api/preset-roles", get(get_preset_roles_web))
-         // PM: Roadmap Items
-         .route("/api/groups/{group_id}/roadmap", get(list_roadmap_items_web))
-         .route("/api/roadmap-items", post(create_roadmap_item_web))
-         .route("/api/roadmap-items/{id}", put(update_roadmap_item_web))
-         .route("/api/roadmap-items/{id}", delete(delete_roadmap_item_web))
-         .route("/api/roadmap-items/{id}/start", post(start_roadmap_item_web))
-         .route("/api/roadmap-orchestrations/{id}/pause", post(pause_orchestration_web))
-         .route("/api/roadmap-orchestrations/{id}/resume", post(resume_orchestration_web))
-         .route("/api/roadmap-orchestrations/{id}/cancel", post(cancel_orchestration_web))
-         .route("/api/groups/{group_id}/roadmap-orchestrations", get(list_orchestrations_web))
-         // PM: Features
-         .route("/api/groups/{group_id}/features", get(list_features_web))
-         .route("/api/features", post(create_feature_web))
-         .route("/api/features/{id}", put(update_feature_web))
-         .route("/api/features/{id}", delete(delete_feature_web))
-         // PM: Feature Tasks
-         .route("/api/features/{feature_id}/tasks", get(list_feature_tasks_web))
-         .route("/api/feature-tasks", post(create_feature_task_web))
-         .route("/api/feature-tasks/{id}", put(update_feature_task_web))
-         .route("/api/feature-tasks/{id}", delete(delete_feature_task_web))
-         // PM: Aggregated State
-         .route("/api/groups/{group_id}/roadmap-state", get(get_roadmap_state_web))
-         // Self-Marketing
-         .route("/api/groups/{group_id}/marketing/campaigns", get(list_marketing_campaigns_web).post(create_marketing_campaign_web))
-         .route("/api/marketing/campaigns/{campaign_id}", get(get_marketing_campaign_web))
-         .route("/api/marketing/campaigns/{campaign_id}/revise", post(revise_marketing_campaign_web))
-         .route("/api/marketing/campaigns/{campaign_id}/approve", post(approve_marketing_campaign_web))
-         .route("/api/marketing/campaigns/{campaign_id}/export", get(export_marketing_campaign_web))
-         // V1.3.0 Version / Wave workflow
-         .route("/api/groups/{group_id}/version-board", get(version_board_web))
-         .route("/api/project-versions", post(create_version_web))
-         .route("/api/project-versions/{version_id}/roadmap", put(update_version_roadmap_web))
-         .route("/api/project-versions/{version_id}/ask", post(start_ask_web))
-         .route("/api/project-versions/{version_id}/ask/cancel", post(cancel_ask_web))
-         .route("/api/project-versions/{version_id}/waves/approve", post(approve_waves_web))
-         .route("/api/project-versions/{version_id}/play", post(play_version_web))
-         .route("/api/project-versions/{version_id}/pause", post(pause_version_web))
-         .route("/api/project-versions/{version_id}/release", post(release_version_web))
-         .route("/api/waves/{wave_id}/play", post(play_wave_web))
-         .route("/api/waves/{wave_id}/pause", post(pause_wave_web))
-         .route("/api/waves/{wave_id}/advance", post(advance_wave_web))
-         // Logs
-         .route("/api/logs", get(list_logs_web))
-         .route("/api/logs/count", get(count_logs_web))
-         .route("/api/logs", delete(clear_logs_web))
-         // Shared Memory (Experiences)
-         .route("/api/experiences", post(save_experience_web))
-         .route("/api/experiences", get(query_experiences_web))
-         .route("/api/experiences/{id}", delete(delete_experience_web))
-         // WebSocket
+        .route(
+            "/api/messages/{message_id}/feedback",
+            get(get_message_feedback_web),
+        )
+        // Runs
+        .route("/api/groups/{group_id}/runs", get(list_runs_web))
+        .route(
+            "/api/groups/{group_id}/runs/active",
+            get(list_active_runs_web),
+        )
+        .route("/api/runs/{run_id}/cancel", post(cancel_run_web))
+        .route("/api/runs/{run_id}/retry", post(retry_run_web))
+        .route("/api/runs/{run_id}/review", post(set_run_review_web))
+        .route("/api/runs/{run_id}/phases", get(get_run_phases_web))
+        // Settings / metrics
+        .route("/api/settings", get(get_settings_web))
+        .route("/api/settings", put(update_settings_web))
+        .route("/api/agent-models", get(get_agent_models_web))
+        .route("/api/adapters", get(list_cli_adapters_web))
+        .route("/api/agent-models/refresh", post(refresh_agent_models_web))
+        .route("/api/metrics/latest", get(metrics_latest_web))
+        // Agent Config（一键导入 / 导出 / 自检 / 安装；仅管理员）
+        .route("/api/agent-config/status", get(agent_config_status_web))
+        .route("/api/agent-config/export", post(agent_config_export_web))
+        .route("/api/agent-config/import", post(agent_config_import_web))
+        .route(
+            "/api/agent-config/install/{cli}",
+            post(agent_config_install_web),
+        )
+        // OCR
+        .route("/api/ocr", post(ocr_image_web))
+        .route("/api/ocr/base64", post(ocr_base64_web))
+        // Preset Roles
+        .route("/api/preset-roles", get(get_preset_roles_web))
+        // PM: Roadmap Items
+        .route(
+            "/api/groups/{group_id}/roadmap",
+            get(list_roadmap_items_web),
+        )
+        .route("/api/roadmap-items", post(create_roadmap_item_web))
+        .route("/api/roadmap-items/{id}", put(update_roadmap_item_web))
+        .route("/api/roadmap-items/{id}", delete(delete_roadmap_item_web))
+        .route(
+            "/api/roadmap-items/{id}/start",
+            post(start_roadmap_item_web),
+        )
+        .route(
+            "/api/roadmap-orchestrations/{id}/pause",
+            post(pause_orchestration_web),
+        )
+        .route(
+            "/api/roadmap-orchestrations/{id}/resume",
+            post(resume_orchestration_web),
+        )
+        .route(
+            "/api/roadmap-orchestrations/{id}/cancel",
+            post(cancel_orchestration_web),
+        )
+        .route(
+            "/api/groups/{group_id}/roadmap-orchestrations",
+            get(list_orchestrations_web),
+        )
+        // PM: Features
+        .route("/api/groups/{group_id}/features", get(list_features_web))
+        .route("/api/features", post(create_feature_web))
+        .route("/api/features/{id}", put(update_feature_web))
+        .route("/api/features/{id}", delete(delete_feature_web))
+        // PM: Feature Tasks
+        .route(
+            "/api/features/{feature_id}/tasks",
+            get(list_feature_tasks_web),
+        )
+        .route("/api/feature-tasks", post(create_feature_task_web))
+        .route("/api/feature-tasks/{id}", put(update_feature_task_web))
+        .route("/api/feature-tasks/{id}", delete(delete_feature_task_web))
+        // PM: Aggregated State
+        .route(
+            "/api/groups/{group_id}/roadmap-state",
+            get(get_roadmap_state_web),
+        )
+        // Self-Marketing
+        .route(
+            "/api/groups/{group_id}/marketing/campaigns",
+            get(list_marketing_campaigns_web).post(create_marketing_campaign_web),
+        )
+        .route(
+            "/api/marketing/campaigns/{campaign_id}",
+            get(get_marketing_campaign_web),
+        )
+        .route(
+            "/api/marketing/campaigns/{campaign_id}/revise",
+            post(revise_marketing_campaign_web),
+        )
+        .route(
+            "/api/marketing/campaigns/{campaign_id}/approve",
+            post(approve_marketing_campaign_web),
+        )
+        .route(
+            "/api/marketing/campaigns/{campaign_id}/export",
+            get(export_marketing_campaign_web),
+        )
+        // 群组级 Goal（P3 自治循环）
+        .route(
+            "/api/groups/{group_id}/goals",
+            get(list_goals_web).post(create_goal_web),
+        )
+        .route("/api/goals/{goal_id}", get(get_goal_web))
+        .route("/api/goals/{goal_id}/start", post(start_goal_web))
+        .route("/api/goals/{goal_id}/pause", post(pause_goal_web))
+        .route("/api/goals/{goal_id}/approve", post(approve_goal_web))
+        .route("/api/goals/{goal_id}/abort", post(abort_goal_web))
+        .route("/api/goals/{goal_id}/advance", post(advance_goal_web))
+        .route(
+            "/api/goals/{goal_id}/auto-advance",
+            post(set_goal_auto_advance_web),
+        )
+        // V1.3.0 Version / Wave workflow
+        .route(
+            "/api/groups/{group_id}/version-board",
+            get(version_board_web),
+        )
+        .route("/api/project-versions", post(create_version_web))
+        .route(
+            "/api/project-versions/{version_id}/roadmap",
+            put(update_version_roadmap_web),
+        )
+        .route(
+            "/api/project-versions/{version_id}/ask",
+            post(start_ask_web),
+        )
+        .route(
+            "/api/project-versions/{version_id}/ask/cancel",
+            post(cancel_ask_web),
+        )
+        .route(
+            "/api/project-versions/{version_id}/waves/approve",
+            post(approve_waves_web),
+        )
+        .route(
+            "/api/project-versions/{version_id}/play",
+            post(play_version_web),
+        )
+        .route(
+            "/api/project-versions/{version_id}/pause",
+            post(pause_version_web),
+        )
+        .route(
+            "/api/project-versions/{version_id}/release",
+            post(release_version_web),
+        )
+        .route("/api/waves/{wave_id}/play", post(play_wave_web))
+        .route("/api/waves/{wave_id}/pause", post(pause_wave_web))
+        .route("/api/waves/{wave_id}/advance", post(advance_wave_web))
+        // Logs
+        .route("/api/logs", get(list_logs_web))
+        .route("/api/logs/count", get(count_logs_web))
+        .route("/api/logs", delete(clear_logs_web))
+        // Shared Memory (Experiences)
+        .route("/api/experiences", post(save_experience_web))
+        .route("/api/experiences", get(query_experiences_web))
+        .route("/api/experiences/{id}", delete(delete_experience_web))
+        // WebSocket
         .route("/ws", get(ws_handler))
         .route_layer(middleware::from_fn(auth_middleware));
 
     // Same-origin extension proxy + PanelLive events (no JWT — iframe cannot send Bearer).
     let extension_public = Router::new()
-        .route("/api/extensions/panellive/events", post(panellive_events_web))
+        .route(
+            "/api/extensions/panellive/events",
+            post(panellive_events_web),
+        )
         .route("/api/extensions/{ext_id}/{*path}", any(proxy_extension));
 
     Router::new()
@@ -2973,6 +3402,198 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .merge(protected)
         .layer(middleware::from_fn(request_id_middleware))
         .with_state(state)
+}
+
+// === 群组级 Goal（P3 自治循环） ===
+
+fn goal_group_id(state: &AppState, goal_id: &str) -> Result<String, (StatusCode, String)> {
+    crate::goals::service::get_goal(&state.db_path, goal_id)
+        .map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error))?
+        .map(|goal| goal.group_id)
+        .ok_or((StatusCode::NOT_FOUND, "goal 不存在".to_string()))
+}
+
+async fn list_goals_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(group_id): Path<String>,
+) -> Result<Json<Vec<crate::goals::Goal>>, (StatusCode, String)> {
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
+    drop(conn);
+    crate::goals::service::list_goals(&state.db_path, &group_id)
+        .map(Json)
+        .map_err(|error| (StatusCode::BAD_REQUEST, error))
+}
+
+async fn get_goal_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(goal_id): Path<String>,
+) -> Result<Json<crate::goals::Goal>, (StatusCode, String)> {
+    let group_id = goal_group_id(&state, &goal_id)?;
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
+    drop(conn);
+    let goal = crate::goals::service::get_goal(&state.db_path, &goal_id)
+        .map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error))?
+        .ok_or((StatusCode::NOT_FOUND, "goal 不存在".to_string()))?;
+    Ok(Json(goal))
+}
+
+async fn create_goal_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(group_id): Path<String>,
+    Json(input): Json<crate::goals::CreateGoalInput>,
+) -> Result<Json<crate::goals::Goal>, (StatusCode, String)> {
+    if input.group_id != group_id {
+        return Err((StatusCode::BAD_REQUEST, "groupId 与路由不一致".into()));
+    }
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_group_access(&conn, &claims.sub, &input.group_id).map_err(map_acl_err)?;
+    drop(conn);
+    crate::goals::service::require_manage(&state.db_path, &claims.sub, &input.group_id)
+        .map_err(|error| (StatusCode::FORBIDDEN, error))?;
+    let auto_advance = input.auto_advance;
+    let goal = crate::goals::service::create_goal(
+        &state.db_path,
+        &input.group_id,
+        &input.objective,
+        input.budget.unwrap_or_default(),
+        input.require_approval_each_round,
+    )
+    .map_err(|error| (StatusCode::BAD_REQUEST, error))?;
+    let goal = if auto_advance {
+        crate::goals::service::set_auto_advance(&state.db_path, &goal.id, true)
+            .map_err(|error| (StatusCode::BAD_REQUEST, error))?
+    } else {
+        goal
+    };
+    Ok(Json(goal))
+}
+
+fn mutate_goal(
+    state: &AppState,
+    claims: &crate::auth::Claims,
+    goal_id: &str,
+    action: fn(&std::path::Path, &str) -> crate::db::AppResult<crate::goals::Goal>,
+) -> Result<Json<crate::goals::Goal>, (StatusCode, String)> {
+    let group_id = goal_group_id(state, goal_id)?;
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
+    drop(conn);
+    crate::goals::service::require_manage(&state.db_path, &claims.sub, &group_id)
+        .map_err(|error| (StatusCode::FORBIDDEN, error))?;
+    action(&state.db_path, goal_id)
+        .map(Json)
+        .map_err(|error| (StatusCode::BAD_REQUEST, error))
+}
+
+async fn start_goal_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(goal_id): Path<String>,
+) -> Result<Json<crate::goals::Goal>, (StatusCode, String)> {
+    mutate_goal(&state, &claims, &goal_id, crate::goals::service::start_goal)
+}
+
+async fn pause_goal_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(goal_id): Path<String>,
+) -> Result<Json<crate::goals::Goal>, (StatusCode, String)> {
+    mutate_goal(&state, &claims, &goal_id, crate::goals::service::pause_goal)
+}
+
+async fn approve_goal_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(goal_id): Path<String>,
+) -> Result<Json<crate::goals::Goal>, (StatusCode, String)> {
+    mutate_goal(
+        &state,
+        &claims,
+        &goal_id,
+        crate::goals::service::approve_goal,
+    )
+}
+
+async fn abort_goal_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(goal_id): Path<String>,
+) -> Result<Json<crate::goals::Goal>, (StatusCode, String)> {
+    mutate_goal(&state, &claims, &goal_id, crate::goals::service::abort_goal)
+}
+
+async fn advance_goal_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(goal_id): Path<String>,
+) -> Result<Json<crate::goals::Goal>, (StatusCode, String)> {
+    let group_id = goal_group_id(&state, &goal_id)?;
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
+    drop(conn);
+    crate::goals::service::require_manage(&state.db_path, &claims.sub, &group_id)
+        .map_err(|error| (StatusCode::FORBIDDEN, error))?;
+
+    let goal = crate::goals::service::get_goal(&state.db_path, &goal_id)
+        .map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error))?
+        .ok_or((StatusCode::NOT_FOUND, "goal 不存在".to_string()))?;
+    if goal.status != crate::goals::GoalStatus::Active {
+        return Err((StatusCode::BAD_REQUEST, "目标未处于运行中".into()));
+    }
+    let actor = crate::goals::service::pick_goal_actor(&state.db_path, &goal.group_id)
+        .map_err(|error| (StatusCode::BAD_REQUEST, error))?;
+
+    let schedulers = state.sched.clone();
+    let dispatcher = crate::goals::scheduler_adapter::SchedulerDispatcher::new(
+        state.db_path.clone(),
+        goal.group_id.clone(),
+        actor.driver_member_id,
+        actor.sender_member_id,
+        Box::new(move |group_id_ref| {
+            crate::scheduler::schedule_group(schedulers.clone(), group_id_ref.to_string());
+        }),
+    );
+    let db_path = state.db_path.clone();
+    let report = tokio::task::spawn_blocking(move || {
+        crate::goals::scheduler_adapter::tick(
+            &db_path,
+            &goal_id,
+            dispatcher,
+            crate::goals::scheduler_adapter::DEFAULT_MAX_POLLS,
+        )
+    })
+    .await
+    .map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))?
+    .map_err(|error| (StatusCode::BAD_REQUEST, error))?;
+    Ok(Json(report.goal))
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GoalAutoAdvanceBody {
+    enabled: bool,
+}
+
+async fn set_goal_auto_advance_web(
+    State(state): State<Arc<AppState>>,
+    ClaimsExtractor(claims): ClaimsExtractor,
+    Path(goal_id): Path<String>,
+    Json(body): Json<GoalAutoAdvanceBody>,
+) -> Result<Json<crate::goals::Goal>, (StatusCode, String)> {
+    let group_id = goal_group_id(&state, &goal_id)?;
+    let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
+    drop(conn);
+    crate::goals::service::require_manage(&state.db_path, &claims.sub, &group_id)
+        .map_err(|error| (StatusCode::FORBIDDEN, error))?;
+    crate::goals::service::set_auto_advance(&state.db_path, &goal_id, body.enabled)
+        .map(Json)
+        .map_err(|error| (StatusCode::BAD_REQUEST, error))
 }
 
 #[cfg(test)]
@@ -3104,12 +3725,8 @@ mod acl_tests {
     #[tokio::test]
     async fn user_without_membership_is_denied_group_access() {
         let (_file, state) = test_state().await;
-        let res = send_message_web(
-            State(state),
-            claims("u-alone", "eve"),
-            msg("g", "am", "hi"),
-        )
-        .await;
+        let res =
+            send_message_web(State(state), claims("u-alone", "eve"), msg("g", "am", "hi")).await;
         assert!(res.is_err(), "无群成员身份的用户不应能发送");
     }
 
@@ -3122,22 +3739,39 @@ mod acl_tests {
             msg("g", "sm", "root speaks as scoped member"),
         )
         .await;
-        assert!(res.is_ok(), "管理员可以代普通成员发言，got {:?}", res.map(|v| v.0));
+        assert!(
+            res.is_ok(),
+            "管理员可以代普通成员发言，got {:?}",
+            res.map(|v| v.0)
+        );
     }
 
     #[tokio::test]
     async fn slash_board_returns_system_reply_for_project_user() {
         let (_file, state) = test_state().await;
-        let res = send_message_web(State(state.clone()), claims("u-scoped", "bob"), msg("g", "sm", "/board")).await;
+        let res = send_message_web(
+            State(state.clone()),
+            claims("u-scoped", "bob"),
+            msg("g", "sm", "/board"),
+        )
+        .await;
         assert!(res.is_ok());
         let conn = crate::db::open_db(&state.db_path).unwrap();
         // 应有两条消息：用户的 /board + 管理员回显
         let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM messages WHERE group_id='g' AND content LIKE '/board%'", [], |r| r.get(0))
+            .query_row(
+                "SELECT COUNT(*) FROM messages WHERE group_id='g' AND content LIKE '/board%'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(count, 1, "用户原始消息存在");
         let caps: i64 = conn
-            .query_row("SELECT COUNT(*) FROM messages WHERE group_id='g' AND content LIKE '%版本%'", [], |r| r.get(0))
+            .query_row(
+                "SELECT COUNT(*) FROM messages WHERE group_id='g' AND content LIKE '%版本%'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(caps, 1, "版本摘要/引导回显存在");
     }
