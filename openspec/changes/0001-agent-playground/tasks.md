@@ -82,4 +82,5 @@
 - [x] 4.4d observability / ops 命令组拆分：`commands/observability.rs`、`commands/ops.rs`（helper `normalize_group_kind` 留在 mod.rs）
 - [x] 4.4e chat 命令组拆分：`commands/chat.rs`（消息读取 / 发送 / run 控制 / 评审 / 反馈）；workflow 共享 helper 留在 mod.rs
 - [x] 4.4f update / agents 命令组拆分：`commands/update.rs`、`commands/agents.rs`；mod.rs 压到约 15KB，只留组装、群设置与共享 helper
+- [x] 4.6 Web 入口收敛：workflow / marketing 只走插件服务，移除「服务优先 + 自由函数回退」双路径；内核未装载返回 503（E2E 验证 board / 建版本 / campaign 列表）
 - [ ] 4.5 每个迁移都补 OpenSpec delta 与回归测试

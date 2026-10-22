@@ -119,6 +119,18 @@ pub fn marketing_service() -> Option<Arc<marketing::MarketingService>> {
     kernel().require(marketing::SERVICE_KEY).ok()
 }
 
+/// 取工作流服务；内核未装载时返回明确错误（传输层映射为 503）。
+///
+/// Web 入口只走服务，不再保留自由函数回退——避免「两套实现」长期漂移。
+pub fn require_workflow_service() -> Result<Arc<workflow::WorkflowService>, String> {
+    workflow_service().ok_or_else(|| "插件内核未装载：svc.workflow".to_string())
+}
+
+/// 取 Marketing 服务；内核未装载时返回明确错误（传输层映射为 503）。
+pub fn require_marketing_service() -> Result<Arc<marketing::MarketingService>, String> {
+    marketing_service().ok_or_else(|| "插件内核未装载：svc.marketing".to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -46,7 +46,7 @@
 - THEN 返回错误
 
 ### Requirement: 工作流写用例
-版本创建 MUST 能通过工作流服务执行，结果与自由函数一致（`kind=draft`、`status=planning`）；Web 入口 MUST 优先使用服务。
+版本创建 MUST 能通过工作流服务执行，结果与自由函数一致（`kind=draft`、`status=planning`）；Web 入口 MUST 只走服务，内核未装载时 MUST 返回明确错误。
 
 #### Scenario: 通过服务创建版本
 - GIVEN 群里有管理员 Agent
@@ -54,11 +54,11 @@
 - THEN 返回 `kind=draft`、`status=planning`
 - AND 版本板能看到它
 
-#### Scenario: 回退
+#### Scenario: 内核不可用
 - GIVEN 插件未装载
-- WHEN 创建版本
-- THEN 使用自由函数
-- AND 行为不变
+- WHEN Web 调用创建版本
+- THEN 返回 503「插件内核未装载」
+- AND 不回退到另一套实现
 
 ### Requirement: 插件清单一致
 每个内置插件 MUST 声明 `id`、`entry`、`provides`，且 `entry` 必须能在注册表中解析。
@@ -80,8 +80,8 @@ Marketing 服务 MUST 提供生成与修订能力；需要调度器时 MUST 由�
 #### Scenario: 调度器注入
 - GIVEN 插件未装载
 - WHEN 发起生成
-- THEN 回退自由函数
-- AND 行为不变
+- THEN 返回 503「插件内核未装载」
+- AND 不回退到另一套实现
 
 ## MODIFIED Requirements
 

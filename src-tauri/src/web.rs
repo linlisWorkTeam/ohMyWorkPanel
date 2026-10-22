@@ -187,6 +187,11 @@ fn map_acl_err(e: String) -> (StatusCode, String) {
     }
 }
 
+/// 插件内核未装载：显式 503，而不是悄悄回退到另一套实现。
+fn kernel_unavailable(e: String) -> (StatusCode, String) {
+    (StatusCode::SERVICE_UNAVAILABLE, e)
+}
+
 async fn register(
     State(state): State<Arc<AppState>>,
     Json(input): Json<RegisterInput>,
@@ -2645,10 +2650,9 @@ async fn version_board_web(
     require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
     let group = db_get_group(&conn, &group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     // 优先走内核服务；未装载时回退自由函数。
-    let board = match crate::plugins::workflow_service() {
-        Some(service) => service.board(&state.db_path, &group),
-        None => crate::workflow::board_for_group(&state.db_path, &group),
-    };
+    let board = crate::plugins::require_workflow_service()
+        .map_err(kernel_unavailable)?
+        .board(&state.db_path, &group);
     board
         .map(Json)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
@@ -2664,10 +2668,9 @@ async fn create_version_web(
     let group = db_get_group(&conn, &input.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_version_manager(&conn, &claims.sub, &group)?;
     // 优先走内核服务；未装载时回退自由函数。
-    let created = match crate::plugins::workflow_service() {
-        Some(service) => service.create_version(&state.db_path, &group, &input),
-        None => crate::workflow::create_version(&conn, &group, &input),
-    };
+    let created = crate::plugins::require_workflow_service()
+        .map_err(kernel_unavailable)?
+        .create_version(&state.db_path, &group, &input);
     created.map(Json).map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
 
@@ -2684,10 +2687,9 @@ async fn update_version_roadmap_web(
     let group = db_get_group(&conn, &v.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_version_manager(&conn, &claims.sub, &group)?;
     // 优先走内核服务；未装载时回退自由函数。
-    let updated = match crate::plugins::workflow_service() {
-        Some(service) => service.update_roadmap(&state.db_path, &version_id, &input),
-        None => crate::workflow::update_roadmap(&conn, &version_id, &input),
-    };
+    let updated = crate::plugins::require_workflow_service()
+        .map_err(kernel_unavailable)?
+        .update_roadmap(&state.db_path, &version_id, &input);
     updated.map(Json).map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
 
@@ -2709,11 +2711,10 @@ async fn start_ask_web(
     require_group_access(&conn, &claims.sub, &v0.group_id).map_err(map_acl_err)?;
     let group = db_get_group(&conn, &v0.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_version_manager(&conn, &claims.sub, &group)?;
-    let v = match crate::plugins::workflow_service() {
-        Some(service) => service.start_ask(&state.db_path, &group, &version_id),
-        None => crate::workflow::start_ask(&conn, &group, &version_id),
-    }
-    .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    let v = crate::plugins::require_workflow_service()
+        .map_err(kernel_unavailable)?
+        .start_ask(&state.db_path, &group, &version_id)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
     let prompt = crate::workflow::build_ask_kickoff_prompt(&v);
     let content = format!(
         "@{} {}",
@@ -2746,10 +2747,9 @@ async fn cancel_ask_web(
     require_group_access(&conn, &claims.sub, &v.group_id).map_err(map_acl_err)?;
     let group = db_get_group(&conn, &v.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_version_manager(&conn, &claims.sub, &group)?;
-    let cancelled = match crate::plugins::workflow_service() {
-        Some(service) => service.cancel_ask(&state.db_path, &version_id),
-        None => crate::workflow::cancel_ask(&conn, &version_id),
-    };
+    let cancelled = crate::plugins::require_workflow_service()
+        .map_err(kernel_unavailable)?
+        .cancel_ask(&state.db_path, &version_id);
     cancelled
         .map(Json)
         .map_err(|e| (StatusCode::BAD_REQUEST, e))
@@ -2792,11 +2792,10 @@ async fn play_wave_web(
     require_group_access(&conn, &claims.sub, &w0.group_id).map_err(map_acl_err)?;
     let group = db_get_group(&conn, &w0.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_version_manager(&conn, &claims.sub, &group)?;
-    let w = match crate::plugins::workflow_service() {
-        Some(service) => service.play_wave(&state.db_path, &wave_id),
-        None => crate::workflow::play_wave(&conn, &wave_id),
-    }
-    .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    let w = crate::plugins::require_workflow_service()
+        .map_err(kernel_unavailable)?
+        .play_wave(&state.db_path, &wave_id)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
     let v = crate::workflow::get_version(&conn, &w.version_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     let prompt = crate::workflow::build_wave_kickoff_prompt(&v, &w);
@@ -2832,10 +2831,9 @@ async fn pause_wave_web(
     require_group_access(&conn, &claims.sub, &w0.group_id).map_err(map_acl_err)?;
     let group = db_get_group(&conn, &w0.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_version_manager(&conn, &claims.sub, &group)?;
-    let paused = match crate::plugins::workflow_service() {
-        Some(service) => service.pause_wave(&state.db_path, &wave_id),
-        None => crate::workflow::pause_wave(&conn, &wave_id),
-    };
+    let paused = crate::plugins::require_workflow_service()
+        .map_err(kernel_unavailable)?
+        .pause_wave(&state.db_path, &wave_id);
     paused.map(Json).map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
 
@@ -2931,10 +2929,9 @@ async fn release_version_web(
     let group = db_get_group(&conn, &v.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_version_manager(&conn, &claims.sub, &group)?;
     // 优先走内核服务；未装载时回退自由函数。
-    let released = match crate::plugins::workflow_service() {
-        Some(service) => service.mark_released(&state.db_path, &version_id, body.git_tag),
-        None => crate::workflow::mark_released(&conn, &version_id, body.git_tag),
-    };
+    let released = crate::plugins::require_workflow_service()
+        .map_err(kernel_unavailable)?
+        .mark_released(&state.db_path, &version_id, body.git_tag);
     released.map(Json).map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
 
@@ -3067,10 +3064,9 @@ async fn create_marketing_campaign_web(
     require_claims_actor(&conn, &claims, &input.group_id, &input.requested_by)?;
     drop(conn);
     // 优先走内核服务；未装载时回退自由函数。
-    let created = match crate::plugins::marketing_service() {
-        Some(service) => service.create(&state.db_path, state.sched.clone(), input),
-        None => crate::marketing::create_campaign(&state.db_path, state.sched.clone(), input),
-    };
+    let created = crate::plugins::require_marketing_service()
+        .map_err(kernel_unavailable)?
+        .create(&state.db_path, state.sched.clone(), input);
     created.map(Json).map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
 
@@ -3082,10 +3078,9 @@ async fn list_marketing_campaigns_web(
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     require_group_access(&conn, &claims.sub, &group_id).map_err(map_acl_err)?;
     // 优先走内核服务；未装载时回退自由函数。
-    let campaigns = match crate::plugins::marketing_service() {
-        Some(service) => service.list(&state.db_path, &group_id),
-        None => crate::marketing::list_campaigns(&conn, &group_id),
-    };
+    let campaigns = crate::plugins::require_marketing_service()
+        .map_err(kernel_unavailable)?
+        .list(&state.db_path, &group_id);
     campaigns
         .map(Json)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
@@ -3097,11 +3092,10 @@ async fn get_marketing_campaign_web(
     Path(campaign_id): Path<String>,
 ) -> Result<Json<crate::marketing::ContentCampaign>, (StatusCode, String)> {
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-    let campaign = match crate::plugins::marketing_service() {
-        Some(service) => service.get(&state.db_path, &campaign_id),
-        None => crate::marketing::get_campaign(&conn, &campaign_id),
-    }
-    .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    let campaign = crate::plugins::require_marketing_service()
+        .map_err(kernel_unavailable)?
+        .get(&state.db_path, &campaign_id)
+        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_group_access(&conn, &claims.sub, &campaign.group_id).map_err(map_acl_err)?;
     Ok(Json(campaign))
 }
@@ -3118,15 +3112,9 @@ async fn revise_marketing_campaign_web(
     require_claims_actor(&conn, &claims, &campaign.group_id, &input.actor_member_id)?;
     drop(conn);
     // 优先走内核服务；未装载时回退自由函数。
-    let revised = match crate::plugins::marketing_service() {
-        Some(service) => service.revise(&state.db_path, state.sched.clone(), &campaign_id, input),
-        None => crate::marketing::revise_campaign(
-            &state.db_path,
-            state.sched.clone(),
-            &campaign_id,
-            input,
-        ),
-    };
+    let revised = crate::plugins::require_marketing_service()
+        .map_err(kernel_unavailable)?
+        .revise(&state.db_path, state.sched.clone(), &campaign_id, input);
     revised.map(Json).map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
 
@@ -3142,10 +3130,9 @@ async fn approve_marketing_campaign_web(
     require_claims_actor(&conn, &claims, &campaign.group_id, &input.actor_member_id)?;
     drop(conn);
     // 优先走内核服务；未装载时回退自由函数。
-    let approved = match crate::plugins::marketing_service() {
-        Some(service) => service.approve(&state.db_path, &campaign_id, input),
-        None => crate::marketing::approve_campaign(&state.db_path, &campaign_id, input),
-    };
+    let approved = crate::plugins::require_marketing_service()
+        .map_err(kernel_unavailable)?
+        .approve(&state.db_path, &campaign_id, input);
     approved.map(Json).map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
 
@@ -3159,10 +3146,9 @@ async fn export_marketing_campaign_web(
         .map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_group_access(&conn, &claims.sub, &campaign.group_id).map_err(map_acl_err)?;
     // 优先走内核服务；未装载时回退自由函数。
-    let exported = match crate::plugins::marketing_service() {
-        Some(service) => service.export(&state.db_path, &campaign_id),
-        None => crate::marketing::export_campaign(&conn, &campaign_id),
-    };
+    let exported = crate::plugins::require_marketing_service()
+        .map_err(kernel_unavailable)?
+        .export(&state.db_path, &campaign_id);
     exported.map(Json).map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
 
