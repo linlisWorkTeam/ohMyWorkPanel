@@ -62,7 +62,8 @@ import { LogsPanel } from "./observability/LogsPanel";
 import { ServerPathPicker } from "./groups/ServerPathPicker";
 import { ExtensionPanel } from "./extensions/ExtensionPanel";
 import { VersionView } from "./workflow/VersionView";
-import { SceneView } from "./scene/SceneView";
+import { resolveSceneView } from "./scene/host";
+import type { SceneViewProps } from "./scene/SceneView";
 import { GoalStrip } from "./goals/GoalStrip";
 import { GroupSettingsView } from "./groups/GroupSettingsView";
 import { AgentConfigView } from "./agents/AgentConfigView";
@@ -142,6 +143,22 @@ function RuntimeThemeSwitcher() {
 function RuntimeHeaderThemePop(props: { open: boolean; onPick: () => void }) {
   const Cmp = HeaderThemePop;
   return <Cmp {...props} />;
+}
+
+/**
+ * 场景槽位：通过前端内核取用 `svc.scene` 提供的视图。
+ * 插件缺失/装载失败时给出提示，不影响聊天等既有视图（fail-open）。
+ */
+function SceneSlot(props: SceneViewProps) {
+  const View = resolveSceneView();
+  if (!View) {
+    return (
+      <div className="scene-empty" role="status">
+        场景插件未装载，已回退到聊天视图。
+      </div>
+    );
+  }
+  return <View {...props} />;
 }
 
 export function App() {
@@ -1401,7 +1418,7 @@ export function App() {
       ) : null}
       chat={current ? (
         mainView === "scene" ? (
-          <SceneView
+          <SceneSlot
             members={members}
             runs={current.runs}
             onExit={() => setMainView("chat")}

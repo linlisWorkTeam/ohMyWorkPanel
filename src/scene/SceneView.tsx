@@ -8,7 +8,7 @@ import {
   type SceneRunInput,
 } from "./sceneModel";
 
-interface SceneViewProps {
+export interface SceneViewProps {
   members: Member[];
   runs: TaskRun[];
   onExit: () => void;

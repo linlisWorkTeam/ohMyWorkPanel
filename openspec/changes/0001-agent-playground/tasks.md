@@ -22,7 +22,7 @@
 - [x] 1.4b Rust：插件装载器（依赖拓扑排序、声明兑现校验、失败整体回滚，7 个单测）
 - [ ] 1.4a Rust：`waterfall`（环绕中间件）语义
 - [x] 1.5 TS：前端同构内核 `src/kernel/`（context / events / plugin / index），15 个契约测试与 Rust 侧逐条对应
-- [ ] 1.5a 前端壳接入：像素场景注册为前端内核插件（`svc.scene`），App 从容器取用
+- [x] 1.5a 前端壳接入：像素场景注册为前端内核插件（`svc.scene`），App 通过 `SceneSlot` 从容器取用；插件缺失时 fail-open 提示（4 个宿主单测 + 浏览器验收）
 - [x] 1.6 manifest v2：`plugin.manifest.json`（id/version/entry/provides/inject/permissions）+ 目录发现 + 注册表映射（7 个单测）
 - [x] 1.6a 磁盘清单接入启动：`OHMYWORKPANEL_PLUGIN_ROOTS` 扫描，未知入口/损坏清单告警跳过（2 个单测）
 - [x] 1.7 样板迁移：扩展宿主成为第一个内置插件（Web 反代与 A2A 走内核服务，桌面命令保留等价自由函数）
