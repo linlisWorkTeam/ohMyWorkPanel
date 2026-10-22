@@ -58,6 +58,7 @@
 - [x] 3.5 证据账本：`goal_rounds.summary`（schema v9）+ Goal 条展示最近一轮
 - [x] 3.6a 自动推进扫描：目标级开关（schema v10）+ 冷却 + 失败隔离 + 创建表单勾选（4 个单测）
 - [x] 3.6b 后台循环接线：Tauri / Web 启动时 spawn 扫描（10s），重启后自动接管 active+auto 目标
+- [x] 3.8 判决标记协议：prompt 要求 Agent 末行输出 `[GOAL:MET]` / `[GOAL:PROGRESS]` / `[GOAL:FAILED]`；judge 标记优先、最后出现者生效、无标记回退关键词（5 个单测）
 - [x] 3.7a E2E（mock 适配器）：真实 HTTP 服务 → 建群/加成员/设管理员 → 建 goal → start → advance → 轮次落库、摘要为 final 文本
 - [ ] 3.7b E2E（真实 CLI Agent）：本机凭据不可用——codex 返回 403 unsupported_country、cursor-agent 未登录、claude 401 invalid token、opencode 订阅过期、dsh credentials.yaml 格式错误。链路本身已在 mock E2E 与错误回传中验证，待有可用凭据的机器补跑。
 

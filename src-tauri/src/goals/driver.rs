@@ -163,14 +163,39 @@ pub fn build_round_prompt(goal: &Goal) -> String {
         .map(|last| format!("上一轮判定：{:?}", last.verdict))
         .unwrap_or_else(|| "这是第一轮".to_string());
     format!(
-        "[GOAL] {}\n[ROUND] 第 {round} 轮（上限 {}）\n[PREVIOUS] {previous}\n请先说明本轮计划，再执行，最后汇报：完成了什么、还差什么、下一轮建议。",
+        "[GOAL] {}\n[ROUND] 第 {round} 轮（上限 {}）\n[PREVIOUS] {previous}\n请先说明本轮计划，再执行，最后汇报：完成了什么、还差什么、下一轮建议。\n最后一行 MUST 只写一个判决标记：{VERDICT_MET}（目标已达成）或 {VERDICT_PROGRESS}（有进展但未完成）或 {VERDICT_FAILED}（受阻或失败）。",
         goal.objective,
         if goal.budget.max_rounds == 0 {
             "不限".to_string()
         } else {
             goal.budget.max_rounds.to_string()
-        }
+        },
+        VERDICT_MET = VERDICT_MET,
+        VERDICT_PROGRESS = VERDICT_PROGRESS,
+        VERDICT_FAILED = VERDICT_FAILED,
     )
+}
+
+pub const VERDICT_MET: &str = "[GOAL:MET]";
+pub const VERDICT_PROGRESS: &str = "[GOAL:PROGRESS]";
+pub const VERDICT_FAILED: &str = "[GOAL:FAILED]";
+
+/// 解析 Agent 的显式判决标记；取最后一次出现的标记（Agent 可能先引用格式再给结论）。
+pub fn parse_verdict_marker(text: &str) -> Option<RoundVerdict> {
+    let upper = text.to_uppercase();
+    let mut found: Option<(usize, RoundVerdict)> = None;
+    for (marker, verdict) in [
+        (VERDICT_MET, RoundVerdict::GoalMet),
+        (VERDICT_PROGRESS, RoundVerdict::Progress),
+        (VERDICT_FAILED, RoundVerdict::Failed),
+    ] {
+        if let Some(index) = upper.rfind(marker) {
+            if found.is_none_or(|(best, _)| index > best) {
+                found = Some((index, verdict));
+            }
+        }
+    }
+    found.map(|(_, verdict)| verdict)
 }
 
 #[cfg(test)]
@@ -373,5 +398,40 @@ mod tests {
         let second = build_round_prompt(&goal);
         assert!(second.contains("[ROUND] 第 2 轮"));
         assert!(second.contains("Progress"));
+    }
+
+    #[test]
+    fn parses_explicit_verdict_markers() {
+        assert_eq!(
+            parse_verdict_marker("工作完成\n[GOAL:MET]"),
+            Some(RoundVerdict::GoalMet)
+        );
+        assert_eq!(
+            parse_verdict_marker("还在做 [GOAL:PROGRESS]"),
+            Some(RoundVerdict::Progress)
+        );
+        assert_eq!(
+            parse_verdict_marker("[goal:failed] 被阻塞"),
+            Some(RoundVerdict::Failed)
+        );
+        assert_eq!(parse_verdict_marker("没有标记"), None);
+    }
+
+    #[test]
+    fn last_verdict_marker_wins() {
+        // Agent 可能先引用格式再给结论，以最后一次出现为准。
+        let text = "格式示例 [GOAL:MET]，但本轮实际上：[GOAL:PROGRESS]";
+        assert_eq!(parse_verdict_marker(text), Some(RoundVerdict::Progress));
+    }
+
+    #[test]
+    fn round_prompt_requires_a_verdict_marker() {
+        let goal = Goal::new("g1", "grp", "做点事", GoalBudget::default(), 0);
+        let prompt = build_round_prompt(&goal);
+
+        assert!(prompt.contains(VERDICT_MET));
+        assert!(prompt.contains(VERDICT_PROGRESS));
+        assert!(prompt.contains(VERDICT_FAILED));
+        assert!(prompt.contains("最后一行"));
     }
 }

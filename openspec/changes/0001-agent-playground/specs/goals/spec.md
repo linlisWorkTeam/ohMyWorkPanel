@@ -68,6 +68,24 @@
 - THEN 返回 `Stopped(GoalMet)`
 - AND 状态为 `completed`
 
+### Requirement: 判决标记
+每轮 prompt MUST 要求 Agent 在最后一行给出显式判决标记：`[GOAL:MET]` / `[GOAL:PROGRESS]` / `[GOAL:FAILED]`。判定 MUST 优先采用标记（取最后一次出现），无标记时才回退关键词启发式；标记解析 MUST 大小写不敏感。
+
+#### Scenario: 标记优先于关键词
+- GIVEN 输出含「全部完成」但同时给出 `[GOAL:PROGRESS]`
+- WHEN 判定
+- THEN 结果为 `Progress`
+
+#### Scenario: 最后一次标记生效
+- GIVEN 输出先引用 `[GOAL:MET]` 作格式示例，最后写 `[GOAL:PROGRESS]`
+- WHEN 判定
+- THEN 结果为 `Progress`
+
+#### Scenario: 无标记回退
+- GIVEN 输出没有标记但包含「全部完成」
+- WHEN 判定
+- THEN 结果为 `GoalMet`
+
 ### Requirement: 人类闸门
 开启每轮审批后，每轮结束 MUST 进入 `awaiting_approval`，只有人类批准才能继续。
 

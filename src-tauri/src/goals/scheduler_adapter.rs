@@ -12,7 +12,7 @@ use crate::db::{create_task_run, get_group, id, now, open_db, AppResult};
 use crate::models::Message;
 
 use super::dispatch::{DispatchHandle, DispatchStatus, DispatchingRunner, GoalDispatcher};
-use super::driver::{GoalDriver, GoalJudge, RoundObservation};
+use super::driver::{parse_verdict_marker, GoalDriver, GoalJudge, RoundObservation};
 use super::{Goal, RoundVerdict};
 
 /// 默认轮询间隔与上限：500ms × 600 ≈ 5 分钟（真实 CLI 首轮常常更慢）。
@@ -194,6 +194,10 @@ impl GoalJudge for HeuristicJudge {
         let text = observation.summary.trim();
         if text.is_empty() {
             return RoundVerdict::NoProgress;
+        }
+        // 显式标记优先：Agent 被要求在最后一行给出判决。
+        if let Some(verdict) = parse_verdict_marker(text) {
+            return verdict;
         }
         let lower = text.to_lowercase();
         let done = text.contains("目标达成")
@@ -488,5 +492,35 @@ mod tests {
         let loaded = service::get_goal(file.path(), &goal.id).unwrap().unwrap();
         assert_eq!(loaded.stop_reason, Some(StopReason::GoalMet));
         assert_eq!(loaded.rounds.len(), 1);
+    }
+
+    #[test]
+    fn judge_prefers_explicit_marker_over_keywords() {
+        let judge = HeuristicJudge;
+        let goal = goal();
+
+        let observation = RoundObservation {
+            summary: "全部完成，但其实还要继续 [GOAL:PROGRESS]".into(),
+            tokens_used: 10,
+        };
+        assert_eq!(judge.judge(&goal, &observation), RoundVerdict::Progress);
+
+        let observation = RoundObservation {
+            summary: "什么都没做 [GOAL:MET]".into(),
+            tokens_used: 10,
+        };
+        assert_eq!(judge.judge(&goal, &observation), RoundVerdict::GoalMet);
+    }
+
+    #[test]
+    fn judge_falls_back_to_keywords_without_marker() {
+        let judge = HeuristicJudge;
+        let goal = goal();
+
+        let observation = RoundObservation {
+            summary: "全部完成".into(),
+            tokens_used: 10,
+        };
+        assert_eq!(judge.judge(&goal, &observation), RoundVerdict::GoalMet);
     }
 }
