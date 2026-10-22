@@ -14,11 +14,11 @@
 #### Scenario: 内核不可用
 - GIVEN 插件装载失败
 - WHEN Web 请求 `/api/adapters`
-- THEN 回退自由函数
-- AND 仍返回完整列表
+- THEN 返回 503「插件内核未装载」
+- AND 不回退到另一套实现
 
 ### Requirement: 适配器解析服务
-适配器目录服务 MUST 提供 `resolve(name)`，其结果 MUST 与自由函数 `resolve_adapter` 一致；执行路径 MUST 优先使用该服务，未装载时回退自由函数。
+适配器目录服务 MUST 提供 `resolve(name)`，其结果 MUST 与自由函数 `resolve_adapter` 一致；执行路径 MUST 只使用该服务，内核未装载时 MUST 明确失败而不是静默回退。
 
 #### Scenario: 解析一致
 - GIVEN 一个内置适配器名

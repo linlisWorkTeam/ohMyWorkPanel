@@ -713,11 +713,8 @@ async fn run_agent(
         return Ok(());
     }
 
-    // 优先走内核服务；未装载时回退自由函数，保证执行路径不受插件装载影响。
-    let spec = match crate::plugins::adapter_catalog_service() {
-        Some(catalog) => catalog.resolve(adapter_name)?,
-        None => adapters::manifest::resolve_adapter(adapter_name)?,
-    };
+    // 只走内核服务：插件内核未装载时执行失败并给出明确错误，不静默换实现。
+    let spec = crate::plugins::require_adapter_catalog_service()?.resolve(adapter_name)?;
     let delta_count = Arc::new(AtomicU64::new(0));
     let hb_stop = Arc::new(AtomicBool::new(false));
     {

@@ -131,6 +131,16 @@ pub fn require_marketing_service() -> Result<Arc<marketing::MarketingService>, S
     marketing_service().ok_or_else(|| "插件内核未装载：svc.marketing".to_string())
 }
 
+/// 取适配器目录服务；内核未装载时返回明确错误。
+pub fn require_adapter_catalog_service() -> Result<Arc<adapter_catalog::AdapterCatalog>, String> {
+    adapter_catalog_service().ok_or_else(|| "插件内核未装载：svc.adapters".to_string())
+}
+
+/// 取扩展宿主服务；内核未装载时返回明确错误。
+pub fn require_extension_host_service() -> Result<Arc<extension_host::ExtensionHost>, String> {
+    extension_host_service().ok_or_else(|| "插件内核未装载：svc.extensions".to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
