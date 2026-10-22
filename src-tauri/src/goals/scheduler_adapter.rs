@@ -15,9 +15,9 @@ use super::dispatch::{DispatchHandle, DispatchStatus, DispatchingRunner, GoalDis
 use super::driver::{GoalDriver, GoalJudge, RoundObservation};
 use super::{Goal, RoundVerdict};
 
-/// 默认轮询间隔与上限：500ms × 120 ≈ 1 分钟。
+/// 默认轮询间隔与上限：500ms × 600 ≈ 5 分钟（真实 CLI 首轮常常更慢）。
 pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_millis(500);
-pub const DEFAULT_MAX_POLLS: u32 = 120;
+pub const DEFAULT_MAX_POLLS: u32 = 600;
 
 /// 触发一次调度；真实实现通常是 `schedule_group`。
 pub type KickFn = Box<dyn Fn(&str) + Send + Sync>;
