@@ -150,6 +150,8 @@ impl GoalDispatcher for SchedulerDispatcher {
                         .unwrap_or_default(),
                     None => String::new(),
                 };
+                // 流式消息的内容是 channel parts JSON；证据账本只存最终文本。
+                let output = final_text_from_content(&output);
                 Ok(DispatchStatus::Completed {
                     output,
                     // 真实 token 计量后续接入；当前不虚报。
@@ -162,6 +164,23 @@ impl GoalDispatcher for SchedulerDispatcher {
             "canceled" => Ok(DispatchStatus::Canceled),
             _ => Ok(DispatchStatus::Pending),
         }
+    }
+}
+
+/// 把消息内容投影成最终文本：优先 final 频道，其次纯文本，最后原样返回。
+fn final_text_from_content(raw: &str) -> String {
+    if raw.trim().is_empty() {
+        return String::new();
+    }
+    let final_text = crate::message_content::extract_channel_text(raw, "final");
+    if !final_text.trim().is_empty() {
+        return final_text;
+    }
+    let plain = crate::message_content::parts_to_plain_text(raw);
+    if plain.trim().is_empty() {
+        raw.to_string()
+    } else {
+        plain
     }
 }
 
@@ -309,6 +328,40 @@ mod tests {
                 tokens_used: 0
             }
         );
+    }
+
+    #[test]
+    fn completed_output_prefers_final_channel_text() {
+        let file = db();
+        let dispatcher = dispatcher(&file, Arc::new(Mutex::new(Vec::new())));
+        let handle = dispatcher.dispatch(&goal(), "prompt").unwrap();
+        let conn = open_db(file.path()).unwrap();
+        let content = r#"{"v":1,"parts":[{"channel":"thinking","text":"先想想"},{"channel":"final","text":"最终结论"}]}"#;
+        conn.execute(
+            "INSERT INTO messages (id, group_id, sender_member_id, content, status, created_at) \
+             VALUES ('m-out', 'g', 'm-agent', ?1, 'completed', 2)",
+            [content],
+        )
+        .unwrap();
+        conn.execute(
+            "UPDATE task_runs SET status='completed', output_message_id='m-out' WHERE id=?1",
+            [&handle.run_ids[0]],
+        )
+        .unwrap();
+
+        assert_eq!(
+            dispatcher.poll(&handle).unwrap(),
+            DispatchStatus::Completed {
+                output: "最终结论".into(),
+                tokens_used: 0
+            }
+        );
+    }
+
+    #[test]
+    fn plain_output_is_passed_through() {
+        assert_eq!(final_text_from_content("普通文本"), "普通文本");
+        assert_eq!(final_text_from_content(""), "");
     }
 
     #[test]

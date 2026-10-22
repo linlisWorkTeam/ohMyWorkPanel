@@ -59,7 +59,8 @@ pub struct GoalActor {
 
 /// 选择驱动 Agent 与消息发送者。
 ///
-/// 优先级：群 admin 成员（若为 agent）→ 最早的活跃 agent；
+/// 驱动者必须是群管理员 Agent：群建群时会自动生成 bootstrap-dsh 之类的 Agent，
+/// 若按「最早创建」兜底，goal 会误用系统自举 Agent 并烧掉它的凭据/额度。
 /// 发送者优先群主，其次最早的活跃用户成员。
 pub fn pick_goal_actor(db_path: &Path, group_id: &str) -> AppResult<GoalActor> {
     let conn = open_db(db_path)?;
@@ -86,17 +87,20 @@ pub fn pick_goal_actor(db_path: &Path, group_id: &str) -> AppResult<GoalActor> {
         .ok_or_else(|| "群里没有可用的用户成员".to_string())?
     };
 
-    let preferred = group.admin_member_id.clone().unwrap_or_default();
+    let preferred = group
+        .admin_member_id
+        .clone()
+        .filter(|member_id| !member_id.trim().is_empty())
+        .ok_or_else(|| "请先设置群管理员 Agent，才能驱动目标".to_string())?;
     let driver_member_id = conn
         .query_row(
-            "SELECT id FROM members WHERE group_id=?1 AND kind='agent' AND is_active=1 \
-             ORDER BY CASE WHEN id=?2 THEN 0 ELSE 1 END, created_at ASC LIMIT 1",
-            params![group_id, preferred],
+            "SELECT id FROM members WHERE id=?1 AND group_id=?2 AND kind='agent' AND is_active=1",
+            params![preferred, group_id],
             |row| row.get::<_, String>(0),
         )
         .optional()
         .map_err(|error| error.to_string())?
-        .ok_or_else(|| "群里没有可用的 Agent".to_string())?;
+        .ok_or_else(|| "群管理员不是可用的 Agent，请重新设置".to_string())?;
 
     Ok(GoalActor {
         driver_member_id,
@@ -294,20 +298,20 @@ mod tests {
     }
 
     #[test]
-    fn falls_back_to_first_agent() {
+    fn errors_when_group_has_no_admin_agent() {
         let file = db_with_agents(None);
-        let actor = pick_goal_actor(file.path(), "grp-1").unwrap();
-        assert_eq!(actor.driver_member_id, "m-agent");
+        let error = pick_goal_actor(file.path(), "grp-1").err().unwrap();
+        assert!(error.contains("群管理员"));
     }
 
     #[test]
-    fn errors_when_group_has_no_agent() {
+    fn errors_when_admin_is_not_an_agent() {
         let file = NamedTempFile::new().unwrap();
         init_db(file.path()).unwrap();
         let conn = open_db(file.path()).unwrap();
         conn.execute(
-            "INSERT INTO groups (id, name, workspace_path, owner_member_id, created_at)
-             VALUES ('grp-x', '测试群', '/tmp', 'm-owner', 1)",
+            "INSERT INTO groups (id, name, workspace_path, owner_member_id, admin_member_id, created_at)
+             VALUES ('grp-x', '测试群', '/tmp', 'm-owner', 'm-owner', 1)",
             [],
         )
         .unwrap();
@@ -320,7 +324,7 @@ mod tests {
 
         let error = pick_goal_actor(file.path(), "grp-x").err().unwrap();
 
-        assert!(error.contains("没有可用的 Agent"));
+        assert!(error.contains("不是可用的 Agent"));
     }
 
     #[test]

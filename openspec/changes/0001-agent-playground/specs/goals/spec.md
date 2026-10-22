@@ -167,10 +167,12 @@
 ### Requirement: 驱动入口
 系统 MUST 提供「推进一步」入口：仅 `active` 目标可推进；推进 MUST 在后台阻塞任务中执行，不阻塞交互线程。
 
-驱动角色选择 MUST 遵循：群 admin 成员若为活跃 Agent 则优先，否则取最早的活跃 Agent；发送者优先群主，其次最早的活跃用户成员。没有可用 Agent 时 MUST 返回明确错误。
+驱动角色 MUST 是群管理员 Agent；未设置管理员或管理员不是活跃 Agent 时 MUST 返回明确错误。建群会自动生成 bootstrap 类 Agent，若按「最早创建」兜底会把 goal 误派给系统自举 Agent。
+
+发送者优先群主，其次最早的活跃用户成员。
 
 #### Scenario: 推进一步
-- GIVEN 目标为 `active` 且群里有可用 Agent
+- GIVEN 目标为 `active` 且群管理员是活跃 Agent
 - WHEN 调用推进
 - THEN 写入一轮并返回最新目标快照
 
@@ -179,16 +181,21 @@
 - WHEN 调用推进
 - THEN 返回「目标未处于运行中」
 
-#### Scenario: 无可用 Agent
-- GIVEN 群里只有用户成员
+#### Scenario: 未设置管理员
+- GIVEN 群没有设置管理员 Agent
 - WHEN 推进
-- THEN 返回「群里没有可用的 Agent」
+- THEN 返回「请先设置群管理员 Agent」
 - AND 不写消息、不建 run
+
+#### Scenario: 管理员不是可用 Agent
+- GIVEN 管理员是用户成员或已失效
+- WHEN 推进
+- THEN 返回「群管理员不是可用的 Agent」
 
 ### Requirement: 调度适配
 派发 MUST 在群里写入一条消息并为指定 Agent 创建 run，然后触发调度；发送者 MUST 属于该群。
 
-轮询 MUST 把 run 状态映射为：`completed` → Completed（读输出消息）、`failed` → Failed、`canceled` → Canceled、其余 → Pending。
+轮询 MUST 把 run 状态映射为：`completed` → Completed（读输出消息的 final 频道文本）、`failed` → Failed、`canceled` → Canceled、其余 → Pending。流式消息内容是 channel parts JSON，证据账本 MUST 只存最终文本。
 
 #### Scenario: 派发
 - GIVEN 群里存在发送者与驱动 Agent
