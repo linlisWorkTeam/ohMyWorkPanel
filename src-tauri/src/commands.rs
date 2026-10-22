@@ -1698,6 +1698,16 @@ pub async fn advance_goal(
     Ok(report.goal)
 }
 
+/// 开启 / 关闭某个目标的自动推进。
+#[tauri::command]
+pub fn set_goal_auto_advance(
+    goal_id: String,
+    enabled: bool,
+    state: State<'_, AppState>,
+) -> AppResult<crate::goals::Goal> {
+    crate::goals::service::set_auto_advance(&state.db_path, &goal_id, enabled)
+}
+
 /// 解析 "x.y.z" / "x.y.z-beta" / "x.y.z+build" → 数值三元组（忽略预发布/构建后缀）。
 /// （比较逻辑与单测见 models::parse_version / models::is_newer_version，双特性共同编译。）
 #[derive(serde::Serialize)]

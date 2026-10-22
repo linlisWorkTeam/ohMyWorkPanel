@@ -164,6 +164,12 @@
 - WHEN 扫描
 - THEN 不推进也不计入跳过
 
+#### Scenario: 界面开关
+- GIVEN 目标在运行
+- WHEN 在 Goal 条勾选或取消「自动」
+- THEN `autoAdvance` 持久化变化
+- AND 后台扫描据此决定是否推进
+
 ### Requirement: 驱动入口
 系统 MUST 提供「推进一步」入口：仅 `active` 目标可推进；推进 MUST 在后台阻塞任务中执行，不阻塞交互线程。
 

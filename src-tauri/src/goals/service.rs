@@ -418,6 +418,24 @@ mod tests {
     }
 
     #[test]
+    fn toggling_auto_advance_persists() {
+        let file = db();
+        let goal = create_goal(file.path(), "grp-1", "推进", budget(), false).unwrap();
+
+        let enabled = set_auto_advance(file.path(), &goal.id, true).unwrap();
+        assert!(enabled.auto_advance);
+        assert!(
+            get_goal(file.path(), &goal.id)
+                .unwrap()
+                .unwrap()
+                .auto_advance
+        );
+
+        let disabled = set_auto_advance(file.path(), &goal.id, false).unwrap();
+        assert!(!disabled.auto_advance);
+    }
+
+    #[test]
     fn platform_admin_and_group_owner_can_manage() {
         let file = db_with_owner();
         assert!(can_manage(file.path(), "u-root", "grp-1").unwrap());

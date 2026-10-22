@@ -184,6 +184,7 @@ pub fn run() {
             commands::approve_goal,
             commands::abort_goal,
             commands::advance_goal,
+            commands::set_goal_auto_advance,
         ])
         .run(tauri::generate_context!())
         .expect("Failed to launch ohMyWorkPanel");

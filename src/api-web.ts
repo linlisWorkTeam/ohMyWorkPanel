@@ -588,6 +588,11 @@ export const api = {
     apiFetch<Goal>(`/api/goals/${encodeURIComponent(goalId)}/abort`, { method: "POST" }),
   advanceGoal: (goalId: string) =>
     apiFetch<Goal>(`/api/goals/${encodeURIComponent(goalId)}/advance`, { method: "POST" }),
+  setGoalAutoAdvance: (goalId: string, enabled: boolean) =>
+    apiFetch<Goal>(`/api/goals/${encodeURIComponent(goalId)}/auto-advance`, {
+      method: "POST",
+      body: JSON.stringify({ enabled }),
+    }),
 
   // WebSocket - replaces Tauri listen()
   connectWS: (onMessage: (data: string) => void) => {

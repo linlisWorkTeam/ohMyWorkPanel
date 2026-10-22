@@ -164,6 +164,19 @@ export function GoalStrip({ group }: { group: { id: string } }) {
           停止
         </button>
       )}
+      {!terminal && (
+        <label className="gs-auto" title="允许后台每 10 秒自动推进一轮">
+          <input
+            type="checkbox"
+            checked={goal.autoAdvance}
+            disabled={busy}
+            onChange={(event) =>
+              void run(() => api.setGoalAutoAdvance(goal.id, event.target.checked))
+            }
+          />
+          自动
+        </label>
+      )}
       {goal.stopReason && <span className="gs-stop">{STOP_LABEL[goal.stopReason]}</span>}
       {error && <span className="gs-error">{error}</span>}
     </div>
