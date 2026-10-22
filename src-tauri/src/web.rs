@@ -3130,9 +3130,12 @@ async fn approve_marketing_campaign_web(
         .map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_claims_actor(&conn, &claims, &campaign.group_id, &input.actor_member_id)?;
     drop(conn);
-    crate::marketing::approve_campaign(&state.db_path, &campaign_id, input)
-        .map(Json)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+    // 优先走内核服务；未装载时回退自由函数。
+    let approved = match crate::plugins::marketing_service() {
+        Some(service) => service.approve(&state.db_path, &campaign_id, input),
+        None => crate::marketing::approve_campaign(&state.db_path, &campaign_id, input),
+    };
+    approved.map(Json).map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
 
 async fn export_marketing_campaign_web(
@@ -3144,9 +3147,12 @@ async fn export_marketing_campaign_web(
     let campaign = crate::marketing::get_campaign(&conn, &campaign_id)
         .map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_group_access(&conn, &claims.sub, &campaign.group_id).map_err(map_acl_err)?;
-    crate::marketing::export_campaign(&conn, &campaign_id)
-        .map(Json)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+    // 优先走内核服务；未装载时回退自由函数。
+    let exported = match crate::plugins::marketing_service() {
+        Some(service) => service.export(&state.db_path, &campaign_id),
+        None => crate::marketing::export_campaign(&conn, &campaign_id),
+    };
+    exported.map(Json).map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
 
 pub fn build_router(state: Arc<AppState>) -> Router {

@@ -67,8 +67,9 @@
 - [x] 4.2c workflow Roadmap 更新走服务（What/Who/How/一句话，1 个单测）
 - [x] 4.2d workflow Wave 播放 / 暂停走服务（状态机写，1 个单测）
 - [x] 4.2e workflow Ask 进入/取消走服务（1 个单测）
-- [ ] 4.2f workflow 发布写操作（mark_released）
+- [x] 4.2f workflow 发布标记走服务（mark_released：released + tag + kind=tag，1 个单测）
 - [x] 4.3a marketing 契约 + 查询插件：`specs/marketing/spec.md` + `svc.marketing.list/get`（3 个单测）
-- [ ] 4.3b marketing 生成 / 审核 / 导出插件化
+- [x] 4.3b marketing 审核 / 导出走服务（approve / export，1 个单测）
+- [ ] 4.3c marketing 生成 / 修订（依赖 SchedulerState，待设计注入方式）
 - [ ] 4.4 内置功能不再直接出现在 `commands.rs` / `App.tsx`
 - [ ] 4.5 每个迁移都补 OpenSpec delta 与回归测试

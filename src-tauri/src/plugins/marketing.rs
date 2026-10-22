@@ -1,19 +1,22 @@
-//! 内置插件：Self-Marketing（P4 读数面）。
+//! 内置插件：Self-Marketing（P4）。
 //!
-//! 当前只收口查询：campaign 列表与详情。生成 / 审核 / 导出仍走既有 use case。
+//! 已收口：campaign 列表 / 详情 / 批准 / 导出。生成与修订仍走既有 use case（依赖调度器）。
 
 use std::path::Path;
 use std::sync::Arc;
 
 use crate::db::{open_db, AppResult};
 use crate::kernel::{Context, PluginManifest, PluginRegistry};
-use crate::marketing::{get_campaign, list_campaigns, ContentCampaign};
+use crate::marketing::{
+    approve_campaign, export_campaign, get_campaign, list_campaigns, ApproveCampaignInput,
+    CampaignExport, ContentCampaign,
+};
 
 pub const ENTRY: &str = "builtin:marketing";
 pub const SERVICE_KEY: &str = "svc.marketing";
 pub const PLUGIN_ID: &str = "builtin.marketing";
 
-/// Self-Marketing 查询服务。
+/// Self-Marketing 服务。
 #[derive(Debug, Clone, Copy, Default)]
 pub struct MarketingService;
 
@@ -26,6 +29,22 @@ impl MarketingService {
     pub fn get(&self, db_path: &Path, campaign_id: &str) -> AppResult<ContentCampaign> {
         let conn = open_db(db_path)?;
         get_campaign(&conn, campaign_id)
+    }
+
+    /// 批准 campaign。
+    pub fn approve(
+        &self,
+        db_path: &Path,
+        campaign_id: &str,
+        input: ApproveCampaignInput,
+    ) -> AppResult<ContentCampaign> {
+        approve_campaign(db_path, campaign_id, input)
+    }
+
+    /// 导出为 Markdown。
+    pub fn export(&self, db_path: &Path, campaign_id: &str) -> AppResult<CampaignExport> {
+        let conn = open_db(db_path)?;
+        export_campaign(&conn, campaign_id)
     }
 }
 
@@ -91,6 +110,29 @@ mod tests {
         };
         assert_eq!(via_service.len(), via_function.len());
         assert!(service.get(file.path(), "nope").is_err());
+    }
+
+    #[test]
+    fn write_paths_report_missing_campaign() {
+        let file = db();
+        let mut registry = PluginRegistry::new();
+        register(&mut registry);
+        let ctx = Context::new();
+        start_plugins(&ctx, &registry, vec![manifest()]).unwrap();
+        let service = from_context(&ctx).unwrap();
+
+        let approve_error = service
+            .approve(
+                file.path(),
+                "nope",
+                ApproveCampaignInput {
+                    actor_member_id: "m1".into(),
+                },
+            )
+            .err()
+            .unwrap();
+        assert!(!approve_error.is_empty());
+        assert!(service.export(file.path(), "nope").is_err());
     }
 
     #[test]
