@@ -20,7 +20,7 @@
 - [x] 1.3a Rust + TS：`Context::fork()` 按作用域派生（服务沿父链查找、覆盖、子作用域独立回收、父释放后失效；Rust 4 个 / TS 4 个单测）
 - [x] 1.4 Rust：类型化事件分发（emit / parallel / serial / bail，含短路与注销语义）
 - [x] 1.4b Rust：插件装载器（依赖拓扑排序、声明兑现校验、失败整体回滚，7 个单测）
-- [ ] 1.4a Rust：`waterfall`（环绕中间件）语义
+- [x] 1.4a Rust + TS：`waterfall`（环绕中间件）语义——值沿监听器链传递、None 表示不修改（Rust 3 个 / TS 3 个单测）
 - [x] 1.5 TS：前端同构内核 `src/kernel/`（context / events / plugin / index），15 个契约测试与 Rust 侧逐条对应
 - [x] 1.5a 前端壳接入：像素场景注册为前端内核插件（`svc.scene`），App 通过 `SceneSlot` 从容器取用；插件缺失时 fail-open 提示（4 个宿主单测 + 浏览器验收）
 - [x] 1.6 manifest v2：`plugin.manifest.json`（id/version/entry/provides/inject/permissions）+ 目录发现 + 注册表映射（7 个单测）

@@ -6,6 +6,7 @@
 //! | `parallel` | 是 | 并发扇出 | 每个监听器的可选结果 |
 //! | `serial` | 是 | 注册顺序依次等待 | 每个监听器的可选结果 |
 //! | `bail` | 是 | 注册顺序，遇到首个非 undefined 即停 | 首个结果 |
+//! | `waterfall` | 是 | 注册顺序，值链式传递 | 最终值 |
 //!
 //! `waterfall`（环绕中间件）暂未实现，与 Rust 侧保持一致，留到事件语义 v0.1。
 
@@ -83,6 +84,21 @@ export class EventBus {
       }
     }
     return undefined;
+  }
+
+  /**
+   * 环绕中间件（waterfall）：上一个监听器的返回值作为下一个的入参。
+   * 返回 `undefined` 表示「不修改」，当前值继续向下传递。
+   */
+  async waterfall(name: string, payload: unknown): Promise<unknown> {
+    let current = payload;
+    for (const entry of this.snapshot(name)) {
+      const next = await entry.handler(current);
+      if (next !== undefined) {
+        current = next;
+      }
+    }
+    return current;
   }
 
   private snapshot(name: string): Entry[] {

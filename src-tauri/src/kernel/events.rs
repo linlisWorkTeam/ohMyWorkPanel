@@ -27,6 +27,8 @@ pub enum DispatchMode {
     Parallel,
     Serial,
     Bail,
+    /// 环绕中间件：值沿监听器链传递。
+    Waterfall,
 }
 
 /// 监听器注册句柄；`off` 时使用。
@@ -158,6 +160,21 @@ impl EventBus {
         }
         None
     }
+
+    /// 环绕中间件（waterfall）：上一个监听器的返回值作为下一个的入参。
+    ///
+    /// 监听器返回 `None` 表示「不修改」，当前值继续向下传递；返回 `Some` 则替换。
+    /// 无监听器时原样返回初始值。
+    pub async fn waterfall(&self, name: &'static str, payload: Value) -> Value {
+        let handlers = self.snapshot(name);
+        let mut current = payload;
+        for handler in handlers {
+            if let Some(next) = handler(current.clone()).await {
+                current = next;
+            }
+        }
+        current
+    }
 }
 
 #[cfg(test)]
@@ -242,5 +259,43 @@ mod tests {
         assert!(!bus.off(drop_me));
         bus.emit("demo", json!({})).await;
         assert!(keep.id() > 0);
+    }
+
+    #[tokio::test]
+    async fn waterfall_threads_value_through_handlers_in_order() {
+        let bus = EventBus::new();
+        bus.on_sync("pipe", |value| {
+            let current = value.as_i64().unwrap_or(0);
+            Some(json!(current + 1))
+        });
+        bus.on_sync("pipe", |value| {
+            let current = value.as_i64().unwrap_or(0);
+            Some(json!(current * 2))
+        });
+
+        let result = bus.waterfall("pipe", json!(3)).await;
+
+        // (3 + 1) * 2 = 8：确认是链式传递而不是各自基于初值。
+        assert_eq!(result, json!(8));
+    }
+
+    #[tokio::test]
+    async fn waterfall_none_keeps_current_value() {
+        let bus = EventBus::new();
+        bus.on_sync("pipe", |_| None);
+        bus.on_sync("pipe", |value| Some(json!({ "wrapped": value })));
+
+        let result = bus.waterfall("pipe", json!("x")).await;
+
+        assert_eq!(result, json!({ "wrapped": "x" }));
+    }
+
+    #[tokio::test]
+    async fn waterfall_without_handlers_returns_initial_payload() {
+        let bus = EventBus::new();
+
+        let result = bus.waterfall("empty", json!({ "n": 1 })).await;
+
+        assert_eq!(result, json!({ "n": 1 }));
     }
 }

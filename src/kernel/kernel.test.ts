@@ -110,6 +110,28 @@ describe("EventBus", () => {
     expect(bus.off(sub)).toBe(true);
     expect(bus.handlerCount("topic")).toBe(1);
   });
+
+  it("waterfall threads the value through handlers in order", async () => {
+    const bus = new EventBus();
+    bus.on("pipe", (value) => (value as number) + 1);
+    bus.on("pipe", (value) => (value as number) * 2);
+
+    await expect(bus.waterfall("pipe", 3)).resolves.toBe(8);
+  });
+
+  it("waterfall keeps the current value when a handler returns undefined", async () => {
+    const bus = new EventBus();
+    bus.on("pipe", () => undefined);
+    bus.on("pipe", (value) => ({ wrapped: value }));
+
+    await expect(bus.waterfall("pipe", "x")).resolves.toEqual({ wrapped: "x" });
+  });
+
+  it("waterfall without handlers returns the initial payload", async () => {
+    const bus = new EventBus();
+
+    await expect(bus.waterfall("empty", { n: 1 })).resolves.toEqual({ n: 1 });
+  });
 });
 
 function recorder(): string[] {
