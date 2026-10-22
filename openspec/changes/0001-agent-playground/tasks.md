@@ -26,7 +26,7 @@
 - [x] 1.6 manifest v2：`plugin.manifest.json`（id/version/entry/provides/inject/permissions）+ 目录发现 + 注册表映射（7 个单测）
 - [x] 1.6a 磁盘清单接入启动：`OHMYWORKPANEL_PLUGIN_ROOTS` 扫描，未知入口/损坏清单告警跳过（2 个单测）
 - [x] 1.7 样板迁移：扩展宿主成为第一个内置插件（Web 反代与 A2A 走内核服务，桌面命令保留等价自由函数）
-- [ ] 1.7a 桌面命令侧切换到内核服务（保持 IPC 签名不变）
+- [x] 1.7a 桌面命令侧切换到内核服务：workflow 8 个 + marketing 6 个 Tauri 命令只走 `require_*_service`，IPC 签名不变；内核未装载明确报错
 - [ ] 1.8 验证：`cargo test --lib` + `pnpm test` + `pnpm run test:gate`
 
 ## P2 像素前台（可与 P1 并行）

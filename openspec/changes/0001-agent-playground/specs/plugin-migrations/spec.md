@@ -83,6 +83,21 @@ Marketing 服务 MUST 提供生成与修订能力；需要调度器时 MUST 由�
 - THEN 返回 503「插件内核未装载」
 - AND 不回退到另一套实现
 
+### Requirement: 桌面命令同源
+Tauri 桌面命令 MUST 与 Web 走同一套插件服务（workflow / marketing），不得保留等价的自由函数路径；IPC 签名 MUST 保持不变。内核未装载时 MUST 返回明确错误。
+
+#### Scenario: 桌面与 Web 同源
+- GIVEN 桌面端调用创建版本命令
+- WHEN 内核正常装载
+- THEN 通过 `svc.workflow.create_version` 执行
+- AND 与 Web 结果一致
+
+#### Scenario: 内核未装载
+- GIVEN 内核装载失败
+- WHEN 桌面端调用创建版本命令
+- THEN 返回「插件内核未装载」错误
+- AND 不静默执行另一套实现
+
 ## MODIFIED Requirements
 
 （无）

@@ -16,7 +16,7 @@ pub async fn get_version_board(
     let state = state.inner().clone();
     let conn = open_db(&state.db_path)?;
     let group = get_group(&conn, &group_id)?;
-    crate::workflow::board_for_group(&state.db_path, &group)
+    crate::plugins::require_workflow_service()?.board(&state.db_path, &group)
 }
 
 #[tauri::command]
@@ -29,7 +29,7 @@ pub async fn create_project_version(
     let group = get_group(&conn, &input.group_id)?;
     let sender = input.requester_member_id.as_deref().unwrap_or_default();
     require_desktop_version_manager(&conn, &group, sender)?;
-    crate::workflow::create_version(&conn, &group, &input)
+    crate::plugins::require_workflow_service()?.create_version(&state.db_path, &group, &input)
 }
 
 #[tauri::command]
@@ -44,7 +44,7 @@ pub async fn update_version_roadmap(
     let group = get_group(&conn, &v.group_id)?;
     let sender = input.requester_member_id.as_deref().unwrap_or_default();
     require_desktop_version_manager(&conn, &group, sender)?;
-    crate::workflow::update_roadmap(&conn, &version_id, &input)
+    crate::plugins::require_workflow_service()?.update_roadmap(&state.db_path, &version_id, &input)
 }
 
 #[tauri::command]
@@ -59,7 +59,11 @@ pub async fn start_version_ask(
     let v = crate::workflow::get_version(&conn, &version_id)?;
     let group = get_group(&conn, &v.group_id)?;
     require_desktop_version_manager(&conn, &group, &sender_member_id)?;
-    let v = crate::workflow::start_ask(&conn, &group, &version_id)?;
+    let v = crate::plugins::require_workflow_service()?.start_ask(
+        &state.db_path,
+        &group,
+        &version_id,
+    )?;
     let prompt = crate::workflow::build_ask_kickoff_prompt(&v);
     let content = format!("@{} {}", admin_display_name(&conn, &group), prompt);
     let run_id =
@@ -82,7 +86,7 @@ pub async fn cancel_version_ask(
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| group.owner_member_id.clone());
     require_desktop_version_manager(&conn, &group, &sender)?;
-    crate::workflow::cancel_ask(&conn, &version_id)
+    crate::plugins::require_workflow_service()?.cancel_ask(&state.db_path, &version_id)
 }
 
 #[tauri::command]
@@ -123,7 +127,7 @@ pub async fn play_wave(
     let w0 = crate::workflow::get_wave(&conn, &wave_id)?;
     let group = get_group(&conn, &w0.group_id)?;
     require_desktop_version_manager(&conn, &group, &sender_member_id)?;
-    let w = crate::workflow::play_wave(&conn, &wave_id)?;
+    let w = crate::plugins::require_workflow_service()?.play_wave(&state.db_path, &wave_id)?;
     let v = crate::workflow::get_version(&conn, &w.version_id)?;
     let prompt = crate::workflow::build_wave_kickoff_prompt(&v, &w);
     let run_id = kickoff_admin_run_desktop(
@@ -143,8 +147,7 @@ pub async fn pause_wave(
     state: State<'_, AppState>,
 ) -> AppResult<crate::workflow::Wave> {
     let state = state.inner().clone();
-    let conn = open_db(&state.db_path)?;
-    crate::workflow::pause_wave(&conn, &wave_id)
+    crate::plugins::require_workflow_service()?.pause_wave(&state.db_path, &wave_id)
 }
 
 #[tauri::command]
@@ -215,5 +218,5 @@ pub async fn release_version(
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| group.owner_member_id.clone());
     require_desktop_version_manager(&conn, &group, &sender)?;
-    crate::workflow::mark_released(&conn, &version_id, git_tag)
+    crate::plugins::require_workflow_service()?.mark_released(&state.db_path, &version_id, git_tag)
 }
