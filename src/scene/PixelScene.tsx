@@ -1,5 +1,5 @@
 import { useEffect, useRef, type MouseEvent } from "react";
-import { agentKindOf, type SceneAgent } from "./sceneModel";
+import { agentKindOf, SCENE_ZONES, type SceneAgent } from "./sceneModel";
 
 /** 虚拟画布尺寸；真实像素由容器缩放决定。 */
 const VIEW_WIDTH = 720;
@@ -86,6 +86,21 @@ function drawFloor(ctx: CanvasRenderingContext2D, palette: Palette, roomSeed: nu
   ctx.fillRect(0, 0, VIEW_WIDTH, 56);
   ctx.fillStyle = palette.elev;
   ctx.fillRect(0, 56, VIEW_WIDTH, 4);
+
+  // 功能区：工位 / 会议 / 候场（描边 + 标签，纯视觉分区）。
+  ctx.save();
+  ctx.globalAlpha = 0.35;
+  ctx.strokeStyle = palette.line;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.font = "11px 'IBM Plex Mono', Consolas, monospace";
+  ctx.textAlign = "left";
+  for (const zone of SCENE_ZONES) {
+    ctx.strokeRect(zone.x + 0.5, zone.y + 0.5, zone.width, zone.height);
+    ctx.fillStyle = palette.dim;
+    ctx.fillText(zone.label, zone.x + 8, zone.y + 16);
+  }
+  ctx.restore();
 }
 
 function drawDesk(ctx: CanvasRenderingContext2D, agent: SceneAgent, palette: Palette) {
@@ -184,12 +199,14 @@ function drawAgent(
 function drawLabel(ctx: CanvasRenderingContext2D, agent: SceneAgent, palette: Palette) {
   ctx.font = "10px 'IBM Plex Mono', Consolas, monospace";
   ctx.textAlign = "center";
-  const textWidth = ctx.measureText(agent.name).width;
+  // 候场区座位间距小，长名字会互相压字：超长截断（完整名字在右侧成员栏可查）。
+  const name = agent.name.length > 10 ? `${agent.name.slice(0, 9)}…` : agent.name;
+  const textWidth = ctx.measureText(name).width;
   // 品牌色小方块：adapter 一眼可辨（比头饰更耐缩放）。
   ctx.fillStyle = kindColor(agent.adapter, palette);
   ctx.fillRect(agent.x - textWidth / 2 - 7, agent.y - 28, 4, 4);
   ctx.fillStyle = palette.dim;
-  ctx.fillText(agent.name, agent.x, agent.y - 24);
+  ctx.fillText(name, agent.x, agent.y - 24);
 }
 
 /** adapter → 品牌色（全部走主题 token，保持颜色门禁）。 */

@@ -5,6 +5,7 @@ import {
   projectSceneAgents,
   ROOM_SEED_COUNT,
   roomSeedOf,
+  SCENE_ZONES,
   sceneStateForRun,
   summarizeScene,
   type SceneMemberInput,
@@ -165,5 +166,44 @@ describe("roomSeedOf", () => {
       ["group-a", "group-b", "group-c", "group-d", "group-e"].map((id) => roomSeedOf(id)),
     );
     expect(seeds.size).toBeGreaterThan(1);
+  });
+});
+
+describe("SCENE_ZONES", () => {
+  it("defines exactly the three functional areas", () => {
+    expect(SCENE_ZONES.map((zone) => zone.id)).toEqual(["desks", "meeting", "lounge"]);
+  });
+
+  it("keeps every zone inside the virtual canvas", () => {
+    for (const zone of SCENE_ZONES) {
+      expect(zone.x).toBeGreaterThanOrEqual(0);
+      expect(zone.y).toBeGreaterThanOrEqual(0);
+      expect(zone.x + zone.width).toBeLessThanOrEqual(720);
+      expect(zone.y + zone.height).toBeLessThanOrEqual(520);
+    }
+  });
+});
+
+describe("blocked agents gather in the meeting zone", () => {
+  it("places blocked agents inside the meeting area instead of desks", () => {
+    const agents = projectSceneAgents(members, [
+      { memberId: "m1", status: "failed" },
+      { memberId: "m2", status: "canceled" },
+    ]);
+    const blocked = agents.filter((agent) => agent.state === "blocked");
+
+    expect(blocked).toHaveLength(2);
+    for (const agent of blocked) {
+      expect(agent.x).toBeGreaterThanOrEqual(DEFAULT_SCENE_LAYOUT.meetingOriginX);
+      expect(agent.y).toBeGreaterThanOrEqual(DEFAULT_SCENE_LAYOUT.meetingOriginY);
+    }
+    expect(blocked[0].x).not.toBe(blocked[1].x);
+  });
+
+  it("keeps working agents at their desks", () => {
+    const agents = projectSceneAgents(members, [{ memberId: "m3", status: "running" }]);
+    const working = agents.find((agent) => agent.id === "m3");
+
+    expect(working?.y).toBe(DEFAULT_SCENE_LAYOUT.originY);
   });
 });

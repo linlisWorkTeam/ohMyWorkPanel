@@ -92,6 +92,12 @@ export interface SceneLayout {
   loungeGapX: number;
   /** 候场区每行人数，超出后换行，避免挤出画布。 */
   loungeColumns: number;
+  /** 受阻角色去会议区，便于一眼看到「谁被卡住」。 */
+  meetingOriginX: number;
+  meetingOriginY: number;
+  meetingColumns: number;
+  meetingGapX: number;
+  meetingGapY: number;
 }
 
 export const DEFAULT_SCENE_LAYOUT: SceneLayout = {
@@ -103,7 +109,28 @@ export const DEFAULT_SCENE_LAYOUT: SceneLayout = {
   loungeY: 384,
   loungeGapX: 56,
   loungeColumns: 8,
+  meetingOriginX: 512,
+  meetingOriginY: 156,
+  meetingColumns: 2,
+  meetingGapX: 72,
+  meetingGapY: 64,
 };
+
+export interface SceneZone {
+  id: "desks" | "meeting" | "lounge";
+  label: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** 场景功能区（纯视觉分区；坐标与上面布局常量对齐）。 */
+export const SCENE_ZONES: SceneZone[] = [
+  { id: "desks", label: "工位区", x: 40, y: 64, width: 400, height: 296 },
+  { id: "meeting", label: "会议区", x: 470, y: 96, width: 220, height: 200 },
+  { id: "lounge", label: "候场区", x: 40, y: 368, width: 640, height: 116 },
+];
 
 /**
  * run 状态 → 场景状态。未知状态按 idle 处理，避免新状态把角色画成"卡住"。
@@ -146,6 +173,7 @@ export function projectSceneAgents(
   }
 
   let loungeIndex = 0;
+  let meetingIndex = 0;
   return members.map((member, index) => {
     const status = latestStatus.get(member.id);
     const state = status === undefined ? "idle" : sceneStateForRun(status);
@@ -157,6 +185,25 @@ export function projectSceneAgents(
       const x = layout.originX + column * layout.loungeGapX;
       const y = layout.loungeY + row * 40;
       loungeIndex += 1;
+      return {
+        id: member.id,
+        name: member.name,
+        role: member.role ?? "",
+        adapter: member.adapter ?? "",
+        state,
+        seat,
+        x,
+        y,
+      };
+    }
+
+    if (state === "blocked") {
+      // 受阻角色去会议区：一眼看出「谁被卡住、在等谁」。
+      const column = meetingIndex % layout.meetingColumns;
+      const row = Math.floor(meetingIndex / layout.meetingColumns);
+      const x = layout.meetingOriginX + column * layout.meetingGapX;
+      const y = layout.meetingOriginY + row * layout.meetingGapY;
+      meetingIndex += 1;
       return {
         id: member.id,
         name: member.name,
