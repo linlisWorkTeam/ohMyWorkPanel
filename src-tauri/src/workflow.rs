@@ -761,7 +761,7 @@ pub fn try_slash_command(
     match cmd {
         "board" => {
             let mut versions = list_versions(conn, group_id)?;
-            versions.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+            versions.sort_by_key(|version| std::cmp::Reverse(version.created_at));
             let Some(v) = versions.first() else {
                 return Ok(Some("当前没有已建立的版本。".into()));
             };
@@ -816,7 +816,7 @@ pub fn try_slash_command(
                 return Ok(Some("用法：/wave <Wave 标题>".into()));
             }
             let mut versions = list_versions(conn, group_id)?;
-            versions.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+            versions.sort_by_key(|version| std::cmp::Reverse(version.created_at));
             let Some(v) = versions.first() else {
                 return Ok(Some("还没有版本，无法创建 Wave。".into()));
             };

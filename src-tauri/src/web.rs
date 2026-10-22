@@ -659,7 +659,7 @@ async fn send_message_web(
         "message",
         &format!(
             "message sent to group {}: {} chars, {} agents triggered",
-            &input.group_id,
+            input.group_id,
             input.content.len(),
             run_ids.len()
         ),
@@ -781,17 +781,15 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, user_id: Opt
                     Some(Ok(WsMessage::Ping(payload))) => {
                         if socket.send(WsMessage::Pong(payload)).await.is_err() { break; }
                     }
-                    Some(Ok(WsMessage::Text(text))) => {
+                    Some(Ok(WsMessage::Text(text))) if text.contains("heartbeat") => {
                         // Client heartbeat / ignore; optional ack keeps NAT mappings warm.
-                        if text.contains("heartbeat") {
-                            let ack = json!({ "kind": "heartbeat", "ts": now() });
-                            if socket
-                                .send(WsMessage::Text(ack.to_string().into()))
-                                .await
-                                .is_err()
-                            {
-                                break;
-                            }
+                        let ack = json!({ "kind": "heartbeat", "ts": now() });
+                        if socket
+                            .send(WsMessage::Text(ack.to_string().into()))
+                            .await
+                            .is_err()
+                        {
+                            break;
                         }
                     }
                     _ => {}
