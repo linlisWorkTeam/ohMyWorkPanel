@@ -76,5 +76,6 @@
 - [x] 4.4b workflow / marketing 命令组拆分：`commands/workflow.rs`、`commands/marketing.rs`（共享 helper 走 `super::`，注册路径不变）
 - [x] 4.4c members / pm 命令组拆分：`commands/members.rs`、`commands/pm.rs`（mod.rs 压到约 39KB）
 - [x] 4.4d observability / ops 命令组拆分：`commands/observability.rs`、`commands/ops.rs`（helper `normalize_group_kind` 留在 mod.rs）
-- [ ] 4.4e chat 命令组拆分（send_message / run 控制 / 反馈）
+- [x] 4.4e chat 命令组拆分：`commands/chat.rs`（消息读取 / 发送 / run 控制 / 评审 / 反馈）；workflow 共享 helper 留在 mod.rs
+- [ ] 4.4f 收尾：mod.rs 只保留组装与杂项（runtime settings / ingest / update / agent config）
 - [ ] 4.5 每个迁移都补 OpenSpec delta 与回归测试
