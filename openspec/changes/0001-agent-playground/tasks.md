@@ -74,5 +74,6 @@
 - [x] 4.3c marketing 生成 / 修订走服务（`SchedulerState` 由传输层注入，插件不持久化；1 个单测）
 - [x] 4.4a `commands.rs` 按领域拆分第一刀：Goal 命令移入 `commands/goals.rs`，`commands::<name>` 路径由 mod.rs 重导出（IPC 签名不变）
 - [x] 4.4b workflow / marketing 命令组拆分：`commands/workflow.rs`、`commands/marketing.rs`（共享 helper 走 `super::`，注册路径不变）
-- [ ] 4.4c 继续拆分：chat / members / observability 命令组
+- [x] 4.4c members / pm 命令组拆分：`commands/members.rs`、`commands/pm.rs`（mod.rs 压到约 39KB）
+- [ ] 4.4d 继续拆分：chat / observability / ops 命令组
 - [ ] 4.5 每个迁移都补 OpenSpec delta 与回归测试
