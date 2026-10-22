@@ -1,6 +1,7 @@
 //! 内置插件：Self-Marketing（P4）。
 //!
-//! 已收口：campaign 列表 / 详情 / 批准 / 导出。生成与修订仍走既有 use case（依赖调度器）。
+//! 已收口：campaign 列表 / 详情 / 创建 / 修订 / 批准 / 导出。
+//! 生成与修订需要调度器，由调用方传入 `SchedulerState`（插件不持久化它）。
 
 use std::path::Path;
 use std::sync::Arc;
@@ -8,9 +9,11 @@ use std::sync::Arc;
 use crate::db::{open_db, AppResult};
 use crate::kernel::{Context, PluginManifest, PluginRegistry};
 use crate::marketing::{
-    approve_campaign, export_campaign, get_campaign, list_campaigns, ApproveCampaignInput,
-    CampaignExport, ContentCampaign,
+    approve_campaign, create_campaign, export_campaign, get_campaign, list_campaigns,
+    revise_campaign, ApproveCampaignInput, CampaignExport, ContentCampaign, CreateCampaignInput,
+    ReviseCampaignInput,
 };
+use crate::scheduler::SchedulerState;
 
 pub const ENTRY: &str = "builtin:marketing";
 pub const SERVICE_KEY: &str = "svc.marketing";
@@ -46,6 +49,27 @@ impl MarketingService {
         let conn = open_db(db_path)?;
         export_campaign(&conn, campaign_id)
     }
+
+    /// 创建 campaign（会派发 Planner/Writer Agent）。
+    pub fn create(
+        &self,
+        db_path: &Path,
+        sched: SchedulerState,
+        input: CreateCampaignInput,
+    ) -> AppResult<ContentCampaign> {
+        create_campaign(db_path, sched, input)
+    }
+
+    /// 要求修改并重新生成草稿。
+    pub fn revise(
+        &self,
+        db_path: &Path,
+        sched: SchedulerState,
+        campaign_id: &str,
+        input: ReviseCampaignInput,
+    ) -> AppResult<ContentCampaign> {
+        revise_campaign(db_path, sched, campaign_id, input)
+    }
 }
 
 pub fn manifest() -> PluginManifest {
@@ -76,13 +100,27 @@ pub fn from_context(ctx: &Context) -> Option<Arc<MarketingService>> {
 mod tests {
     use super::*;
     use crate::db::init_db;
+    use crate::event_sender::EventSender;
     use crate::kernel::{parse_manifest, start_plugins, PluginRegistry};
+    use std::collections::{HashMap, HashSet};
+    use std::sync::{Arc, Mutex};
     use tempfile::NamedTempFile;
 
     fn db() -> NamedTempFile {
         let file = NamedTempFile::new().unwrap();
         init_db(file.path()).unwrap();
         file
+    }
+
+    fn sched(path: &Path) -> SchedulerState {
+        let (tx, _rx) = tokio::sync::broadcast::channel::<String>(8);
+        SchedulerState {
+            db_path: path.to_path_buf(),
+            event_sender: EventSender::Web(tx),
+            cancellations: Arc::new(Mutex::new(HashMap::new())),
+            scheduling_groups: Arc::new(Mutex::new(HashSet::new())),
+            live_sessions: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 
     #[test]
@@ -133,6 +171,47 @@ mod tests {
             .unwrap();
         assert!(!approve_error.is_empty());
         assert!(service.export(file.path(), "nope").is_err());
+    }
+
+    #[test]
+    fn create_and_revise_are_wired() {
+        let file = db();
+        let mut registry = PluginRegistry::new();
+        register(&mut registry);
+        let ctx = Context::new();
+        start_plugins(&ctx, &registry, vec![manifest()]).unwrap();
+        let service = from_context(&ctx).unwrap();
+
+        let create_error = service
+            .create(
+                file.path(),
+                sched(file.path()),
+                CreateCampaignInput {
+                    group_id: "no-such-group".into(),
+                    requested_by: "m1".into(),
+                    planner_agent_id: None,
+                    writer_agent_id: None,
+                    source_mode: None,
+                    base_ref: None,
+                },
+            )
+            .err()
+            .unwrap();
+        assert!(!create_error.is_empty());
+
+        let revise_error = service
+            .revise(
+                file.path(),
+                sched(file.path()),
+                "nope",
+                ReviseCampaignInput {
+                    actor_member_id: "m1".into(),
+                    feedback: "再改改".into(),
+                },
+            )
+            .err()
+            .unwrap();
+        assert!(!revise_error.is_empty());
     }
 
     #[test]

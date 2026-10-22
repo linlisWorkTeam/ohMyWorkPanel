@@ -3066,9 +3066,12 @@ async fn create_marketing_campaign_web(
     let conn = open_db(&state.db_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     require_claims_actor(&conn, &claims, &input.group_id, &input.requested_by)?;
     drop(conn);
-    crate::marketing::create_campaign(&state.db_path, state.sched.clone(), input)
-        .map(Json)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+    // 优先走内核服务；未装载时回退自由函数。
+    let created = match crate::plugins::marketing_service() {
+        Some(service) => service.create(&state.db_path, state.sched.clone(), input),
+        None => crate::marketing::create_campaign(&state.db_path, state.sched.clone(), input),
+    };
+    created.map(Json).map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
 
 async fn list_marketing_campaigns_web(
@@ -3114,9 +3117,17 @@ async fn revise_marketing_campaign_web(
         .map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_claims_actor(&conn, &claims, &campaign.group_id, &input.actor_member_id)?;
     drop(conn);
-    crate::marketing::revise_campaign(&state.db_path, state.sched.clone(), &campaign_id, input)
-        .map(Json)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+    // 优先走内核服务；未装载时回退自由函数。
+    let revised = match crate::plugins::marketing_service() {
+        Some(service) => service.revise(&state.db_path, state.sched.clone(), &campaign_id, input),
+        None => crate::marketing::revise_campaign(
+            &state.db_path,
+            state.sched.clone(),
+            &campaign_id,
+            input,
+        ),
+    };
+    revised.map(Json).map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
 
 async fn approve_marketing_campaign_web(

@@ -70,6 +70,6 @@
 - [x] 4.2f workflow 发布标记走服务（mark_released：released + tag + kind=tag，1 个单测）
 - [x] 4.3a marketing 契约 + 查询插件：`specs/marketing/spec.md` + `svc.marketing.list/get`（3 个单测）
 - [x] 4.3b marketing 审核 / 导出走服务（approve / export，1 个单测）
-- [ ] 4.3c marketing 生成 / 修订（依赖 SchedulerState，待设计注入方式）
+- [x] 4.3c marketing 生成 / 修订走服务（`SchedulerState` 由传输层注入，插件不持久化；1 个单测）
 - [ ] 4.4 内置功能不再直接出现在 `commands.rs` / `App.tsx`
 - [ ] 4.5 每个迁移都补 OpenSpec delta 与回归测试

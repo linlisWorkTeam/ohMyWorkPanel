@@ -69,6 +69,20 @@
 - THEN `entry` 与注册表 key 一致
 - AND `provides` 与安装后实际注册的服务一致
 
+### Requirement: Marketing 生成 / 修订
+Marketing 服务 MUST 提供生成与修订能力；需要调度器时 MUST 由传输层传入 `SchedulerState`，插件自身不持有调度器状态。
+
+#### Scenario: 生成
+- GIVEN 群与成员合法
+- WHEN 通过服务创建 campaign
+- THEN 行为与自由函数一致
+
+#### Scenario: 调度器注入
+- GIVEN 插件未装载
+- WHEN 发起生成
+- THEN 回退自由函数
+- AND 行为不变
+
 ## MODIFIED Requirements
 
 （无）
