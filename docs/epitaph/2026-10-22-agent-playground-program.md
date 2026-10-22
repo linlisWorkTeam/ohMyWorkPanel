@@ -9,7 +9,7 @@ status: active
 
 ## Built this session
 
-从 `origin/main`（`1bf4c58`）出发，本地 34 个提交，覆盖四条轨道：
+从 `origin/main`（`1bf4c58`）出发，本地 47 个提交，覆盖四条轨道：
 
 **P0 契约**
 - `openspec/`：`project.md`（愿景/原则/架构地图）、`specs/`（kernel、extensions 契约）、`changes/0001-agent-playground/`（proposal / design / tasks + scene、goals delta）
@@ -32,9 +32,14 @@ status: active
 
 **P4 插件化（进行中）**
 - 第二个内置插件 `adapter_catalog`：`svc.adapters`（list / resolve / candidates），Web `/api/adapters` 与 scheduler 执行路径、agent 自检均已接入并保留回退
-- 第三个 `workflow`：`svc.workflow`（board / create_version / update_roadmap / play_wave / pause_wave），Web 版本板、创建、Roadmap、Wave 播放/暂停全部接入
-- 第四个 `marketing`：`svc.marketing`（list / get），Web campaign 列表与详情接入
+- 第三个 `workflow`：`svc.workflow`（board / create_version / update_roadmap / play_wave / pause_wave / start_ask / cancel_ask / mark_released）——读写全部接入
+- 第四个 `marketing`：`svc.marketing`（list / get / approve / export / create / revise）；需要调度器的用例由传输层注入 `SchedulerState`
+- 内核 P1 收尾：`OHMYWORKPANEL_PLUGIN_ROOTS` 磁盘清单接入启动（未知入口/损坏清单告警跳过）
 - 新增 capability 契约：`openspec/specs/workflow/spec.md`、`openspec/specs/marketing/spec.md`、`changes/.../specs/plugin-migrations/spec.md`
+
+**发布与验收**
+- PR #20：分支 `codex/agent-playground-2026-10-22`，两份 CI（Rust gate + Windows Tauri package）已通过一轮；后续提交继续跑
+- 像素场景真实浏览器验收：`output/scene-acceptance2.png`（8 成员群，HUD/像素小人/返回聊天正常）
 
 ## Key paths
 
@@ -59,16 +64,19 @@ status: active
 - **PowerShell 文本往返会毁 UTF-8**：本会话两次把中文注释写成 mojibake（`service.rs`）。所有文本改动只用编辑器工具。
 - **内核是进程级 `OnceLock`**：桌面与 Web 共享同一容器；按群 fork 子上下文尚未实现。
 - **Web 前端与桌面 API 双份**：新增接口要同时改 `api.ts` / `api-web.ts` / `types.ts`，否则 Web 构建缺方法。
+- **Web 出包必须 `pnpm run build:web`**：误用桌面版 `pnpm run build` 会覆盖 `dist/`，浏览器打开会报 `Cannot read properties of undefined (reading 'invoke')`。
+- **CI 浮动 stable ≠ 本地工具链**：CI 用 `dtolnay/rust-toolchain@stable`，2026-10 已是 1.99；`cfg(not(windows))` 分支的 lint 本地（Windows）看不到。建议钉 `rust-toolchain.toml` 或保持本地 stable 同步。
+- **本机无可用真实 Agent 凭据**：codex 403 unsupported_country、cursor-agent 未登录、claude 401、opencode 订阅过期、dsh credentials.yaml 格式错误——Goal 真实 CLI E2E 需换机器。
 
 ## How to run / verify
 
 ```bash
-pnpm run test:gate        # vitest 140 + cargo 281 + clippy + fmt + lint + colors
+pnpm run test:gate        # vitest 140 + cargo 289 + clippy + fmt + lint + colors
 cd src-tauri && cargo test --no-default-features --lib
 pnpm run check:ai
 ```
 
-- 像素场景：起服务 → 进项目群 → 标题栏 ◧
+- 像素场景：`pnpm run build:web` → 起服务 → 进项目群 → 标题栏 ◧
 - Goal：群顶部 Goal 条新建 → 启动 → 「推进一步」（会真实发消息给 Agent）
 
 ## Do not regress
@@ -79,9 +87,9 @@ pnpm run check:ai
 
 ## Open follow-ups
 
-- **未推送**：本地 34 个提交仅在本地；备份 tag `backup/pre-vision-2026-10-21` 已推
-- **P4 未完成**：workflow 还剩 Ask / 发布写入；marketing 还剩生成 / 审核 / 导出；`commands.rs` / `App.tsx` 入口未瘦身
-- **真实 Agent 端到端**：Goal 的自动循环未用真实 CLI 验证过（task 3.7）
-- **场景视觉验收**：未在真实群数据下人工看过；tileset / 房间分区未做
+- **已推送**：PR #20（`codex/agent-playground-2026-10-22`，47 个提交）；备份 tag `backup/pre-vision-2026-10-21`
+- **P4 未完成**：`commands.rs` / `App.tsx` 入口未瘦身；marketing/workflow 已完成读写迁移但尚无第三方插件实装样例
+- **真实 CLI E2E**：本机五条 CLI 均因凭据/地区不可用（见 pitfalls），需换机器补跑
+- **场景视觉验收**：已完成（`output/scene-acceptance2.png`）；tileset / 房间分区未做
 - **TS 同构内核**、`waterfall` 事件、按群作用域 fork 未做
 - **生产仍跑旧壳**（`:8080` 标题仍是 Linli's Workpanel），`update.json` 两端都未部署
