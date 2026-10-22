@@ -27,7 +27,7 @@
 - [x] 1.6a 磁盘清单接入启动：`OHMYWORKPANEL_PLUGIN_ROOTS` 扫描，未知入口/损坏清单告警跳过（2 个单测）
 - [x] 1.7 样板迁移：扩展宿主成为第一个内置插件（Web 反代与 A2A 走内核服务，桌面命令保留等价自由函数）
 - [x] 1.7a 桌面命令侧切换到内核服务：workflow 8 个 + marketing 6 个 Tauri 命令只走 `require_*_service`，IPC 签名不变；内核未装载明确报错
-- [ ] 1.8 验证：`cargo test --lib` + `pnpm test` + `pnpm run test:gate`
+- [x] 1.8 验证：`cargo test --lib`（302）+ `pnpm test`（vitest 42）+ `pnpm run test:gate` 全绿；`submit:ai` 通过
 
 ## P2 像素前台（可与 P1 并行）
 
@@ -84,4 +84,4 @@
 - [x] 4.4e chat 命令组拆分：`commands/chat.rs`（消息读取 / 发送 / run 控制 / 评审 / 反馈）；workflow 共享 helper 留在 mod.rs
 - [x] 4.4f update / agents 命令组拆分：`commands/update.rs`、`commands/agents.rs`；mod.rs 压到约 15KB，只留组装、群设置与共享 helper
 - [x] 4.6 Web 入口收敛：workflow / marketing 只走插件服务，移除「服务优先 + 自由函数回退」双路径；内核未装载返回 503（E2E 验证 board / 建版本 / campaign 列表）
-- [ ] 4.5 每个迁移都补 OpenSpec delta 与回归测试
+- [x] 4.5 每个迁移都补 OpenSpec delta 与回归测试（kernel/workflow/marketing/scene/goals/plugin-migrations 六份 delta 均有对应单测）
