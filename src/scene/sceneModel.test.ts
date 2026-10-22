@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  agentKindOf,
   DEFAULT_SCENE_LAYOUT,
   projectSceneAgents,
   ROOM_SEED_COUNT,
@@ -117,6 +118,31 @@ describe("summarizeScene", () => {  it("统计各状态数量", () => {
       blocked: 1,
       done: 1,
     });
+  });
+});
+
+describe("agentKindOf", () => {
+  it("maps known adapter names", () => {
+    expect(agentKindOf("codex")).toBe("codex");
+    expect(agentKindOf("claude")).toBe("claude");
+    expect(agentKindOf("claude-code")).toBe("claude");
+    expect(agentKindOf("opencode")).toBe("opencode");
+    expect(agentKindOf("cursor")).toBe("cursor");
+    expect(agentKindOf("cursor-agent")).toBe("cursor");
+    expect(agentKindOf("dsh")).toBe("dsh");
+    expect(agentKindOf("mock")).toBe("mock");
+  });
+
+  it("is case-insensitive and trims whitespace", () => {
+    expect(agentKindOf("  Codex ")).toBe("codex");
+    expect(agentKindOf("CLAUDE")).toBe("claude");
+  });
+
+  it("falls back to generic for unknown or missing adapters", () => {
+    expect(agentKindOf("unknown-cli")).toBe("generic");
+    expect(agentKindOf("")).toBe("generic");
+    expect(agentKindOf(undefined)).toBe("generic");
+    expect(agentKindOf(null)).toBe("generic");
   });
 });
 

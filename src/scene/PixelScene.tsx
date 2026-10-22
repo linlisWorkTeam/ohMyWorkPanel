@@ -1,5 +1,5 @@
 import { useEffect, useRef, type MouseEvent } from "react";
-import type { SceneAgent } from "./sceneModel";
+import { agentKindOf, type SceneAgent } from "./sceneModel";
 
 /** 虚拟画布尺寸；真实像素由容器缩放决定。 */
 const VIEW_WIDTH = 720;
@@ -134,6 +134,37 @@ function drawAgent(
   ctx.fillRect(agent.x - 3, y - 13, 2, 2);
   ctx.fillRect(agent.x + 1, y - 13, 2, 2);
 
+  // 头饰/配件：不同 adapter 的像素造型区分（纯装饰，不参与交互）。
+  switch (agentKindOf(agent.adapter)) {
+    case "codex":
+      ctx.fillStyle = palette.acc;
+      ctx.fillRect(agent.x - 6, y - 18, 12, 2);
+      break;
+    case "claude":
+      ctx.fillStyle = palette.warning;
+      ctx.fillRect(agent.x - 3, y - 19, 6, 3);
+      break;
+    case "opencode":
+      ctx.fillStyle = palette.ok;
+      ctx.fillRect(agent.x - 1, y - 21, 2, 5);
+      break;
+    case "cursor":
+      ctx.fillStyle = palette.critical;
+      ctx.fillRect(agent.x - 7, y - 14, 2, 4);
+      break;
+    case "dsh":
+      ctx.fillStyle = palette.dim;
+      ctx.fillRect(agent.x - 8, y - 15, 2, 3);
+      ctx.fillRect(agent.x + 6, y - 15, 2, 3);
+      break;
+    case "mock":
+      ctx.fillStyle = palette.elev;
+      ctx.fillRect(agent.x - 3, y - 12, 6, 2);
+      break;
+    default:
+      break;
+  }
+
   if (agent.state === "done") {
     ctx.fillStyle = palette.ok;
     ctx.fillRect(agent.x + 6, y - 20, 5, 5);
@@ -151,10 +182,34 @@ function drawAgent(
 }
 
 function drawLabel(ctx: CanvasRenderingContext2D, agent: SceneAgent, palette: Palette) {
-  ctx.fillStyle = palette.dim;
   ctx.font = "10px 'IBM Plex Mono', Consolas, monospace";
   ctx.textAlign = "center";
+  const textWidth = ctx.measureText(agent.name).width;
+  // 品牌色小方块：adapter 一眼可辨（比头饰更耐缩放）。
+  ctx.fillStyle = kindColor(agent.adapter, palette);
+  ctx.fillRect(agent.x - textWidth / 2 - 7, agent.y - 28, 4, 4);
+  ctx.fillStyle = palette.dim;
   ctx.fillText(agent.name, agent.x, agent.y - 24);
+}
+
+/** adapter → 品牌色（全部走主题 token，保持颜色门禁）。 */
+function kindColor(adapter: string, palette: Palette): string {
+  switch (agentKindOf(adapter)) {
+    case "codex":
+      return palette.acc;
+    case "claude":
+      return palette.warning;
+    case "opencode":
+      return palette.ok;
+    case "cursor":
+      return palette.critical;
+    case "dsh":
+      return palette.dim;
+    case "mock":
+      return palette.elev;
+    default:
+      return palette.line;
+  }
 }
 
 interface PixelSceneProps {

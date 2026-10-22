@@ -100,3 +100,17 @@
 - WHEN 切换到其他群或退出场景
 - THEN 旧作用域被 dispose
 - AND 根内核不再持有该群配置
+
+### Requirement: 造型区分
+场景 MUST 按 Agent 的 adapter 区分像素造型（头饰 + 名字旁品牌色块），未知 adapter MUST 降级为通用造型而不报错；颜色 MUST 只引用主题 token。
+
+#### Scenario: 已知 adapter
+- GIVEN 成员 adapter 为 `codex`
+- WHEN 渲染场景
+- THEN 角色使用 codex 造型与品牌色
+
+#### Scenario: 未知 adapter
+- GIVEN 成员 adapter 为无法识别的值
+- WHEN 渲染场景
+- THEN 使用通用造型
+- AND 不抛出错误、不影响其他角色

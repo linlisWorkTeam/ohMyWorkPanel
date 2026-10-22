@@ -49,6 +49,38 @@ export interface SceneAgent {
   y: number;
 }
 
+/** 像素造型类别：决定头饰/配件，不影响业务状态。 */
+export type SceneAgentKind =
+  | "codex"
+  | "claude"
+  | "opencode"
+  | "cursor"
+  | "dsh"
+  | "mock"
+  | "generic";
+
+/** adapter 字符串 → 像素造型类别；未知一律 generic（降级安全）。 */
+export function agentKindOf(adapter?: string | null): SceneAgentKind {
+  switch ((adapter ?? "").trim().toLowerCase()) {
+    case "codex":
+      return "codex";
+    case "claude":
+    case "claude-code":
+      return "claude";
+    case "opencode":
+      return "opencode";
+    case "cursor":
+    case "cursor-agent":
+      return "cursor";
+    case "dsh":
+      return "dsh";
+    case "mock":
+      return "mock";
+    default:
+      return "generic";
+  }
+}
+
 export interface SceneLayout {
   originX: number;
   originY: number;
