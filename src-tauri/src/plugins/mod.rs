@@ -5,10 +5,12 @@ pub mod extension_host;
 pub mod marketing;
 pub mod workflow;
 
+use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
 use crate::kernel::{
-    start_plugins, Context, LoadReport, ManifestError, PluginManifest, PluginRegistry,
+    discover_manifests, start_plugins, Context, LoadReport, ManifestError, PluginManifest,
+    PluginRegistry,
 };
 
 /// 注册全部内置插件的实现。
@@ -33,8 +35,51 @@ pub fn builtin_manifests() -> Vec<PluginManifest> {
 
 /// 装载内置插件；返回上下文与装载报告。
 pub fn bootstrap() -> Result<(Context, LoadReport), ManifestError> {
+    bootstrap_with_roots(&plugin_roots())
+}
+
+/// `OHMYWORKPANEL_PLUGIN_ROOTS`：`:` / `;` 分隔的插件目录列表；未设置则不扫描磁盘。
+pub fn plugin_roots() -> Vec<PathBuf> {
+    std::env::var("OHMYWORKPANEL_PLUGIN_ROOTS")
+        .map(|raw| {
+            raw.split([':', ';'])
+                .map(str::trim)
+                .filter(|part| !part.is_empty())
+                .map(PathBuf::from)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// 内置清单 + 磁盘发现的清单。
+///
+/// 磁盘清单只有在 `entry` 已注册时才纳入；未知入口与损坏清单只告警，不影响内置插件。
+pub fn collect_manifests(registry: &PluginRegistry, roots: &[PathBuf]) -> Vec<PluginManifest> {
+    let mut manifests = builtin_manifests();
+    if roots.is_empty() {
+        return manifests;
+    }
+    for discovery in discover_manifests(roots) {
+        match discovery.result {
+            Ok(manifest) if registry.contains(&manifest.entry) => manifests.push(manifest),
+            Ok(manifest) => eprintln!(
+                "[kernel] 跳过未知入口的插件清单：{}（entry={}）",
+                manifest.id, manifest.entry
+            ),
+            Err(error) => eprintln!(
+                "[kernel] 插件清单无效（{}）：{error}",
+                discovery.root.display()
+            ),
+        }
+    }
+    manifests
+}
+
+/// 带磁盘扫描的装载入口（测试与启动共用）。
+pub fn bootstrap_with_roots(roots: &[PathBuf]) -> Result<(Context, LoadReport), ManifestError> {
+    let registry = registry();
     let context = Context::new();
-    let report = start_plugins(&context, &registry(), builtin_manifests())?;
+    let report = start_plugins(&context, &registry, collect_manifests(&registry, roots))?;
     Ok((context, report))
 }
 
@@ -108,5 +153,44 @@ mod tests {
         assert!(std::ptr::eq(first, second));
         assert!(extension_host_service().is_some());
         assert!(adapter_catalog_service().is_some());
+        assert!(workflow_service().is_some());
+        assert!(marketing_service().is_some());
+    }
+
+    #[test]
+    fn disk_manifest_with_unknown_entry_is_skipped() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("plugin.manifest.json"),
+            r#"{"id":"third-party.unknown","name":"Unknown","version":"0.1.0","entry":"builtin:does-not-exist"}"#,
+        )
+        .unwrap();
+
+        let manifests = collect_manifests(&registry(), &[dir.path().to_path_buf()]);
+
+        assert_eq!(manifests.len(), builtin_manifests().len());
+        assert!(!manifests.iter().any(|m| m.id == "third-party.unknown"));
+    }
+
+    #[test]
+    fn disk_manifest_loads_when_entry_is_registered() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("plugin.manifest.json"),
+            r#"{"id":"third-party.echo","name":"Echo","version":"0.1.0","entry":"test:echo","provides":["svc.echo"]}"#,
+        )
+        .unwrap();
+        let mut registry = registry();
+        registry.register("test:echo", |ctx| {
+            ctx.provide("svc.echo", 7_u8).map_err(String::from)?;
+            Ok(())
+        });
+
+        let manifests = collect_manifests(&registry, &[dir.path().to_path_buf()]);
+        let ctx = Context::new();
+        let report = start_plugins(&ctx, &registry, manifests).unwrap();
+
+        assert!(report.loaded.contains(&"third-party.echo"));
+        assert_eq!(*ctx.require::<u8>("svc.echo").unwrap(), 7);
     }
 }
