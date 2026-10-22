@@ -529,6 +529,7 @@ export interface Goal {
   rounds: GoalRound[];
   stopReason: GoalStopReason | null;
   requireApprovalEachRound: boolean;
+  autoAdvance: boolean;
 }
 
 export interface CreateGoalInput {
