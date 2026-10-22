@@ -195,6 +195,27 @@ v0 只覆盖进程内、单进程、同步语义；事件分发与清单 v2 属�
 - THEN 只返回根 A
 - AND 根 B 不产生错误
 
+### Requirement: 前端同构内核
+前端 MUST 提供与 Rust 侧同构的内核实现（`src/kernel/`）：服务容器、`inject` 依赖校验、可撤销副作用、四种事件分发、依赖拓扑装载与失败回滚。
+
+前端实现 MUST 与 Rust 侧共享同一组行为用例：注册/重复注册、缺失依赖一次性列出、副作用逆序释放、`emit`/`parallel`/`serial`/`bail` 语义、装载顺序、重复 id、依赖成环、声明未兑现。
+
+#### Scenario: 注册后取回
+- GIVEN 上下文已 `provide("svc.a", value)`
+- WHEN `require("svc.a")`
+- THEN 返回同一个值
+
+#### Scenario: 装载失败整体释放
+- GIVEN 某个插件 `install` 抛错
+- THEN 返回 `install` 类错误
+- AND 上下文 `isDisposed()` 为真
+- AND 已注册服务不再可用
+
+#### Scenario: 依赖顺序
+- GIVEN 消费者先于提供者出现在输入里
+- WHEN 装载
+- THEN 提供者先安装、消费者后安装
+
 ## 非目标（v0）
 
 - 事件分发 `waterfall`（环绕中间件）语义
