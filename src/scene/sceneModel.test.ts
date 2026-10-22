@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SCENE_LAYOUT,
   projectSceneAgents,
+  ROOM_SEED_COUNT,
+  roomSeedOf,
   sceneStateForRun,
   summarizeScene,
   type SceneMemberInput,
@@ -115,5 +117,27 @@ describe("summarizeScene", () => {  it("统计各状态数量", () => {
       blocked: 1,
       done: 1,
     });
+  });
+});
+
+describe("roomSeedOf", () => {
+  it("is deterministic for the same group id", () => {
+    const first = roomSeedOf("group-abc");
+    expect(roomSeedOf("group-abc")).toBe(first);
+  });
+
+  it("stays within the room seed range", () => {
+    for (const id of ["a", "group-1", "9f0c2e5d-0000-4000-8000-000000000000"]) {
+      const seed = roomSeedOf(id);
+      expect(seed).toBeGreaterThanOrEqual(0);
+      expect(seed).toBeLessThan(ROOM_SEED_COUNT);
+    }
+  });
+
+  it("spreads distinct groups across rooms", () => {
+    const seeds = new Set(
+      ["group-a", "group-b", "group-c", "group-d", "group-e"].map((id) => roomSeedOf(id)),
+    );
+    expect(seeds.size).toBeGreaterThan(1);
   });
 });

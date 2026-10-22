@@ -49,9 +49,19 @@ function stateColor(agent: SceneAgent, palette: Palette): string {
   }
 }
 
-function drawFloor(ctx: CanvasRenderingContext2D, palette: Palette) {
+function drawFloor(ctx: CanvasRenderingContext2D, palette: Palette, roomSeed: number) {
   ctx.fillStyle = palette.bg;
   ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+
+  // 房间色带：同一群 seed 固定，不同群分区位置不同（纯装饰，不影响交互）。
+  ctx.save();
+  ctx.globalAlpha = 0.05;
+  ctx.fillStyle = palette.acc;
+  for (let index = 0; index < 4; index += 1) {
+    const band = (roomSeed + index * 2) % 8;
+    ctx.fillRect(band * 90, 60, 90, VIEW_HEIGHT - 60);
+  }
+  ctx.restore();
 
   ctx.save();
   ctx.globalAlpha = 0.18;
@@ -151,9 +161,11 @@ interface PixelSceneProps {
   agents: SceneAgent[];
   selectedId?: string | null;
   onSelectAgent?: (agentId: string) => void;
+  /** 房间种子（由群 id 派生）：决定地板色带分区，0..7。 */
+  roomSeed?: number;
 }
 
-export function PixelScene({ agents, selectedId, onSelectAgent }: PixelSceneProps) {
+export function PixelScene({ agents, selectedId, onSelectAgent, roomSeed = 0 }: PixelSceneProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const agentsRef = useRef<SceneAgent[]>(agents);
@@ -184,7 +196,7 @@ export function PixelScene({ agents, selectedId, onSelectAgent }: PixelSceneProp
     floor.height = VIEW_HEIGHT;
     const floorCtx = floor.getContext("2d");
     const renderFloor = () => {
-      if (floorCtx) drawFloor(floorCtx, palette);
+      if (floorCtx) drawFloor(floorCtx, palette, roomSeed);
     };
 
     const resize = () => {
@@ -216,7 +228,7 @@ export function PixelScene({ agents, selectedId, onSelectAgent }: PixelSceneProp
       if (floorCtx) {
         ctx.drawImage(floor, 0, 0);
       } else {
-        drawFloor(ctx, palette);
+        drawFloor(ctx, palette, roomSeed);
       }
       const agentsNow = agentsRef.current;
       for (const agent of agentsNow) {
@@ -244,7 +256,7 @@ export function PixelScene({ agents, selectedId, onSelectAgent }: PixelSceneProp
       observer.disconnect();
       themeObserver.disconnect();
     };
-  }, []);
+  }, [roomSeed]);
 
   const handleClick = (event: MouseEvent<HTMLCanvasElement>) => {
     if (!onSelectAgent) return;

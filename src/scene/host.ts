@@ -3,7 +3,7 @@
 import type { ComponentType } from "react";
 
 import { frontendKernel } from "../kernel/host";
-import { SCENE_SERVICE, type SceneCapability } from "./plugin";
+import { SCENE_SERVICE, type SceneCapability, type SceneGroupScope } from "./plugin";
 import type { SceneViewProps } from "./SceneView";
 
 /**
@@ -12,6 +12,18 @@ import type { SceneViewProps } from "./SceneView";
 export function resolveSceneView(): ComponentType<SceneViewProps> | null {
   try {
     return frontendKernel().require<SceneCapability>(SCENE_SERVICE).View;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 为某个群开独立场景作用域（`ctx.fork()`）；插件缺失时返回 `null`。
+ * 调用方在群切换/卸载时 MUST 调用 `scope.dispose()`。
+ */
+export function openSceneGroupScope(groupId: string): SceneGroupScope | null {
+  try {
+    return frontendKernel().require<SceneCapability>(SCENE_SERVICE).openGroupScope(groupId);
   } catch {
     return null;
   }

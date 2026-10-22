@@ -13,13 +13,15 @@ export interface SceneViewProps {
   runs: TaskRun[];
   onExit: () => void;
   onSelectAgent?: (agentId: string) => void;
+  /** 房间种子（由群 id 派生）：决定地板色带分区。 */
+  roomSeed?: number;
 }
 
 /**
  * 像素场景视图：只读消费既有成员与 run 数据，不新增后端接口。
  * 进入方式由主壳的 `mainView` 决定；退出即回到聊天，不改变任何业务状态。
  */
-export function SceneView({ members, runs, onExit, onSelectAgent }: SceneViewProps) {
+export function SceneView({ members, runs, onExit, onSelectAgent, roomSeed }: SceneViewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const agents = useMemo(() => {
     const memberInputs: SceneMemberInput[] = members.map((member) => ({
@@ -56,6 +58,7 @@ export function SceneView({ members, runs, onExit, onSelectAgent }: SceneViewPro
         <PixelScene
           agents={agents}
           selectedId={selectedId}
+          roomSeed={roomSeed}
           onSelectAgent={(agentId) => {
             setSelectedId(agentId);
             onSelectAgent?.(agentId);

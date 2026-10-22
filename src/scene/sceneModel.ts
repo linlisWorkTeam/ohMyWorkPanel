@@ -14,6 +14,23 @@ export interface SceneMemberInput {
   adapter?: string;
 }
 
+/**
+ * 由群 id 派生稳定的「房间种子」（0..ROOM_SEED_COUNT-1）。
+ *
+ * 同一个群永远得到同一个房间（地板配色/分区不同），不同群大概率不同。
+ * 纯函数，便于单测；不引入随机数，避免每次渲染抖动。
+ */
+export const ROOM_SEED_COUNT = 8;
+
+export function roomSeedOf(groupId: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < groupId.length; index += 1) {
+    hash ^= groupId.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return Math.abs(hash) % ROOM_SEED_COUNT;
+}
+
 export interface SceneRunInput {
   memberId: string;
   /** run 状态字符串，来自现有调度投影（running / queued / failed / done ...）。 */

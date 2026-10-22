@@ -62,7 +62,7 @@ import { LogsPanel } from "./observability/LogsPanel";
 import { ServerPathPicker } from "./groups/ServerPathPicker";
 import { ExtensionPanel } from "./extensions/ExtensionPanel";
 import { VersionView } from "./workflow/VersionView";
-import { resolveSceneView } from "./scene/host";
+import { resolveSceneView, openSceneGroupScope } from "./scene/host";
 import type { SceneViewProps } from "./scene/SceneView";
 import { GoalStrip } from "./goals/GoalStrip";
 import { GroupSettingsView } from "./groups/GroupSettingsView";
@@ -147,10 +147,20 @@ function RuntimeHeaderThemePop(props: { open: boolean; onPick: () => void }) {
 
 /**
  * 场景槽位：通过前端内核取用 `svc.scene` 提供的视图。
+ * 每个群通过 `ctx.fork()` 开一个独立作用域（群专属房间配置），卸载即释放。
  * 插件缺失/装载失败时给出提示，不影响聊天等既有视图（fail-open）。
  */
-function SceneSlot(props: SceneViewProps) {
+function SceneSlot({ groupId, ...props }: SceneViewProps & { groupId: string }) {
   const View = resolveSceneView();
+  const [roomSeed, setRoomSeed] = useState(0);
+
+  useEffect(() => {
+    const scope = openSceneGroupScope(groupId);
+    if (!scope) return;
+    setRoomSeed(scope.roomSeed);
+    return () => scope.dispose();
+  }, [groupId]);
+
   if (!View) {
     return (
       <div className="scene-empty" role="status">
@@ -158,7 +168,7 @@ function SceneSlot(props: SceneViewProps) {
       </div>
     );
   }
-  return <View {...props} />;
+  return <View {...props} roomSeed={roomSeed} />;
 }
 
 export function App() {
@@ -1419,6 +1429,7 @@ export function App() {
       chat={current ? (
         mainView === "scene" ? (
           <SceneSlot
+            groupId={current.group.id}
             members={members}
             runs={current.runs}
             onExit={() => setMainView("chat")}

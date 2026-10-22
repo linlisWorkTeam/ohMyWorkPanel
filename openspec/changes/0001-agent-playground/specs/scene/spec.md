@@ -85,3 +85,18 @@
 - WHEN 点击某个角色
 - THEN 成员面板打开
 - AND 不发送消息、不改变选中角色以外的状态
+
+### Requirement: 分群房间
+场景 MUST 由群 id 稳定派生房间种子（0..7），并在地板色带上体现；同一群 MUST 永远得到同一房间，不同群 SHOULD 得到不同房间。房间配置 MUST 通过内核 `ctx.fork()` 的群作用域提供，切换群时释放旧作用域。
+
+#### Scenario: 同群稳定
+- GIVEN 群 id 不变
+- WHEN 多次进入场景
+- THEN 房间种子一致
+- AND 地板色带位置一致
+
+#### Scenario: 作用域释放
+- GIVEN 已为某群打开场景作用域
+- WHEN 切换到其他群或退出场景
+- THEN 旧作用域被 dispose
+- AND 根内核不再持有该群配置
