@@ -17,7 +17,7 @@
 - [x] 1.1 Rust：`kernel::Context` + `Service` 注册表（稳定 key、类型安全取回）
 - [x] 1.2 Rust：`inject` 声明依赖（缺失时一次性列出全部缺口）
 - [x] 1.3 Rust：`effect` / disposer 回收（逆序卸载、重复释放幂等，含单测）
-- [ ] 1.3a Rust：按群作用域 fork 子上下文（服务可见性隔离）
+- [x] 1.3a Rust + TS：`Context::fork()` 按作用域派生（服务沿父链查找、覆盖、子作用域独立回收、父释放后失效；Rust 4 个 / TS 4 个单测）
 - [x] 1.4 Rust：类型化事件分发（emit / parallel / serial / bail，含短路与注销语义）
 - [x] 1.4b Rust：插件装载器（依赖拓扑排序、声明兑现校验、失败整体回滚，7 个单测）
 - [ ] 1.4a Rust：`waterfall`（环绕中间件）语义

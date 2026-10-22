@@ -57,6 +57,20 @@ struct ContextInner {
     effects: EffectStack,
     events: EventBus,
     disposed: AtomicBool,
+    /// 父作用域；子上下文按 key 逐级向上查找服务，但副作用只回收自己的。
+    parent: Option<Arc<ContextInner>>,
+}
+
+impl ContextInner {
+    /// 自身 → 父 → 祖父……逐级查找服务。
+    fn lookup(&self, key: &'static str) -> Option<Service> {
+        if let Ok(services) = self.services.read() {
+            if let Some(service) = services.get(key) {
+                return Some(Arc::clone(service));
+            }
+        }
+        self.parent.as_ref().and_then(|parent| parent.lookup(key))
+    }
 }
 
 /// 可克隆的服务容器；克隆共享同一份注册表与副作用栈。
@@ -79,6 +93,21 @@ impl Context {
                 effects: EffectStack::default(),
                 events: EventBus::new(),
                 disposed: AtomicBool::new(false),
+                parent: None,
+            }),
+        }
+    }
+
+    /// 派生子作用域：继承父服务（查找时逐级向上），但拥有独立的注册表、
+    /// 副作用栈与事件总线；`dispose()` 只回收本作用域。
+    pub fn fork(&self) -> Context {
+        Self {
+            inner: Arc::new(ContextInner {
+                services: RwLock::new(HashMap::new()),
+                effects: EffectStack::default(),
+                events: EventBus::new(),
+                disposed: AtomicBool::new(false),
+                parent: Some(Arc::clone(&self.inner)),
             }),
         }
     }
@@ -124,32 +153,25 @@ impl Context {
         })))
     }
 
-    /// 按 key 取回服务并做类型校验。
+    /// 按 key 取回服务并做类型校验；会沿父作用域向上查找。
     pub fn require<T>(&self, key: &'static str) -> Result<Arc<T>, ServiceRegistryError>
     where
         T: Any + Send + Sync,
     {
-        let services = self
+        let service = self
             .inner
-            .services
-            .read()
-            .map_err(|_| ServiceRegistryError::Disposed)?;
-        let service = services
-            .get(key)
+            .lookup(key)
             .ok_or(ServiceRegistryError::NotFound(key))?;
-        Arc::clone(service)
+        service
             .downcast::<T>()
             .map_err(|_| ServiceRegistryError::TypeMismatch(key))
     }
 
     /// 列出全部缺失依赖（用于启动时报出完整缺口，而不是逐个试错）。
     pub fn missing(&self, keys: &[&'static str]) -> Vec<&'static str> {
-        let Ok(services) = self.inner.services.read() else {
-            return keys.to_vec();
-        };
         keys.iter()
             .copied()
-            .filter(|key| !services.contains_key(key))
+            .filter(|key| self.inner.lookup(key).is_none())
             .collect()
     }
 
@@ -279,5 +301,60 @@ mod tests {
         ctx.dispose();
 
         assert_eq!(runs.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn fork_inherits_parent_services() {
+        let root = Context::new();
+        root.provide("greeter", Greeter("parent")).unwrap();
+        let child = root.fork();
+
+        let greeter = child.require::<Greeter>("greeter").unwrap();
+        assert_eq!(greeter.0, "parent");
+        assert!(child.inject(&["greeter"]).is_ok());
+    }
+
+    #[test]
+    fn fork_may_shadow_parent_service() {
+        let root = Context::new();
+        root.provide("greeter", Greeter("parent")).unwrap();
+        let child = root.fork();
+        child.provide("greeter", Greeter("child")).unwrap();
+
+        assert_eq!(child.require::<Greeter>("greeter").unwrap().0, "child");
+        assert_eq!(root.require::<Greeter>("greeter").unwrap().0, "parent");
+    }
+
+    #[test]
+    fn fork_dispose_only_releases_its_own_effects() {
+        let root = Context::new();
+        root.provide("greeter", Greeter("parent")).unwrap();
+        let order = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let child = root.fork();
+        let buffer = Arc::clone(&order);
+        child
+            .effect(move || buffer.lock().unwrap().push("child"))
+            .unwrap();
+
+        child.dispose();
+
+        assert!(child.is_disposed());
+        assert_eq!(*order.lock().unwrap(), vec!["child"]);
+        assert_eq!(root.require::<Greeter>("greeter").unwrap().0, "parent");
+    }
+
+    #[test]
+    fn disposed_parent_no_longer_serves_children() {
+        let root = Context::new();
+        root.provide("greeter", Greeter("parent")).unwrap();
+        let child = root.fork();
+
+        root.dispose();
+
+        assert_eq!(
+            child.require::<Greeter>("greeter").unwrap_err(),
+            ServiceRegistryError::NotFound("greeter")
+        );
+        assert_eq!(child.missing(&["greeter"]), vec!["greeter"]);
     }
 }

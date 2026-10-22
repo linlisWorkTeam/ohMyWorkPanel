@@ -232,3 +232,49 @@ describe("loadPlugins", () => {
     expect(ctx.isDisposed()).toBe(true);
   });
 });
+
+describe("fork", () => {
+  it("inherits parent services", () => {
+    const root = new Context();
+    root.provide("svc.a", 7);
+    const child = root.fork();
+
+    expect(child.require<number>("svc.a")).toBe(7);
+    expect(child.inject(["svc.a"])).toBeUndefined();
+  });
+
+  it("may shadow a parent service without conflicting", () => {
+    const root = new Context();
+    root.provide("svc.a", "parent");
+    const child = root.fork();
+    child.provide("svc.a", "child");
+
+    expect(child.require<string>("svc.a")).toBe("child");
+    expect(root.require<string>("svc.a")).toBe("parent");
+  });
+
+  it("disposes only its own effects", () => {
+    const root = new Context();
+    root.provide("svc.a", 1);
+    const order: string[] = [];
+    const child = root.fork();
+    child.effect(() => order.push("child"));
+
+    child.dispose();
+
+    expect(child.isDisposed()).toBe(true);
+    expect(order).toEqual(["child"]);
+    expect(root.require<number>("svc.a")).toBe(1);
+  });
+
+  it("stops serving children once the parent is disposed", () => {
+    const root = new Context();
+    root.provide("svc.a", 1);
+    const child = root.fork();
+
+    root.dispose();
+
+    expect(() => child.require("svc.a")).toThrow(/服务不存在/);
+    expect(child.missing(["svc.a"])).toEqual(["svc.a"]);
+  });
+});

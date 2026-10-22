@@ -42,6 +42,16 @@ export class Context {
   private nextEffectId = 1;
   private disposed = false;
 
+  constructor(private readonly parent: Context | null = null) {}
+
+  /**
+   * 派生子作用域：继承父服务（查找时逐级向上），但拥有独立的注册表、
+   * 副作用栈与事件总线；`dispose()` 只回收本作用域。
+   */
+  fork(): Context {
+    return new Context(this);
+  }
+
   isDisposed(): boolean {
     return this.disposed;
   }
@@ -68,24 +78,33 @@ export class Context {
     });
   }
 
-  /** 按 key 取回服务。 */
+  /** 按 key 取回服务；会沿父作用域向上查找。 */
   require<T>(key: string): T {
     if (this.disposed) {
       throw new KernelError("disposed", "上下文已释放");
     }
-    if (!this.services.has(key)) {
+    const entry = this.lookup(key);
+    if (!entry) {
       throw new KernelError("not_found", `服务不存在：${key}`, [key]);
     }
-    return this.services.get(key) as T;
+    return entry.value as T;
   }
 
   has(key: string): boolean {
-    return this.services.has(key);
+    return this.lookup(key) !== null;
   }
 
   /** 返回缺失的 key 列表（不抛错）。 */
   missing(keys: readonly string[]): string[] {
-    return keys.filter((key) => !this.services.has(key));
+    return keys.filter((key) => this.lookup(key) === null);
+  }
+
+  /** 自身 → 父 → 祖父……逐级查找服务。 */
+  private lookup(key: string): { value: unknown } | null {
+    if (this.services.has(key)) {
+      return { value: this.services.get(key) };
+    }
+    return this.parent ? this.parent.lookup(key) : null;
   }
 
   /** 校验依赖是否全部就绪；缺失时一次性返回全部缺口。 */
