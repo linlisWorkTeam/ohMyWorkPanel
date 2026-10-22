@@ -35,7 +35,7 @@ src-tauri/src/          # Rust 后端；实现按产品领域下沉
   lib.rs                # 应用启动、AppState、模块声明
   models.rs             # serde 数据模型（Group/Member/Message/TaskRun/...）
   db.rs                 # SQLite 初始化、查询、写入辅助
-  commands.rs           # 全部 #[tauri::command]
+  commands/             # 全部 #[tauri::command]；按领域分文件（chat/goals/workflow/marketing/members/pm/observability/ops/update/agents），mod.rs 只做组装与重导出
   scheduler.rs          # 任务调度/执行/委派/完成
   agents/adapters/      # Agent 适配器
     mod.rs              # AdapterKind 枚举 + run_streaming 共享执行

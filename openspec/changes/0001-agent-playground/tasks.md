@@ -77,5 +77,5 @@
 - [x] 4.4c members / pm 命令组拆分：`commands/members.rs`、`commands/pm.rs`（mod.rs 压到约 39KB）
 - [x] 4.4d observability / ops 命令组拆分：`commands/observability.rs`、`commands/ops.rs`（helper `normalize_group_kind` 留在 mod.rs）
 - [x] 4.4e chat 命令组拆分：`commands/chat.rs`（消息读取 / 发送 / run 控制 / 评审 / 反馈）；workflow 共享 helper 留在 mod.rs
-- [ ] 4.4f 收尾：mod.rs 只保留组装与杂项（runtime settings / ingest / update / agent config）
+- [x] 4.4f update / agents 命令组拆分：`commands/update.rs`、`commands/agents.rs`；mod.rs 压到约 15KB，只留组装、群设置与共享 helper
 - [ ] 4.5 每个迁移都补 OpenSpec delta 与回归测试
