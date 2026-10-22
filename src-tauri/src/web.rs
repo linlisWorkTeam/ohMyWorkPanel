@@ -2930,9 +2930,12 @@ async fn release_version_web(
     require_group_access(&conn, &claims.sub, &v.group_id).map_err(map_acl_err)?;
     let group = db_get_group(&conn, &v.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_version_manager(&conn, &claims.sub, &group)?;
-    crate::workflow::mark_released(&conn, &version_id, body.git_tag)
-        .map(Json)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+    // 优先走内核服务；未装载时回退自由函数。
+    let released = match crate::plugins::workflow_service() {
+        Some(service) => service.mark_released(&state.db_path, &version_id, body.git_tag),
+        None => crate::workflow::mark_released(&conn, &version_id, body.git_tag),
+    };
+    released.map(Json).map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
 
 async fn ops_job_web(

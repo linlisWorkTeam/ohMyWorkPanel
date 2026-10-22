@@ -9,8 +9,8 @@ use crate::db::{open_db, AppResult};
 use crate::kernel::{Context, PluginManifest, PluginRegistry};
 use crate::models::Group;
 use crate::workflow::{
-    board_for_group, cancel_ask, create_version, pause_wave, play_wave, start_ask, update_roadmap,
-    CreateVersionInput, ProjectVersion, UpdateRoadmapInput, VersionBoard, Wave,
+    board_for_group, cancel_ask, create_version, mark_released, pause_wave, play_wave, start_ask,
+    update_roadmap, CreateVersionInput, ProjectVersion, UpdateRoadmapInput, VersionBoard, Wave,
 };
 
 pub const ENTRY: &str = "builtin:workflow";
@@ -76,6 +76,17 @@ impl WorkflowService {
     pub fn cancel_ask(&self, db_path: &Path, version_id: &str) -> AppResult<ProjectVersion> {
         let conn = open_db(db_path)?;
         cancel_ask(&conn, version_id)
+    }
+
+    /// 标记发布（可携带 Git tag）。
+    pub fn mark_released(
+        &self,
+        db_path: &Path,
+        version_id: &str,
+        git_tag: Option<String>,
+    ) -> AppResult<ProjectVersion> {
+        let conn = open_db(db_path)?;
+        mark_released(&conn, version_id, git_tag)
     }
 }
 
@@ -326,6 +337,42 @@ mod tests {
             .unwrap()
             .asking_version_id
             .is_none());
+    }
+
+    #[test]
+    fn service_marks_a_version_released() {
+        let (file, mut group) = group_db();
+        group.admin_member_id = Some("m-agent".into());
+        let mut registry = PluginRegistry::new();
+        register(&mut registry);
+        let ctx = Context::new();
+        start_plugins(&ctx, &registry, vec![manifest()]).unwrap();
+        let service = from_context(&ctx).unwrap();
+        let version = service
+            .create_version(
+                file.path(),
+                &group,
+                &CreateVersionInput {
+                    group_id: "g".into(),
+                    name: Some("v-release".into()),
+                    what: None,
+                    who: None,
+                    how: None,
+                    one_liner: None,
+                    requester_member_id: None,
+                    mode: Some("create".into()),
+                },
+            )
+            .unwrap();
+
+        let released = service
+            .mark_released(file.path(), &version.id, Some("v9.9.9".into()))
+            .unwrap();
+
+        assert_eq!(released.status, "released");
+        assert_eq!(released.git_tag.as_deref(), Some("v9.9.9"));
+        assert_eq!(released.kind, "tag");
+        assert!(released.released_at.is_some());
     }
 
     #[test]
