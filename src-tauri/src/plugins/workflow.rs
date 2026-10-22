@@ -9,8 +9,8 @@ use crate::db::{open_db, AppResult};
 use crate::kernel::{Context, PluginManifest, PluginRegistry};
 use crate::models::Group;
 use crate::workflow::{
-    board_for_group, create_version, pause_wave, play_wave, update_roadmap, CreateVersionInput,
-    ProjectVersion, UpdateRoadmapInput, VersionBoard, Wave,
+    board_for_group, cancel_ask, create_version, pause_wave, play_wave, start_ask, update_roadmap,
+    CreateVersionInput, ProjectVersion, UpdateRoadmapInput, VersionBoard, Wave,
 };
 
 pub const ENTRY: &str = "builtin:workflow";
@@ -59,6 +59,23 @@ impl WorkflowService {
     pub fn pause_wave(&self, db_path: &Path, wave_id: &str) -> AppResult<Wave> {
         let conn = open_db(db_path)?;
         pause_wave(&conn, wave_id)
+    }
+
+    /// 进入 Ask 模式。
+    pub fn start_ask(
+        &self,
+        db_path: &Path,
+        group: &Group,
+        version_id: &str,
+    ) -> AppResult<ProjectVersion> {
+        let conn = open_db(db_path)?;
+        start_ask(&conn, group, version_id)
+    }
+
+    /// 取消 Ask。
+    pub fn cancel_ask(&self, db_path: &Path, version_id: &str) -> AppResult<ProjectVersion> {
+        let conn = open_db(db_path)?;
+        cancel_ask(&conn, version_id)
     }
 }
 
@@ -264,6 +281,51 @@ mod tests {
         let paused = service.pause_wave(file.path(), "w1").unwrap();
         assert_eq!(paused.status, "paused");
         assert_eq!(paused.play_state, "paused");
+    }
+
+    #[test]
+    fn service_starts_and_cancels_ask() {
+        let (file, mut group) = group_db();
+        group.admin_member_id = Some("m-agent".into());
+        let mut registry = PluginRegistry::new();
+        register(&mut registry);
+        let ctx = Context::new();
+        start_plugins(&ctx, &registry, vec![manifest()]).unwrap();
+        let service = from_context(&ctx).unwrap();
+        let version = service
+            .create_version(
+                file.path(),
+                &group,
+                &CreateVersionInput {
+                    group_id: "g".into(),
+                    name: Some("v-ask".into()),
+                    what: Some("对齐需求".into()),
+                    who: Some("Codex".into()),
+                    how: Some("先问再做".into()),
+                    one_liner: None,
+                    requester_member_id: None,
+                    mode: Some("create".into()),
+                },
+            )
+            .unwrap();
+
+        let asking = service.start_ask(file.path(), &group, &version.id).unwrap();
+        assert_eq!(asking.status, "asking");
+        assert_eq!(
+            service
+                .board(file.path(), &group)
+                .unwrap()
+                .asking_version_id,
+            Some(version.id.clone())
+        );
+
+        let cancelled = service.cancel_ask(file.path(), &version.id).unwrap();
+        assert_eq!(cancelled.status, "planning");
+        assert!(service
+            .board(file.path(), &group)
+            .unwrap()
+            .asking_version_id
+            .is_none());
     }
 
     #[test]

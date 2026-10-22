@@ -2709,8 +2709,11 @@ async fn start_ask_web(
     require_group_access(&conn, &claims.sub, &v0.group_id).map_err(map_acl_err)?;
     let group = db_get_group(&conn, &v0.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_version_manager(&conn, &claims.sub, &group)?;
-    let v = crate::workflow::start_ask(&conn, &group, &version_id)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    let v = match crate::plugins::workflow_service() {
+        Some(service) => service.start_ask(&state.db_path, &group, &version_id),
+        None => crate::workflow::start_ask(&conn, &group, &version_id),
+    }
+    .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
     let prompt = crate::workflow::build_ask_kickoff_prompt(&v);
     let content = format!(
         "@{} {}",
@@ -2743,7 +2746,11 @@ async fn cancel_ask_web(
     require_group_access(&conn, &claims.sub, &v.group_id).map_err(map_acl_err)?;
     let group = db_get_group(&conn, &v.group_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     require_version_manager(&conn, &claims.sub, &group)?;
-    crate::workflow::cancel_ask(&conn, &version_id)
+    let cancelled = match crate::plugins::workflow_service() {
+        Some(service) => service.cancel_ask(&state.db_path, &version_id),
+        None => crate::workflow::cancel_ask(&conn, &version_id),
+    };
+    cancelled
         .map(Json)
         .map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
