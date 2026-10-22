@@ -581,7 +581,7 @@
 .scene-canvas { width:100%; height:100%; display:block; cursor:pointer; }
 .scene-empty { flex:1; display:grid; place-items:center; color:var(--lp-text-secondary); font-size:13px; border:1px dashed var(--lp-border); border-radius:12px; }
 
-.goal-strip { display:flex; align-items:center; gap:10px; padding:6px 10px; font-size:12px; color:var(--lp-text-secondary); }
+.goal-strip { display:flex; align-items:center; gap:10px; padding:6px 10px; font-size:12px; color:var(--lp-text-secondary); flex-wrap:wrap; }
 .gs-title { font-family:var(--mono); font-size:10px; letter-spacing:.12em; color:var(--lp-accent); }
 .gs-objective { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--lp-text-primary); }
 .gs-status { padding:1px 6px; border-radius:6px; background:var(--lp-bg-elev); }
@@ -593,6 +593,16 @@
 .goal-strip button { border:1px solid var(--lp-border-l1); background:var(--lp-bg-elev); color:var(--lp-text-primary); border-radius:6px; padding:2px 8px; font-size:12px; cursor:pointer; }
 .goal-strip input { flex:1; min-width:0; background:var(--lp-bg-elev); border:1px solid var(--lp-border-l1); color:var(--lp-text-primary); border-radius:6px; padding:3px 8px; font-size:12px; }
 .gs-error { color:var(--lp-error); }
+.gs-ledger {
+  flex-basis:100%; max-height:132px; overflow:auto; margin-top:4px; padding-top:6px;
+  border-top:1px solid var(--lp-border-l1);
+  display:flex; flex-direction:column; gap:2px;
+  font-family:var(--mono); font-size:11px; color:var(--lp-text-secondary);
+}
+.gs-ledger-row { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.gs-ledger-row[data-verdict="goal_met"] { color:var(--lp-success); }
+.gs-ledger-row[data-verdict="progress"] { color:var(--lp-accent); }
+.gs-ledger-row[data-verdict="failed"] { color:var(--lp-error); }
 .gs-stop { color:var(--lp-warn); }
 .gs-last { max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--lp-text-secondary); font-size:11px; }
 .gs-auto { display:inline-flex; align-items:center; gap:4px; font-size:11px; color:var(--lp-text-secondary); cursor:pointer; }

@@ -55,7 +55,7 @@
 - [x] 3.2e 驱动器入口：`advance_goal` 命令 + Web 路由 + Goal 条「推进一步」按钮（阻塞任务 + 角色选择单测）
 - [x] 3.3 预算与熔断：轮次 / 时长 / token / 无进展 / 连续失败（触线即停）
 - [x] 3.4 人类闸门：每轮确认（`AwaitingApproval` → `approve`）
-- [x] 3.5 证据账本：`goal_rounds.summary`（schema v9）+ Goal 条展示最近一轮
+- [x] 3.5 证据账本：`goal_rounds.summary`（schema v9）+ Goal 条展示最近一轮 + 「明细」展开全部轮次（`goals/ledger.ts` 6 个单测 + 浏览器验收）
 - [x] 3.6a 自动推进扫描：目标级开关（schema v10）+ 冷却 + 失败隔离 + 创建表单勾选（4 个单测）
 - [x] 3.6b 后台循环接线：Tauri / Web 启动时 spawn 扫描（10s），重启后自动接管 active+auto 目标
 - [x] 3.8 判决标记协议：prompt 要求 Agent 末行输出 `[GOAL:MET]` / `[GOAL:PROGRESS]` / `[GOAL:FAILED]`；judge 标记优先、最后出现者生效、无标记回退关键词（5 个单测）

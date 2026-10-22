@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
 import type { Goal } from "../types";
+import { formatRoundLine } from "./ledger";
 
 const STATUS_LABEL: Record<Goal["status"], string> = {
   draft: "草稿",
@@ -39,6 +40,7 @@ export function GoalStrip({ group }: { group: { id: string } }) {
   const [autoAdvance, setAutoAdvance] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showLedger, setShowLedger] = useState(false);
 
   const reload = useCallback(async () => {
     try {
@@ -124,6 +126,16 @@ export function GoalStrip({ group }: { group: { id: string } }) {
       <span className="gs-meta">
         {goal.rounds.length}/{budgetRounds} 轮 · {totalTokens(goal)} tok
       </span>
+      {goal.rounds.length > 0 && (
+        <button
+          type="button"
+          className="gs-ledger-toggle"
+          onClick={() => setShowLedger((open) => !open)}
+          title="查看每轮判定与摘要（证据账本）"
+        >
+          {showLedger ? "收起" : "明细"}
+        </button>
+      )}
       {goal.rounds.length > 0 && goal.rounds[goal.rounds.length - 1].summary && (
         <span className="gs-last" title={goal.rounds[goal.rounds.length - 1].summary}>
           {goal.rounds[goal.rounds.length - 1].summary}
@@ -179,6 +191,20 @@ export function GoalStrip({ group }: { group: { id: string } }) {
       )}
       {goal.stopReason && <span className="gs-stop">{STOP_LABEL[goal.stopReason]}</span>}
       {error && <span className="gs-error">{error}</span>}
+      {showLedger && goal.rounds.length > 0 && (
+        <div className="gs-ledger" role="region" aria-label="Goal 证据账本">
+          {goal.rounds.map((round) => (
+            <div
+              key={round.index}
+              className="gs-ledger-row"
+              data-verdict={round.verdict}
+              title={round.summary}
+            >
+              {formatRoundLine(round)}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

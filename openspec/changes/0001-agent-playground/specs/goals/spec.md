@@ -272,13 +272,19 @@
 - THEN 摘要截断为 2000 字加省略号
 
 ### Requirement: 证据账本
-每一轮 MUST 保存观察摘要（`summary`），并能在重新读取时恢复；旧数据 MUST 以空串兼容。
+每一轮 MUST 保存观察摘要（`summary`），并能在重新读取时恢复；旧数据 MUST 以空串兼容。Goal 条 MUST 提供「明细」展开，按轮次展示判定、token 与摘要（长摘要截断并保留完整 title）。
 
 #### Scenario: 保存摘要
 - GIVEN 驱动器执行一轮并产出观察摘要
 - WHEN 轮次落库
 - THEN 摘要与判定、token 一起保存
 - AND 重新读取可见相同摘要
+
+#### Scenario: 展开账本
+- GIVEN 目标已有若干轮次
+- WHEN 点击「明细」
+- THEN 按轮次列出「#序号 判定 · token · 摘要」
+- AND 再次点击收起
 
 #### Scenario: 旧数据兼容
 - GIVEN schema v8 的轮次记录没有 summary 列
