@@ -1903,6 +1903,11 @@ fn sha256_of_file(path: &std::path::Path) -> Result<String, String> {
 /// 退出应用并静默安装：以独立进程启动安装器（/S + 显式 /D= 安装位），随后本进程退出。
 #[tauri::command]
 pub fn exit_and_install(installer_path: String, app: tauri::AppHandle) -> AppResult<()> {
+    #[cfg(not(windows))]
+    {
+        let _ = (installer_path, app);
+        Err("仅 Windows 桌面版支持自动安装".into())
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt as _;
@@ -1914,14 +1919,9 @@ pub fn exit_and_install(installer_path: String, app: tauri::AppHandle) -> AppRes
         // DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP：独立运行，不挂本进程控制台
         cmd.creation_flags(0x00000008 | 0x00000200);
         cmd.spawn().map_err(|e| format!("启动安装器失败：{e}"))?;
+        app.exit(0);
+        Ok(())
     }
-    #[cfg(not(windows))]
-    {
-        let _ = installer_path;
-        return Err("仅 Windows 桌面版支持自动安装".into());
-    }
-    app.exit(0);
-    Ok(())
 }
 
 #[tauri::command]

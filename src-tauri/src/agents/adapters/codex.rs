@@ -46,20 +46,15 @@ fn default_auth_path() -> std::path::PathBuf {
     if let Some(home) = std::env::var_os("CODEX_HOME") {
         return std::path::PathBuf::from(home).join("auth.json");
     }
+    #[cfg(windows)]
     let home = std::env::var_os("HOME")
         .map(std::path::PathBuf::from)
-        .or_else(|| {
-            #[cfg(windows)]
-            {
-                std::env::var_os("USERPROFILE").map(std::path::PathBuf::from)
-            }
-            #[cfg(not(windows))]
-            {
-                None
-            }
-        })
-        .unwrap_or_else(|| std::path::PathBuf::from("/root"));
-    home.join(".codex").join("auth.json")
+        .or_else(|| std::env::var_os("USERPROFILE").map(std::path::PathBuf::from));
+    #[cfg(not(windows))]
+    let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
+    home.unwrap_or_else(|| std::path::PathBuf::from("/root"))
+        .join(".codex")
+        .join("auth.json")
 }
 
 pub(crate) fn read_openai_key_from_auth_path(path: &std::path::Path) -> Option<String> {

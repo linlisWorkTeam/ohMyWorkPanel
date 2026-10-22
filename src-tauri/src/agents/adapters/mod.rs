@@ -211,16 +211,15 @@ pub(crate) fn find_executable_path(name: &str) -> Option<String> {
 /// Public wrapper for agent-config / provisioning: whether a CLI executable (or a Windows
 /// shim extension of it) is findable on PATH (incl. npm global on Windows).
 pub fn find_executable_on_path(name: &str) -> Option<String> {
-    find_executable_path(name).or_else(|| {
-        #[cfg(windows)]
-        {
-            find_in_npm(name)
-        }
-        #[cfg(not(windows))]
-        {
-            None
-        }
-    })
+    let found = find_executable_path(name);
+    #[cfg(windows)]
+    {
+        found.or_else(|| find_in_npm(name))
+    }
+    #[cfg(not(windows))]
+    {
+        found
+    }
 }
 
 #[cfg(windows)]
