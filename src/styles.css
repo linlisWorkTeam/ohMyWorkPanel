@@ -992,3 +992,22 @@
 /* 行高与头像（设计 §3：成员行 64、头像 32、任务行 64） */
 .group-avatar { width:32px; height:32px; }
 .queue-card { min-height:64px; padding:12px; }
+
+
+/* 右栏、成员表单与页面标题（设计 §3 / §5） */
+.member-panel header { padding:16px; min-height:56px; }
+.tabs { min-height:40px; }
+.tab, .pm-tab-btn { min-height:40px; font-size:13px; padding:8px 12px; background:transparent; }
+.tab.active, .pm-tab-btn.active { color:var(--lp-text); border-bottom-color:var(--lp-accent); }
+.add-member-form { padding:16px; gap:12px; border-radius:8px; }
+.add-member-form label { font-size:13px; line-height:20px; color:var(--lp-text-dim); }
+.add-member-form input, .add-member-form select { min-height:40px; font-size:14px; padding:8px 10px; box-sizing:border-box; }
+.add-member-form button { min-height:36px; font-size:13px; padding:0 12px; }
+.goals-list-head h2, .content-list-head h2, .extensions-list h2 { font-size:20px; line-height:28px; }
+.modal-form { gap:12px; }
+.modal header { margin-bottom:16px; }
+
+
+/* 路径选择行：按钮不换行、与输入同高（设计 40） */
+.path-input input { flex:1; min-width:0; }
+.path-input button { flex:none; white-space:nowrap; min-height:40px; padding:0 12px; font-size:13px; }

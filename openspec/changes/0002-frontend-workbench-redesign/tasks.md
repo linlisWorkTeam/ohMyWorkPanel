@@ -77,3 +77,13 @@
 | Agent 环境页 PageLayout | 已实现 | `294d47a` |
 | 窄屏抽屉确定性收敛 | 已实现 | 本轮改为按窗口宽度收敛，1024 实测抽屉关闭 |
 | 七主题 × 三视口矩阵 | 已重拍 | 几何变更后 35 张（`output/theme-*.png`） |
+
+### 右栏 / 弹窗 / 缩放（2026-11-05 第四轮）
+
+| 项 | 状态 | 证据 |
+|---|---|---|
+| 右栏页签 40、面板头 16 内距、成员表单 40 控件 | 已实现 | 实测 tab 40 / header 12px 16px / addBtn 36 |
+| 对话框 480、padding 24、表单 gap 12、输入 40 | 已实现 | 实测 modal 480 / pad 24 / gap 12 / input 40 |
+| 路径选择按钮不换行（40 高） | 已实现 | 截图 `output/create-group-modal.png` |
+| 目标/内容/扩展页标题 20/28 | 已实现 | 实测 goalsTitle 20/28 |
+| 200% 缩放（720 CSS px @ DPR2） | 已测 | `scrollWidth === innerWidth`，截图 `output/zoom-200.png` |
