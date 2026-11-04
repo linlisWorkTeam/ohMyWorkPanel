@@ -18,6 +18,20 @@ export type ChatTranscriptProps = {
   onPlayVoice?: (messageId: string, content: string) => void;
   onQuote?: (message: GroupState["messages"][number], senderName: string) => void;
   onMarketingError?: (message: string) => void;
+  /** 打开右栏 run 详情。 */
+  onOpenRun?: (run: TaskRun) => void;
+  /** 在消息上直接审阅。 */
+  onReview?: (run: TaskRun, decision: "approved" | "rejected") => void;
+};
+
+const RUN_STATUS_LABEL: Record<string, string> = {
+  queued: "排队中",
+  running: "运行中",
+  completed: "已完成",
+  failed: "失败",
+  cancelled: "已取消",
+  interrupted: "已中断",
+  changes_requested: "需修改",
 };
 
 /** `[语音]`, `[语音 3″]`, `3″`, `🎤 3`. */
@@ -83,6 +97,8 @@ const TranscriptRow = memo(function TranscriptRow({
   onPlayVoice,
   onQuote,
   onMarketingError,
+  onOpenRun,
+  onReview,
 }: ChatTranscriptProps & { message: GroupState["messages"][number] }) {
   const sender = members.find((member) => member.id === message.senderMemberId);
   const run = runs.find((candidate) => candidate.outputMessageId === message.id);
@@ -98,6 +114,7 @@ const TranscriptRow = memo(function TranscriptRow({
   const marketingMarker = parseMarketingMarker(message.content);
   const senderName = sender?.displayName ?? "已移除成员";
   const showSpeak = Boolean(voiceUxEnabled && hasContent && !responding && onPlayVoice);
+  const [expanded, setExpanded] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const openMenu = (x: number, y: number) => setMenu({ x, y });
   const hold = useLongPress(openMenu);
@@ -119,6 +136,14 @@ const TranscriptRow = memo(function TranscriptRow({
     items.push({ id: "retry", label: "重试", onSelect: () => onRun(run, "retry") });
   }
 
+  const longContent =
+    !responding && (message.content.length > 1200 || (message.content.match(/\n/g)?.length ?? 0) >= 12);
+  const clampClass = longContent && !expanded ? "wp-clamp" : undefined;
+  const durationSec = run?.startedAt
+    ? Math.max(1, Math.round(((run.completedAt ?? Date.now()) - run.startedAt) / 1000))
+    : 0;
+  const runLabel =
+    run?.reviewStatus === "pending" ? "待审阅" : run ? (RUN_STATUS_LABEL[run.status] ?? run.status) : "";
   const whoExtra = responding ? " · 流式" : failed ? " · 失败" : "";
   const bubClass = [
     "wp-bub",
@@ -184,7 +209,21 @@ const TranscriptRow = memo(function TranscriptRow({
               <span className="sec">{voiceSeconds(message.content)}″</span>
             </>
           ) : (
-            body
+            <>
+              <div className={clampClass}>{body}</div>
+              {longContent && (
+                <button
+                  type="button"
+                  className="wp-expand"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setExpanded((value) => !value);
+                  }}
+                >
+                  {expanded ? "收起" : "展开全文"}
+                </button>
+              )}
+            </>
           )}
           {failed && run?.errorMessage && <p className="run-error">{run.errorMessage}</p>}
           {canStop && run && (
@@ -202,6 +241,30 @@ const TranscriptRow = memo(function TranscriptRow({
           )}
         </div>
         <div className="wp-time">{time(message.createdAt)}</div>
+        {run && (
+          <div className="wp-run">
+            <span className="wp-run-status" data-status={run.reviewStatus === "pending" ? "review" : run.status}>
+              {runLabel}
+            </span>
+            {run.phase && <span>{PHASE_LABEL[run.phase] ?? run.phase}</span>}
+            {durationSec > 0 && <span>{durationSec}s</span>}
+            {run.reviewStatus === "pending" && onReview && (
+              <>
+                <button type="button" className="wp-run-btn" onClick={(event) => { event.stopPropagation(); onReview(run, "approved"); }}>
+                  通过
+                </button>
+                <button type="button" className="wp-run-btn" onClick={(event) => { event.stopPropagation(); onReview(run, "rejected"); }}>
+                  驳回
+                </button>
+              </>
+            )}
+            {onOpenRun && (
+              <button type="button" className="wp-run-btn" onClick={(event) => { event.stopPropagation(); onOpenRun(run); }}>
+                详情
+              </button>
+            )}
+          </div>
+        )}
       </div>
       {menu && <ContextActionMenu items={items} x={menu.x} y={menu.y} onClose={() => setMenu(null)} />}
     </div>

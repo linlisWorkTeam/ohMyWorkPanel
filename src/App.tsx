@@ -68,6 +68,7 @@ import { GoalStrip } from "./goals/GoalStrip";
 import { GoalsPage } from "./goals/GoalsPage";
 import { MarketingPage } from "./marketing/MarketingPage";
 import { ObservabilityPage } from "./observability/ObservabilityPage";
+import { RunDetails } from "./members/RunDetails";
 import { SettingsPage } from "./settings/SettingsPage";
 import { GroupNavigation, type GroupNavItem } from "./shell/GroupNavigation";
 import { GroupSettingsView } from "./groups/GroupSettingsView";
@@ -194,6 +195,7 @@ export function App() {
     typeof window === "undefined" || window.matchMedia("(min-width: 1081px)").matches,
   );
   const [rightPanelTab, setRightPanelTab] = useState("core.members");
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [detailInner, setDetailInner] = useState<"home" | "experiences" | "logs">("home");
   const [quote, setQuote] = useState<{ author: string; excerpt: string } | null>(null);
   const [dock, setDock] = useState<DockGeom>(() => readDockGeom());
@@ -1318,6 +1320,7 @@ export function App() {
     setShowMembers((open) => !open);
   };
 
+  const selectedRun = current?.runs.find((run) => run.id === selectedRunId) ?? null;
   const groupNavItems: GroupNavItem[] = [
     { id: "chat", label: "协作" },
     ...(!isChatGroup ? [{ id: "versions", label: "交付" } as GroupNavItem] : []),
@@ -1388,6 +1391,9 @@ export function App() {
         >
           {frame.leftMode === "open" ? "◀◀" : "▶▶"}
         </button>
+        <button type="button" className="sidebar-link" onClick={() => setMainView("settings")}>设置</button>
+        <button type="button" className="sidebar-link" onClick={() => setMainView("observability")}>可观测</button>
+        {isAdmin && <button type="button" className="sidebar-link" onClick={() => setMainView("agent-config")}>Agent 配置</button>}
         {requiresAuth && <button onClick={() => goLogin(null)}>退出登录{authUser ? `（${authUser.username}）` : ""}</button>}
       </div>
       }
@@ -1526,6 +1532,8 @@ export function App() {
               onPlayVoice={playMessageVoice}
               onQuote={(msg, senderName) => setQuote({ author: senderName, excerpt: extractReplyPreview(msg.content, 80) })}
               onMarketingError={(message) => setError(message)}
+              onOpenRun={(run) => { setSelectedRunId(run.id); setShowMembers(true); setRightPanelTab("core.details"); }}
+              onReview={(run, decision) => void changeRunReview(run, decision)}
             />
           )}
           {current.runs
@@ -1836,7 +1844,17 @@ export function App() {
           <div><button type="button" className="quiet-button" onClick={() => setShowAddMember(false)}>取消</button><button type="submit">添加</button></div>
         </form> : isAdmin ? <button className="add-member-button" onClick={() => { setNewMember(emptyMember); setShowAddMember(true); }}>＋ 邀请成员</button> : null}
       </> : rightPanelTab === "core.queue" ? <RunQueuePane runs={current.runs} members={members} onCancel={(run) => void changeRun(run, "cancel")} onReview={(run, decision) => void changeRunReview(run, decision)} />
-      : rightPanelTab === "core.details" ? <div className="details-pane">
+      : rightPanelTab === "core.details" ? (selectedRun ? (
+        <RunDetails
+          run={selectedRun}
+          member={members.find((member) => member.id === selectedRun.agentMemberId)}
+          parent={current?.runs.find((candidate) => candidate.id === selectedRun.parentRunId) ?? null}
+          onClose={() => setSelectedRunId(null)}
+          onCancel={(run) => void changeRun(run, "cancel")}
+          onRetry={(run) => void changeRun(run, "retry")}
+          onReview={(run, decision) => void changeRunReview(run, decision)}
+        />
+      ) : <div className="details-pane">
         {detailInner !== "home" && (
           <div className="details-links" style={{ paddingBottom: 0 }}>
             <button type="button" onClick={() => setDetailInner("home")}>← 返回详情</button>
@@ -1851,6 +1869,7 @@ export function App() {
         ) : detailInner === "experiences" ? <ExperiencePanel groupId={current.group.id} members={members} ownerId={current.group.ownerMemberId} onError={(msg) => setError(msg)} />
         : <LogsPanel onError={(msg) => setError(msg)} />}
       </div>
+      )
       : rightPanelTab === "core.settings" ? (
         <div className="settings-pane modal-form settings-modal">
           <h3 className="settings-section-title">外观</h3>
