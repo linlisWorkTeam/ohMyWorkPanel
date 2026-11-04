@@ -10,6 +10,7 @@ export function Shell({
   groups,
   footer,
   header,
+  nav,
   wave,
   chat,
   composer,
@@ -24,6 +25,7 @@ export function Shell({
   groups: ReactNode;
   footer: ReactNode;
   header: ReactNode;
+  nav?: ReactNode;
   wave: ReactNode;
   chat: ReactNode;
   composer: ReactNode;
@@ -46,6 +48,7 @@ export function Shell({
       </aside>
       <section className="wp-mid">
         <header className="wp-head">{header}</header>
+        {nav}
         {wave && <div className="wp-wave">{wave}</div>}
         {chat}
         {composer}

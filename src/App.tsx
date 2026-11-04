@@ -65,6 +65,8 @@ import { VersionView } from "./workflow/VersionView";
 import { resolveSceneView, openSceneGroupScope } from "./scene/host";
 import type { SceneViewProps } from "./scene/SceneView";
 import { GoalStrip } from "./goals/GoalStrip";
+import { GoalsPage } from "./goals/GoalsPage";
+import { GroupNavigation, type GroupNavItem } from "./shell/GroupNavigation";
 import { GroupSettingsView } from "./groups/GroupSettingsView";
 import { AgentConfigView } from "./agents/AgentConfigView";
 import {
@@ -1313,6 +1315,19 @@ export function App() {
     setShowMembers((open) => !open);
   };
 
+  const groupNavItems: GroupNavItem[] = [
+    { id: "chat", label: "协作" },
+    ...(!isChatGroup ? [{ id: "versions", label: "交付" } as GroupNavItem] : []),
+    ...(!isChatGroup ? [{ id: "goals", label: "目标" } as GroupNavItem] : []),
+    { id: "scene", label: "场景" },
+  ];
+  const activeGroupNav =
+    mainView === "goals" || mainView === "versions" || mainView === "scene"
+      ? mainView
+      : mainView === "chat"
+        ? "chat"
+        : null;
+
   return <main className="app-shell" ref={frame.rootRef} style={{ ...frame.rootStyle, display: "flex", flexDirection: "column" }} data-left={frame.leftMode} data-right={frame.rightOpen ? "open" : "closed"}>
     {showMembers && <div className="members-backdrop" onClick={() => setShowMembers(false)} />}
     <div style={{ flex: 1, minHeight: 0, width: "100%" }}>
@@ -1407,7 +1422,10 @@ export function App() {
             <RuntimeHeaderThemePop open={false} onPick={() => undefined} />
           </div>
       </> : null}
-      wave={!isChatGroup && current ? (
+      nav={current ? (
+        <GroupNavigation items={groupNavItems} active={activeGroupNav} onSelect={(id) => setMainView(id)} />
+      ) : null}
+      wave={!isChatGroup && current && mainView !== "goals" ? (
         <>
           <div
             className="goal-bar"
@@ -1434,6 +1452,11 @@ export function App() {
             runs={current.runs}
             onExit={() => setMainView("chat")}
             onSelectAgent={() => setShowMembers(true)}
+          />
+        ) : !isChatGroup && mainView === "goals" ? (
+          <GoalsPage
+            groupId={current.group.id}
+            canManage={isAdmin || Boolean(senderMemberId && current.group.ownerMemberId === senderMemberId)}
           />
         ) : !isChatGroup && mainView === "versions" ? (
           <VersionView
@@ -1508,7 +1531,7 @@ export function App() {
       ) : groups.length === 0 && groupsLoaded ? (
         <EmptyHome canCreate={isAdmin} onCreate={() => setShowCreate(true)} />
       ) : <div className="loading">正在打开本地群聊…</div>}
-      composer={current && mainView !== "dsh" && mainView !== "agent-config" && mainView !== "scene" && !(!isChatGroup && mainView === "versions") ? <div className="wp-composer-anchor">
+      composer={current && mainView !== "dsh" && mainView !== "agent-config" && mainView !== "scene" && mainView !== "goals" && !(!isChatGroup && mainView === "versions") ? <div className="wp-composer-anchor">
           {slashOpen && (
             <div className="mention-menu slash-menu">
               {SLASH_COMMANDS.map((c) => (
