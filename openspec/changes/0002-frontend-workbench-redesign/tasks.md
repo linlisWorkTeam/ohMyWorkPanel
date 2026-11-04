@@ -87,3 +87,13 @@
 | 路径选择按钮不换行（40 高） | 已实现 | 截图 `output/create-group-modal.png` |
 | 目标/内容/扩展页标题 20/28 | 已实现 | 实测 goalsTitle 20/28 |
 | 200% 缩放（720 CSS px @ DPR2） | 已测 | `scrollWidth === innerWidth`，截图 `output/zoom-200.png` |
+
+### 排版与焦点（2026-11-05 第五轮）
+
+| 项 | 状态 | 证据 |
+|---|---|---|
+| 辅助信息 12/18（时间、标签） | 已实现 | 实测 `.wp-time` 12/18 |
+| 代码块 padding 12、mono 12/18、横向滚动 | 已实现 | `.wp-bub pre/code` 规则 |
+| 全局 focus-visible 2px ring + 2px offset | 已实现 | Tab 实测 outline 2px solid / offset 2px |
+| 未读徽章 ≥18 | 已实现 | `.unread-badge` 规则 |
+| 七主题矩阵最终重拍 | 已完成 | 35 张（`output/theme-*.png`） |
