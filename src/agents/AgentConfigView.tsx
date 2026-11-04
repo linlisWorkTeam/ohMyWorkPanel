@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import type { AgentEnvStatus, AgentConfigBundle, ImportReport } from "../api-web";
+import { PageHeader, PageSection, PageShell } from "../components/ui";
 
 interface Props {
   onError: (msg: string) => void;
@@ -137,15 +138,22 @@ export function AgentConfigView({ onError, onStatusChange }: Props) {
   };
 
   if (loading) {
-    return <div className="project-workflow agent-config-view"><p className="wf-hint">正在检测 Agent 环境…</p></div>;
+    return (
+      <div className="project-workflow agent-config-view">
+        <p className="wf-hint">正在检测 Agent 环境…</p>
+      </div>
+    );
   }
 
   const knownClis = (status?.clis ?? []).filter((c) => Boolean(CLI_LABELS[c.cli]));
 
   return (
-    <div className="project-workflow agent-config-view">
-      <section className="wf-section">
-        <h2>环境自检</h2>
+    <PageShell className="agent-config-view">
+      <PageHeader
+        title="Agent 环境"
+        description="检测本机 CLI、导入导出配置包与一键安装；成员专属配置请在成员详情中修改。"
+      />
+      <PageSection title="环境自检">
         <p className="wf-hint">
           检测本机（服务器）已安装的 Agent CLI、Node.js 与 Codex shim（
           <code>127.0.0.1:{status?.shimPort ?? 18888}</code>
@@ -214,10 +222,9 @@ export function AgentConfigView({ onError, onStatusChange }: Props) {
             </div>
           ))}
         </div>
-      </section>
+      </PageSection>
 
-      <section className="wf-section">
-        <h2>一键导入（本地 / 新安装）</h2>
+      <PageSection title="一键导入（本地 / 新安装）">
         <p className="wf-hint">
           粘贴从服务器导出的配置包（<code>ohmyworkpanel-agent-config-*.json</code>），或选择该文件。
           导入会：写 <code>~/.codex</code>、<code>~/.claude</code>、<code>~/.cursor</code>、
@@ -272,10 +279,9 @@ export function AgentConfigView({ onError, onStatusChange }: Props) {
             )}
           </div>
         )}
-      </section>
+      </PageSection>
 
-      <section className="wf-section">
-        <h2>导出配置包（在服务器 / 已 vibecoding 好的环境执行一次）</h2>
+      <PageSection title="导出配置包（在服务器 / 已 vibecoding 好的环境执行一次）">
         <p className="wf-hint">
           把当前环境的 Agent 配置收敛成一份可移植包：codex（base_url / model / key）、claude
           （base_url / token）、cursor（cli-config / mcp）、成员映射。到本地「一键导入」即可。
@@ -297,17 +303,16 @@ export function AgentConfigView({ onError, onStatusChange }: Props) {
             value={exportText}
           />
         )}
-      </section>
+      </PageSection>
 
-      <section className="wf-section">
-        <h2>使用说明（release 开箱即用）</h2>
+      <PageSection title="使用说明（release 开箱即用）">
         <ol className="wf-ol">
           <li><strong>服务器（首台）</strong>：在已 vibecoding 配好 Agent 的 ECS 上登录面板 → 「Agent 配置」→ 「导出配置包（含密钥）」→ 保存 <code>ohmyworkpanel-agent-config-with-secrets.json</code>。</li>
           <li><strong>本地 / 新机器</strong>：安装面板 release → 「Agent 配置」→ 粘贴该包 → 「一键导入并配置」→ 缺失 CLI 自动安装，缺哪个就点「自动安装」。</li>
           <li>此后每次启动会 <strong>自动重放</strong>（幂等补写缺失配置），新用户无需重新 vibecoding。</li>
           <li>扩展性：未知 CLI 可用包内 <code>files</code>（home 相对路径 → 内容）额外携带配置；密钥字段不含密钥时导入不会误写。</li>
         </ol>
-      </section>
-    </div>
+      </PageSection>
+    </PageShell>
   );
 }
