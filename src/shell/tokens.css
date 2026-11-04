@@ -384,8 +384,8 @@ body::before {
 }
 
 .wp-av {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 6px;
   display: grid;
   place-items: center;
@@ -698,7 +698,8 @@ body::before {
 
 .wp-m-row {
   display: grid;
-  grid-template-columns: 40px minmax(0,1fr) auto;
+  min-height: 64px;
+  grid-template-columns: 32px minmax(0,1fr) auto;
   gap: 10px;
   align-items: center;
   padding: 8px 8px;
@@ -715,8 +716,8 @@ body::before {
 }
 
 .wp-m-av {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   border-radius: 10px;
   display: grid;
   place-items: center;

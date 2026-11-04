@@ -52,7 +52,6 @@ export function useAppFrame(options: UseAppFrameOptions = {}) {
   leftWRef.current = leftW;
   const rightWRef = useRef(rightW);
   rightWRef.current = rightW;
-  const prevWidth = useRef(0);
   const rightOpen = options.rightOpen !== false;
 
   const setLeftW = useCallback((w: number) => {
@@ -68,26 +67,16 @@ export function useAppFrame(options: UseAppFrameOptions = {}) {
     setLeftMode((mode) => (mode === "open" ? "rail" : "open"));
   }, []);
 
-  // 窄屏让步（仅在穿越阈值时自动收敛一次，避免与手动操作反复打架）
+  // 窄屏让步：按当前窗口宽度收敛（1280 以下侧栏折叠、右栏关闭）。
   useEffect(() => {
-    const el = rootRef.current;
-    if (!el) return;
     const check = () => {
-      const w = el.clientWidth;
-      if (prevWidth.current === 0) prevWidth.current = w;
-      const narrowed = prevWidth.current > w;
-      if (narrowed && w < CONCEDE_RIGHT && options.rightOpen && options.onRightClose) {
-        options.onRightClose();
-      }
-      if (narrowed && w < CONCEDE_LEFT) {
-        setLeftMode((mode) => (mode === "open" ? "rail" : mode));
-      }
-      prevWidth.current = w;
+      const width = typeof window !== "undefined" ? window.innerWidth : 1440;
+      if (width < CONCEDE_RIGHT && options.rightOpen) options.onRightClose?.();
+      if (width < CONCEDE_LEFT) setLeftMode((mode) => (mode === "open" ? "rail" : mode));
     };
     check();
-    const ro = new ResizeObserver(check);
-    ro.observe(el);
-    return () => ro.disconnect();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
   }, [options.rightOpen, options.onRightClose]);
 
   const leftDivider: DividerProps = {

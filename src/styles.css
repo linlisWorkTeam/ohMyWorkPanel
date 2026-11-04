@@ -987,3 +987,8 @@
 .goal-strip { min-height:24px; padding:1px 10px; font-size:11px; line-height:16px; gap:8px; }
 .goal-strip button { min-height:18px; padding:0 6px; font-size:11px; }
 .goal-strip input { padding:1px 6px; font-size:11px; }
+
+
+/* 行高与头像（设计 §3：成员行 64、头像 32、任务行 64） */
+.group-avatar { width:32px; height:32px; }
+.queue-card { min-height:64px; padding:12px; }
