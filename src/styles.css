@@ -1072,3 +1072,13 @@
 .member-form-legend { margin:8px 0 0; font-size:12px; line-height:18px; font-weight:600; color:var(--lp-text-dim); letter-spacing:.04em; }
 .member-field { display:flex; flex-direction:column; gap:4px; font-size:13px; line-height:20px; color:var(--lp-text-dim); }
 .member-field input, .member-field select { width:100%; box-sizing:border-box; }
+
+
+/* 群设置 / 路线图排版（设计 §3：标题 16/24、辅助 12/18、间距 4 的倍数） */
+.wf-section { padding:16px 20px; box-shadow:none; }
+.wf-section h2 { font-size:16px; line-height:24px; }
+.wf-hint, .wf-meta { line-height:18px; }
+.wf-announce { min-height:96px; }
+.pm-tab { font-size:12px; min-height:36px; padding:8px 12px; }
+.pm-tab.active { color:var(--lp-text); border-bottom-color:var(--lp-accent); }
+.pm-count { font-size:11px; }
