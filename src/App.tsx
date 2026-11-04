@@ -11,6 +11,7 @@ import {
 } from "./chat/chatUi";
 import { applyPresence, shouldBumpUnread } from "./accounts/presence";
 import { routeChatEvent } from "./chat/eventRouting";
+import { bootSession } from "./shell/bootSession";
 import { currentMentionQuery, findMentionedMemberIds } from "./chat/mentions";
 import { applyMessageDelta, applyRunStatus, isTerminalRunStatus } from "./chat/stateReducers";
 import { defaultModelForAdapter, modelsForAdapter, applyAgentModelsPayload } from "./agents/agentModels";
@@ -458,45 +459,45 @@ export function App() {
         return;
       }
       try {
-        try {
-          const me = await api.verify() as { sub: string; username: string; isAdmin?: boolean; is_admin?: boolean };
-          if (!disposed) {
-            const next: AuthUser = {
-              userId: me.sub,
-              username: me.username,
-              isAdmin: Boolean(me.isAdmin ?? me.is_admin),
-            };
-            saveAuthUser(next);
-            setAuthUser(next);
-          }
-        } catch { /* keep cached */ }
-        const boot = await api.bootstrap();
-        if (disposed) return;
-        setGroups(sortGroupsForSidebar(boot.groups));
-        setGroupsLoaded(true);
-        try {
-          const presence = await api.listPresence();
-          if (!disposed) setOnlineUserIds(new Set(presence.onlineUserIds ?? []));
-        } catch { /* optional */ }
-        if (boot.groups[0]) {
-          forceScrollGroupId.current = boot.groups[0].id;
-          await refresh(boot.groups[0].id);
-          setGroups((prev) => clearUnread(prev, boot.groups[0].id));
-        } else {
-          setCurrent(null);
-          // Only admins may create groups when empty.
-          if ((loadAuthUser()?.isAdmin ?? false)) setShowCreate(true);
-        }
-        try { setSettings(await api.getSettings()); } catch { /* scoped users may lack settings */ }
-        try {
-          const catalog = await api.getAgentModels();
-          applyAgentModelsPayload(catalog);
-        } catch { /* optional live catalog */ }
-        try { setPresetRoles(await api.getPresetRoles()); } catch { /* optional */ }
-        if (!disposed) {
-          setError(null);
-          setSession("ready");
-        }
+        await bootSession(
+          {
+            api: {
+              verify: api.verify,
+              bootstrap: api.bootstrap,
+              listPresence: api.listPresence,
+              getSettings: api.getSettings,
+              getAgentModels: api.getAgentModels,
+              getPresetRoles: api.getPresetRoles,
+            },
+            refresh,
+            isDisposed: () => disposed,
+            onUser: (user: AuthUser) => {
+              saveAuthUser(user);
+              setAuthUser(user);
+            },
+            onGroups: (groups: Group[]) => {
+              setGroups(sortGroupsForSidebar(groups));
+              setGroupsLoaded(true);
+            },
+            onOnline: (ids: string[]) => setOnlineUserIds(new Set(ids)),
+            onFirstGroup: (groupId: string) => {
+              forceScrollGroupId.current = groupId;
+            },
+            onFirstGroupLoaded: (groupId: string) => setGroups((prev) => clearUnread(prev, groupId)),
+            onEmpty: () => {
+              setCurrent(null);
+              if (loadAuthUser()?.isAdmin ?? false) setShowCreate(true);
+            },
+            onSettings: setSettings,
+            onModels: applyAgentModelsPayload,
+            onPresetRoles: setPresetRoles,
+            onReady: () => {
+              setError(null);
+              setSession("ready");
+            },
+          },
+          { verify: true, presence: true, models: true },
+        );
       } catch (reason) {
         if (!disposed) goLogin(isUnauthorizedError(reason) ? "请先登录" : readError(reason));
       }
@@ -511,16 +512,32 @@ export function App() {
     void (async () => {
       if (requiresAuth) return; // web already bootstrapped in checking phase
       try {
-        const boot = await api.bootstrap();
-        if (disposed) return;
-        setGroups(boot.groups);
-        setGroupsLoaded(true);
-        if (boot.groups[0]) {
-          forceScrollGroupId.current = boot.groups[0].id;
-          await refresh(boot.groups[0].id);
-        } else setShowCreate(true);
-        setSettings(await api.getSettings());
-        try { setPresetRoles(await api.getPresetRoles()); } catch { /* optional */ }
+        await bootSession(
+          {
+            api: {
+              bootstrap: api.bootstrap,
+              getSettings: api.getSettings,
+              getPresetRoles: api.getPresetRoles,
+            },
+            refresh,
+            isDisposed: () => disposed,
+            onUser: () => undefined,
+            onGroups: (groups: Group[]) => {
+              setGroups(groups);
+              setGroupsLoaded(true);
+            },
+            onOnline: () => undefined,
+            onFirstGroup: (groupId: string) => {
+              forceScrollGroupId.current = groupId;
+            },
+            onFirstGroupLoaded: () => undefined,
+            onEmpty: () => setShowCreate(true),
+            onSettings: setSettings,
+            onPresetRoles: setPresetRoles,
+            onReady: () => undefined,
+          },
+          { verify: false, presence: false, models: false },
+        );
       } catch (reason) {
         if (!disposed) setError(readError(reason));
       }

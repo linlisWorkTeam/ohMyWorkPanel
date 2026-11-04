@@ -173,3 +173,12 @@
 | 弹窗为底部 toast 留安全区 | 已实现 | `max-height: calc(100dvh - 120px)`（手机 140） |
 | 320 宽弹窗 | 已测 | 全宽底部抽屉，`scrollWidth === innerWidth`，无横向溢出 |
 | 实拍 | 已产出 | `output/modal-320.png` |
+
+### M1 第四刀：boot 编排下沉（2026-11-05 第十四轮）
+
+| 项 | 状态 | 证据 |
+|---|---|---|
+| Web 启动顺序（verify → bootstrap → presence → first refresh → settings → models → preset） | 已实现 | `shell/bootSession.ts` |
+| 桌面启动（无 verify/presence/models） | 已实现 | 同函数 + options |
+| disposed 中止 | 已实现 | bootstrap 后检查，测试覆盖 |
+| 单测 | 已实现 | `bootSession.test.ts` 5 例（顺序、桌面差异、空群、disposed、错误传播） |
