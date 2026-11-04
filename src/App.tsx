@@ -61,7 +61,7 @@ import { ExperiencePanel } from "./observability/ExperiencePanel";
 import { LogsPanel } from "./observability/LogsPanel";
 import { ServerPathPicker } from "./groups/ServerPathPicker";
 import { ExtensionPanel } from "./extensions/ExtensionPanel";
-import { VersionView } from "./workflow/VersionView";
+import { DeliveryPage } from "./workflow/DeliveryPage";
 import { resolveSceneView, openSceneGroupScope } from "./scene/host";
 import type { SceneViewProps } from "./scene/SceneView";
 import { GoalStrip } from "./goals/GoalStrip";
@@ -1479,7 +1479,7 @@ export function App() {
             canManage={isAdmin || Boolean(senderMemberId && current.group.ownerMemberId === senderMemberId)}
           />
         ) : !isChatGroup && mainView === "versions" ? (
-          <VersionView
+          <DeliveryPage
             group={current.group}
             members={members}
             senderMemberId={senderMemberId}

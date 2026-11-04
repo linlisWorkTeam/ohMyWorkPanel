@@ -750,3 +750,42 @@
 .obs-slots p, .obs-job p { margin:0; font-size:12px; color:var(--lp-text-dim); font-family:var(--mono); }
 .obs-job pre { max-height:260px; overflow:auto; margin:8px 0 0; padding:8px 10px; border:1px solid var(--lp-border); border-radius:var(--lp-radius-sm); background:var(--lp-bg-panel); font-family:var(--mono); font-size:11px; color:var(--lp-text-dim); white-space:pre-wrap; }
 .obs-actions { display:flex; gap:8px; }
+
+
+/* ==== 交付页（工作台重设计 P06） ==== */
+.delivery-page { flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+.delivery-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; padding:14px 20px 10px; border-bottom:1px solid var(--lp-border); }
+.delivery-head h2 { margin:0; font-size:18px; color:var(--lp-text); }
+.delivery-head p { margin:4px 0 0; font-size:12px; color:var(--lp-text-dim); }
+.delivery-nav { display:flex; gap:4px; }
+.delivery-tab { height:32px; padding:0 12px; border:1px solid var(--lp-border); border-radius:var(--lp-radius-sm); background:var(--lp-bg-panel); color:var(--lp-text-dim); font-size:12px; cursor:pointer; }
+.delivery-tab:hover { background:var(--lp-bg-hover); color:var(--lp-text); }
+.delivery-tab.is-active { border-color:var(--lp-accent); color:var(--lp-accent); }
+.delivery-tab:focus-visible { outline:2px solid var(--lp-ring); outline-offset:1px; }
+.delivery-body { flex:1; min-height:0; display:flex; overflow:hidden; }
+
+.version-view { display:flex; flex-direction:column; gap:10px; }
+.version-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+.version-git { margin:0; font-size:12px; color:var(--lp-text-dim); font-family:var(--mono); }
+.version-pane { display:grid; grid-template-columns:240px minmax(0,1fr); gap:16px; min-height:0; flex:1; }
+.version-list { min-height:0; overflow-y:auto; border-right:1px solid var(--lp-border); padding-right:12px; }
+.version-list h3 { margin:0 0 8px; font-size:13px; color:var(--lp-text-dim); }
+.version-list ul { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+.version-item { width:100%; text-align:left; display:flex; flex-direction:column; gap:4px; padding:8px 10px; border:1px solid var(--lp-border); border-radius:var(--lp-radius-sm); background:var(--lp-bg-elev); color:var(--lp-text); cursor:pointer; }
+.version-item:hover { background:var(--lp-bg-hover); }
+.version-item.is-active { border-color:var(--lp-accent); background:var(--lp-bg-active); }
+.version-item:focus-visible { outline:2px solid var(--lp-ring); outline-offset:1px; }
+.version-item-name { font-size:13px; }
+.version-item-meta { display:flex; flex-wrap:wrap; gap:8px; font-size:11px; color:var(--lp-text-dim); font-family:var(--mono); }
+.version-list-empty { color:var(--lp-text-dim); font-size:12px; }
+.version-detail { min-height:0; overflow-y:auto; padding-right:4px; display:flex; flex-direction:column; gap:12px; }
+.version-detail-head h2 { margin:0; font-size:18px; color:var(--lp-text); }
+.version-detail-meta { display:flex; flex-wrap:wrap; gap:10px; margin:4px 0 0; font-size:12px; color:var(--lp-text-dim); font-family:var(--mono); }
+.version-oneliner { margin:6px 0 0; font-size:13px; color:var(--lp-text-dim); }
+.version-empty { color:var(--lp-text-dim); font-size:13px; padding:24px 0; }
+.wave-row p { margin:2px 0 0; font-size:12px; color:var(--lp-text-dim); }
+
+@media (max-width: 960px) {
+  .version-pane { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr); }
+  .version-list { border-right:0; border-bottom:1px solid var(--lp-border); padding:0 0 10px; max-height:180px; }
+}
