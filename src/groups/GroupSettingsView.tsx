@@ -120,7 +120,7 @@ export function GroupSettingsView({
       {!isChat && (
         <section className="wf-section">
           <h2>Agent 工作区</h2>
-          <p className="wf-hint">可覆盖单个 Agent 的沙箱路径（须落在群工作区下）。</p>
+          <p className="wf-hint">可覆盖单个 Agent 的沙箱路径（须落在群工作区下；支持相对路径，如 <code>agents/a1</code>）。</p>
           <div className="agent-lanes">
             {agents.map((agent) => (
               <div key={agent.id} className="agent-lane">
@@ -134,7 +134,7 @@ export function GroupSettingsView({
                   {canManage && (
                     editingAgent === agent.id ? (
                       <div className="wf-ws-edit">
-                        <ServerPathPicker value={agentWs} onChange={setAgentWs} onError={onError} />
+                        <ServerPathPicker value={agentWs} onChange={setAgentWs} onError={onError} allowRelative />
                         <button className="pm-btn sm" onClick={() => void saveAgentWorkspace(agent.id)}>保存</button>
                         <button className="pm-btn sm quiet" onClick={() => setEditingAgent(null)}>取消</button>
                       </div>

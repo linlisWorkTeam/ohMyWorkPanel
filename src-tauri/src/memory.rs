@@ -130,22 +130,46 @@ pub fn resolve_agent_workspace(
         .map_err(|e| format!("群工作区无效：{e}。请在群设置中重新选择本机上的目录（跨系统迁移的群需要更新工作区路径）"))?;
     let target = if let Some(raw) = configured.map(str::trim).filter(|s| !s.is_empty()) {
         let p = Path::new(raw);
-        if !p.is_absolute() {
-            return Err("Agent 工作区必须是绝对路径。".into());
+        // 绝对路径原样使用；相对路径按群工作区解析（如 `agents/a1`）。
+        let candidate = if p.is_absolute() || p.has_root() {
+            normalize_lexical(p)
+        } else {
+            normalize_lexical(&group_canon.join(p))
+        };
+        // 先做词法越界检查，避免在群目录之外建目录（`..` 逃逸）。
+        if !candidate.starts_with(&group_canon) && !allow_cross_workspace {
+            return Err("Agent 工作区必须位于群工作区目录之内。".into());
         }
-        if !p.exists() {
-            std::fs::create_dir_all(p).map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(&candidate)
+            .map_err(|e| format!("无法创建 Agent 工作区 {}：{e}", candidate.display()))?;
+        let canon = candidate.canonicalize().map_err(|e| e.to_string())?;
+        // 符号链接仍可能指到群外，最终再校验一次。
+        if !canon.starts_with(&group_canon) && !allow_cross_workspace {
+            return Err("Agent 工作区必须位于群工作区目录之内。".into());
         }
-        p.canonicalize().map_err(|e| e.to_string())?
+        canon
     } else {
         let d = default_agent_workspace(&group_canon, agent_member_id);
         std::fs::create_dir_all(d.join("scratch")).map_err(|e| e.to_string())?;
         d.canonicalize().unwrap_or(d)
     };
-    if !target.starts_with(&group_canon) && !allow_cross_workspace {
-        return Err("Agent 工作区必须位于群工作区目录之内。".into());
-    }
     Ok(target)
+}
+
+/// 纯词法归一化：折叠 `.` 与 `..`，不访问文件系统。
+fn normalize_lexical(path: &Path) -> PathBuf {
+    use std::path::Component;
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                out.pop();
+            }
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -165,6 +189,33 @@ mod tests {
             resolve_agent_workspace_under_group(&group, "a1", Some(outside.to_str().unwrap()))
                 .unwrap_err();
         assert!(err.contains("之内"));
+    }
+
+    #[test]
+    fn relative_agent_workspace_resolves_under_group() {
+        let dir = tempfile::tempdir().unwrap();
+        let group = dir.path().join("group");
+        std::fs::create_dir_all(&group).unwrap();
+
+        let ws = resolve_agent_workspace_under_group(&group, "a1", Some("agents/a1")).unwrap();
+
+        let group_canon = group.canonicalize().unwrap();
+        assert_eq!(ws, group_canon.join("agents").join("a1"));
+        assert!(ws.is_dir());
+    }
+
+    #[test]
+    fn relative_agent_workspace_cannot_escape_group() {
+        let dir = tempfile::tempdir().unwrap();
+        let group = dir.path().join("group");
+        std::fs::create_dir_all(&group).unwrap();
+
+        let err =
+            resolve_agent_workspace_under_group(&group, "a1", Some("../outside")).unwrap_err();
+
+        assert!(err.contains("之内"));
+        // 词法检查先于建目录：群外目录不应被顺手创建出来。
+        assert!(!dir.path().join("outside").exists());
     }
 
     #[test]

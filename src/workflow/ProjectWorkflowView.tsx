@@ -390,7 +390,7 @@ export function ProjectWorkflowView({ group, members, runs, canManage, onGroupPa
                     {canManage && (
                       editingAgent === agent.id ? (
                         <div className="wf-ws-edit">
-                          <ServerPathPicker value={agentWs} onChange={setAgentWs} onError={onError} />
+                          <ServerPathPicker value={agentWs} onChange={setAgentWs} onError={onError} allowRelative />
                           <button className="pm-btn sm" onClick={() => void saveAgentWorkspace(agent.id)}>保存</button>
                           <button className="pm-btn sm quiet" onClick={() => setEditingAgent(null)}>取消</button>
                         </div>

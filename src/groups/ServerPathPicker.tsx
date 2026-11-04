@@ -7,6 +7,18 @@ interface Props {
   value: string;
   onChange: (path: string) => void;
   onError?: (msg: string) => void;
+  /** 允许相对路径（按群工作区解析）；为 true 时只对绝对路径做目录浏览。 */
+  allowRelative?: boolean;
+}
+
+/** 粗判绝对路径：Windows 盘符 / UNC，或 Unix 根路径。 */
+function looksAbsolute(path: string): boolean {
+  const p = path.trim();
+  if (p.startsWith("/")) return true;
+  if (p.charCodeAt(0) === 92 && p.charCodeAt(1) === 92) return true; // UNC (two backslashes)
+  const isLetter = /[A-Za-z]/.test(p[0] ?? "");
+  const sep = p.charCodeAt(2);
+  return isLetter && p[1] === ":" && (sep === 92 || p[2] === "/");
 }
 
 type Crumb = { label: string; path: string };
@@ -34,7 +46,7 @@ function platformCrumbs(path: string | undefined): Crumb[] {
 
 const isWindows = typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent);
 
-export function ServerPathPicker({ value, onChange, onError }: Props) {
+export function ServerPathPicker({ value, onChange, onError, allowRelative = false }: Props) {
   const [listing, setListing] = useState<DirListing | null>(null);
   const [loading, setLoading] = useState(false);
   const [manual, setManual] = useState(value);
@@ -55,7 +67,7 @@ export function ServerPathPicker({ value, onChange, onError }: Props) {
   }, [onError]);
 
   useEffect(() => {
-    void load(value || "/");
+    if (!allowRelative || looksAbsolute(value)) void load(value || "/");
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- initial browse only
 
   const crumbs = platformCrumbs(listing?.path);
@@ -109,7 +121,14 @@ export function ServerPathPicker({ value, onChange, onError }: Props) {
         <button type="button" className="pm-btn sm" onClick={pickNativeDir} title="通过系统对话框选择本机目录（桌面版）">
           本机选择…
         </button>
-        <button type="button" onClick={() => { onChange(manual.trim()); void load(manual.trim() || "/"); }}>
+        <button
+          type="button"
+          onClick={() => {
+            const next = manual.trim();
+            onChange(next);
+            if (!allowRelative || looksAbsolute(next)) void load(next || "/");
+          }}
+        >
           打开
         </button>
       </div>
