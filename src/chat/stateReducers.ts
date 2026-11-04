@@ -102,3 +102,18 @@ export function applyRunStatus(previous: GroupState | null, payload: ChatEvent):
   }
   return { state: { ...previous, runs, messages }, missing: false };
 }
+
+
+/** 运行心跳：只更新状态与 phase 时间，不产生新的 run 记录。 */
+export function applyRunHeartbeat(previous: GroupState | null, payload: ChatEvent): GroupState | null {
+  if (!previous || payload.kind !== "run_heartbeat" || !payload.runId) return previous;
+  const index = previous.runs.findIndex((run) => run.id === payload.runId);
+  if (index < 0) return previous;
+  const runs = previous.runs.slice();
+  runs[index] = {
+    ...runs[index],
+    status: (payload.status as GroupState["runs"][number]["status"]) ?? runs[index].status,
+    phaseUpdatedAt: Date.now(),
+  };
+  return { ...previous, runs };
+}

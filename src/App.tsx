@@ -9,11 +9,9 @@ import {
   formatQuotePrefix,
   isNearBottom,
 } from "./chat/chatUi";
-import { applyPresence, shouldBumpUnread } from "./accounts/presence";
-import { routeChatEvent } from "./chat/eventRouting";
 import { bootSession } from "./shell/bootSession";
+import { dispatchChatEvent, type ChatEventBridgeDeps } from "./chat/chatEventBridge";
 import { currentMentionQuery, findMentionedMemberIds } from "./chat/mentions";
-import { applyMessageDelta, applyRunStatus, isTerminalRunStatus } from "./chat/stateReducers";
 import { defaultModelForAdapter, modelsForAdapter, applyAgentModelsPayload } from "./agents/agentModels";
 import {
   CONNECTER_REMOTE_ADAPTER,
@@ -505,6 +503,41 @@ export function App() {
     return () => { disposed = true; };
   }, [session]);
 
+  const resyncAll = async () => {
+    const boot = await api.bootstrap();
+    setGroups(sortGroupsForSidebar(boot.groups));
+    const gid = currentGroupIdRef.current ?? boot.groups[0]?.id;
+    if (!gid) return;
+    await refresh(gid);
+    try {
+      const active = await api.listActiveRuns?.(gid);
+      if (active) {
+        setCurrent((prev) => {
+          if (!prev || prev.group.id !== gid) return prev;
+          const byId = new Map(prev.runs.map((r) => [r.id, r]));
+          for (const r of active) byId.set(r.id, r);
+          return { ...prev, runs: [...byId.values()] };
+        });
+      }
+    } catch {
+      /* optional */
+    }
+  };
+
+  const bridgeDepsRef = useRef<ChatEventBridgeDeps | null>(null);
+  bridgeDepsRef.current = {
+    getActiveGroupId: () => currentGroupIdRef.current ?? null,
+    setOnline: setOnlineUserIds,
+    bumpUnread: (groupId: string) => setGroups((prev) => bumpUnread(prev, groupId, currentGroupIdRef.current)),
+    setCurrent,
+    refresh: (groupId?: string) => refresh(groupId),
+    resync: resyncAll,
+    reportError: (reason: unknown) => {
+      if (isUnauthorizedError(reason)) goLogin("登录已失效，请重新登录");
+      else setError(readError(reason));
+    },
+  };
+
   // Desktop bootstrap + event subscription (web bootstrap happens in checking phase).
   useEffect(() => {
     if (session !== "ready") return;
@@ -543,107 +576,8 @@ export function App() {
       }
     })();
     const unlisten = listen<ChatEvent>("chat-event", (event) => {
-      const payload = event.payload;
-      const activeGroupId: string | null | undefined = currentGroupIdRef.current;
-      const route = routeChatEvent(payload);
-      if (route === "ignore") return;
-      if (route === "presence") {
-        setOnlineUserIds((previous) => applyPresence(previous, payload));
-        return;
-      }
-      if (shouldBumpUnread(payload)) {
-        setGroups((prev) => bumpUnread(prev, payload.groupId!, activeGroupId));
-      }
-      if (route === "orchestration") {
-        if (activeGroupId) {
-          void refresh(activeGroupId ?? undefined).catch((reason) => {
-            if (isUnauthorizedError(reason)) goLogin("登录已失效，请重新登录");
-            else setError(readError(reason));
-          });
-        }
-        return;
-      }
-      if (route === "resync") {
-        void (async () => {
-          try {
-            const boot = await api.bootstrap();
-            setGroups(sortGroupsForSidebar(boot.groups));
-            const gid = activeGroupId || boot.groups[0]?.id;
-            if (gid) {
-              await refresh(gid);
-              try {
-                const active = await api.listActiveRuns?.(gid);
-                if (active) {
-                  setCurrent((prev) => {
-                    if (!prev || prev.group.id !== gid) return prev;
-                    const byId = new Map(prev.runs.map((r) => [r.id, r]));
-                    for (const r of active) byId.set(r.id, r);
-                    return { ...prev, runs: [...byId.values()] };
-                  });
-                }
-              } catch { /* optional */ }
-            }
-          } catch (reason) {
-            if (isUnauthorizedError(reason)) goLogin("登录已失效，请重新登录");
-            else setError(readError(reason));
-          }
-        })();
-        return;
-      }
-      if (payload.kind === "run_heartbeat" && payload.runId) {
-        setCurrent((previous) => {
-          if (!previous) return previous;
-          const idx = previous.runs.findIndex((r) => r.id === payload.runId);
-          if (idx < 0) return previous;
-          const runs = previous.runs.slice();
-          runs[idx] = {
-            ...runs[idx],
-            status: (payload.status as TaskRun["status"]) ?? runs[idx].status,
-            phaseUpdatedAt: Date.now(),
-          };
-          return { ...previous, runs };
-        });
-        return;
-      }
-      if (payload.kind === "message_delta" && payload.messageId) {
-        if (payload.groupId && payload.groupId !== activeGroupId) return;
-        setCurrent((previous) => {
-          const outcome = applyMessageDelta(previous, payload);
-          if (outcome.missing) {
-            void refresh(previous?.group.id ?? activeGroupId).catch((reason) => {
-              if (isUnauthorizedError(reason)) goLogin("登录已失效，请重新登录");
-              else setError(readError(reason));
-            });
-          }
-          return outcome.state;
-        });
-        return;
-      }
-      if (payload.kind === "run_status" && payload.runId) {
-        const terminal = isTerminalRunStatus(payload.status);
-        setCurrent((previous) => {
-          const outcome = applyRunStatus(previous, payload);
-          if (outcome.missing) {
-            void refresh(payload.groupId || previous?.group.id).catch((reason) => {
-              if (isUnauthorizedError(reason)) goLogin("登录已失效，请重新登录");
-              else setError(readError(reason));
-            });
-          }
-          return outcome.state;
-        });
-        if (terminal) {
-          void refresh(payload.groupId || activeGroupId).catch((reason) => {
-            if (isUnauthorizedError(reason)) goLogin("登录已失效，请重新登录");
-            else setError(readError(reason));
-          });
-        }
-        return;
-      }
-      if (payload.groupId && payload.groupId !== activeGroupId) return;
-      void refresh(payload.groupId || activeGroupId).catch((reason) => {
-        if (isUnauthorizedError(reason)) goLogin("登录已失效，请重新登录");
-        else setError(readError(reason));
-      });
+      const deps = bridgeDepsRef.current;
+      if (deps) dispatchChatEvent(event.payload, deps);
     });
     return () => { disposed = true; void unlisten.then((unsubscribe) => unsubscribe()); };
   }, [session]);

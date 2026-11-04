@@ -182,3 +182,13 @@
 | 桌面启动（无 verify/presence/models） | 已实现 | 同函数 + options |
 | disposed 中止 | 已实现 | bootstrap 后检查，测试覆盖 |
 | 单测 | 已实现 | `bootSession.test.ts` 5 例（顺序、桌面差异、空群、disposed、错误传播） |
+
+### M1 第五刀：WS 订阅体下沉（2026-11-05 第十五轮）
+
+| 项 | 状态 | 证据 |
+|---|---|---|
+| `listen("chat-event")` 处理体移入 `chat/chatEventBridge` | 已实现 | `dispatchChatEvent(payload, deps)` |
+| App 仅保留 deps 装配与 resyncAll | 已实现 | 订阅回调 3 行 |
+| heartbeat 归并 | 已实现 | `applyRunHeartbeat`（不产生新 run、不触发刷新） |
+| 单测 | 已实现 | `chatEventBridge.test.ts` 7 例 |
+| 真实 WS 冒烟 | 通过 | 消息可见、Agent 回复落地（10 条、终态 2s） |
