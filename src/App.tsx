@@ -304,6 +304,9 @@ export function App() {
   const holdActiveRef = useRef(false);
   const currentGroupIdRef = useRef<string | undefined>(undefined);
   const [showJumpBottom, setShowJumpBottom] = useState(false);
+  const [newSinceScroll, setNewSinceScroll] = useState(0);
+  const [summaryOpen, setSummaryOpen] = useState(true);
+  const seenMessagesRef = useRef(0);
   const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_MESSAGES);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasMoreOlder, setHasMoreOlder] = useState(false);
@@ -729,6 +732,41 @@ export function App() {
     scrollMessagesToBottom(entering || stickToBottom.current);
   }, [lastKey, mainView, current?.group.id]);
 
+  useEffect(() => {
+    const len = current?.messages.length ?? 0;
+    if (stickToBottom.current) {
+      seenMessagesRef.current = len;
+      setNewSinceScroll(0);
+    } else {
+      setNewSinceScroll(Math.max(0, len - seenMessagesRef.current));
+    }
+  }, [current?.messages.length, current?.group.id]);
+
+  useEffect(() => {
+    const groupId = current?.group.id;
+    if (!groupId) return;
+    try {
+      setSummaryOpen(localStorage.getItem(`omwp.summary.${groupId}`) !== "0");
+    } catch {
+      setSummaryOpen(true);
+    }
+  }, [current?.group.id]);
+
+  const toggleSummary = () => {
+    setSummaryOpen((open) => {
+      const next = !open;
+      const groupId = current?.group.id;
+      if (groupId) {
+        try {
+          localStorage.setItem(`omwp.summary.${groupId}`, next ? "1" : "0");
+        } catch {
+          /* ignore */
+        }
+      }
+      return next;
+    });
+  };
+
   // Must stay above auth early returns — otherwise login→ready adds a hook and React #310 blanks the page.
   useEffect(() => {
     if (!showAddMember || !current || newMember.kind !== "user" || newMember.userAddMode !== "link") {
@@ -830,6 +868,10 @@ export function App() {
     const near = isNearBottom(node.scrollTop, node.scrollHeight, node.clientHeight, BOTTOM_THRESHOLD_PX);
     stickToBottom.current = near;
     setShowJumpBottom(!near);
+    if (near) {
+      seenMessagesRef.current = current?.messages.length ?? 0;
+      setNewSinceScroll(0);
+    }
     if (shouldLoadOlderOnScroll(node.scrollTop) && !loadingOlderRef.current) {
       void loadOlderMessages();
     }
@@ -841,6 +883,8 @@ export function App() {
     forceScrollGroupId.current = unread > 0 ? null : group.id;
     stickToBottom.current = true;
     setShowJumpBottom(false);
+    setNewSinceScroll(0);
+    seenMessagesRef.current = 0;
     setVisibleCount(INITIAL_VISIBLE_MESSAGES);
     setHasMoreOlder(false);
     setComposer("");
@@ -1442,7 +1486,18 @@ export function App() {
         <GroupNavigation items={groupNavItems} active={activeGroupNav} onSelect={(id) => setMainView(id)} />
       ) : null}
       wave={!isChatGroup && current && mainView === "chat" ? (
-        <>
+        <div className={`wp-summary${summaryOpen ? "" : " is-collapsed"}`}>
+          <button
+            type="button"
+            className="wp-summary-toggle"
+            aria-expanded={summaryOpen}
+            aria-label={summaryOpen ? "收起项目摘要" : "展开项目摘要"}
+            onClick={toggleSummary}
+          >
+            {summaryOpen ? "⌃" : "⌄"}
+          </button>
+          {summaryOpen && (
+          <>
           <div
             className="goal-bar"
             data-status={goalBar?.status ?? "idle"}
@@ -1458,7 +1513,9 @@ export function App() {
             <span className="g-act">{goalBar ? `${goalBar.done}/${goalBar.total} 完成` : "0/0"}</span>
           </div>
           <GoalStrip group={current.group} />
-        </>
+          </>
+          )}
+        </div>
       ) : null}
       chat={current ? (
         mainView === "extensions" ? (
@@ -1572,7 +1629,7 @@ export function App() {
             onClick={() => scrollMessagesToBottom(true)}
             title="回到最下方"
           >
-            ↓ 最新
+            ↓ {newSinceScroll > 0 ? `${newSinceScroll} 条新消息` : "最新"}
           </button>
         )}
         </div>

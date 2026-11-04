@@ -975,3 +975,15 @@
   .pm-btn, .pm-btn.sm, .obs-tab, .delivery-tab, .group-nav-item,
   .theme-card, .settings-radio, .sidebar-link { min-height:44px; }
 }
+
+
+/* 项目摘要条（设计 P03：两行，合计 ≤96，可折叠） */
+.wp-summary { position:relative; max-height:96px; overflow:hidden; border-bottom:1px solid var(--lp-border-l2); }
+.wp-summary.is-collapsed { max-height:0; border-bottom:0; }
+.wp-summary-toggle { position:absolute; right:6px; top:2px; z-index:2; width:20px; height:20px; display:grid; place-items:center; border:0; border-radius:4px; background:transparent; color:var(--lp-text-dim); font-size:12px; cursor:pointer; }
+.wp-summary-toggle:hover { background:var(--lp-bg-hover); color:var(--lp-text); }
+.wp-summary-toggle:focus-visible { outline:2px solid var(--lp-ring); outline-offset:1px; }
+.goal-bar { min-height:24px; padding:1px 36px 1px 12px; font-size:11px; line-height:16px; gap:8px; }
+.goal-strip { min-height:24px; padding:1px 10px; font-size:11px; line-height:16px; gap:8px; }
+.goal-strip button { min-height:18px; padding:0 6px; font-size:11px; }
+.goal-strip input { padding:1px 6px; font-size:11px; }
