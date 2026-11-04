@@ -43,3 +43,6 @@ dist.tar.gz
 .playwright-cli/
 src-tauri/.playwright-cli/
 
+
+# 本地调试数据（local deploy）
+.local-dev/
