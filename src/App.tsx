@@ -69,6 +69,7 @@ import { GoalsPage } from "./goals/GoalsPage";
 import { MarketingPage } from "./marketing/MarketingPage";
 import { ObservabilityPage } from "./observability/ObservabilityPage";
 import { RunDetails } from "./members/RunDetails";
+import { ExtensionsPage } from "./extensions/ExtensionsPage";
 import { SettingsPage } from "./settings/SettingsPage";
 import { GroupNavigation, type GroupNavItem } from "./shell/GroupNavigation";
 import { GroupSettingsView } from "./groups/GroupSettingsView";
@@ -397,13 +398,15 @@ export function App() {
   };
 
   const goLogin = (message?: string | null) => {
+    // 首次访问没有 token 时，401 只是「未登录」，不应显示「登录已失效」。
+    const hadToken = typeof localStorage !== "undefined" && Boolean(localStorage.getItem("ohmyworkpanel_auth_token"));
     setAuthToken(null);
     saveAuthUser(null);
     setAuthUser(null);
     setCurrent(null);
     setGroups([]);
     setSession("login");
-    setError(message ?? null);
+    setError(message && hadToken ? message : null);
   };
 
   // Any API 401 → drop session and show login (covers stale token / Missing token).
@@ -1327,9 +1330,10 @@ export function App() {
     ...(!isChatGroup ? [{ id: "goals", label: "目标" } as GroupNavItem] : []),
     ...(!isChatGroup ? [{ id: "marketing", label: "内容" } as GroupNavItem] : []),
     { id: "scene", label: "场景" },
+    { id: "extensions", label: "扩展" },
   ];
   const activeGroupNav =
-    mainView === "goals" || mainView === "versions" || mainView === "scene" || mainView === "marketing"
+    mainView === "goals" || mainView === "versions" || mainView === "scene" || mainView === "marketing" || mainView === "extensions"
       ? mainView
       : mainView === "chat"
         ? "chat"
@@ -1457,7 +1461,17 @@ export function App() {
         </>
       ) : null}
       chat={current ? (
-        mainView === "settings" ? (
+        mainView === "extensions" ? (
+          <ExtensionsPage
+            group={current.group}
+            members={members}
+            messages={current.messages}
+            senderMemberId={senderMemberId}
+            views={extTabViews}
+            onOpenSettings={() => setRightPanelTab("core.settings")}
+            onError={(msg) => setError(msg)}
+          />
+        ) : mainView === "settings" ? (
           <SettingsPage
             sendKeyMode={sendKeyMode}
             onSendKeyModeChange={(mode) => { setSendKeyMode(mode); saveSendKeyMode(mode); }}
@@ -1566,7 +1580,7 @@ export function App() {
       ) : groups.length === 0 && groupsLoaded ? (
         <EmptyHome canCreate={isAdmin} onCreate={() => setShowCreate(true)} />
       ) : <div className="loading">正在打开本地群聊…</div>}
-      composer={current && mainView !== "dsh" && mainView !== "agent-config" && mainView !== "scene" && mainView !== "goals" && mainView !== "marketing" && mainView !== "observability" && mainView !== "settings" && !(!isChatGroup && mainView === "versions") ? <div className="wp-composer-anchor">
+      composer={current && mainView !== "dsh" && mainView !== "agent-config" && mainView !== "scene" && mainView !== "goals" && mainView !== "marketing" && mainView !== "observability" && mainView !== "settings" && mainView !== "extensions" && !(!isChatGroup && mainView === "versions") ? <div className="wp-composer-anchor">
           {slashOpen && (
             <div className="mention-menu slash-menu">
               {SLASH_COMMANDS.map((c) => (
@@ -2167,17 +2181,20 @@ function AuthScreen({ error, onError, onAuthed }: { error: string | null; onErro
     <main className="auth-screen">
       <section className="auth-card">
         <BrandMark />
+        <span className="auth-badge">自托管 · 本地优先</span>
         <h1>{mode === "login" ? "登录" : "注册"}</h1>
-        <p className="auth-hint">多 Agent 协作工作台。使用管理员分配的账号登录后进入所属群聊。</p>
-        <form className="modal-form" onSubmit={(e) => void submit(e)}>
-          <label>用户名<input autoFocus value={username} onChange={(e) => setUsername(e.target.value)} required autoComplete="username" /></label>
-          <label>密码<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete={mode === "login" ? "current-password" : "new-password"} /></label>
-          <button className="primary-wide" type="submit" disabled={busy}>{busy ? "请稍候…" : mode === "login" ? "进入 ohMyWorkPanel" : "注册并进入"}</button>
+        <p className="auth-hint">连接到此自托管工作台。使用管理员分配的账号登录后进入所属群聊。</p>
+        <form className="modal-form auth-form" onSubmit={(e) => void submit(e)}>
+          <label>用户名<input autoFocus value={username} onChange={(e) => setUsername(e.target.value)} required autoComplete="username" placeholder="用户名" /></label>
+          <label>密码<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete={mode === "login" ? "current-password" : "new-password"} placeholder="密码" /></label>
+          {error && <div className="auth-error" role="alert">{error}</div>}
+          <button className="primary-wide" type="submit" disabled={busy} aria-busy={busy}>
+            {busy ? (mode === "login" ? "正在登录…" : "正在注册…") : mode === "login" ? "进入 ohMyWorkPanel" : "注册并进入"}
+          </button>
         </form>
         <button type="button" className="auth-switch" onClick={() => { setMode(mode === "login" ? "register" : "login"); onError(null); }}>
           {mode === "login" ? "没有账号？注册" : "已有账号？登录"}
         </button>
-        {error && <div className="auth-error">{error}</div>}
       </section>
     </main>
   );

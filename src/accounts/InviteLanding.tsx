@@ -81,7 +81,13 @@ export function InviteLanding({
         <h1>加入群组</h1>
         {loadError && <p className="error">{loadError}</p>}
         {preview && !preview.valid && (
-          <p className="error">{preview.reason || "邀请无效"}</p>
+          <>
+            <p className="error" role="alert">{preview.reason || "邀请无效"}</p>
+            <p className="muted">邀请已失效或被撤销。请联系群管理员重新发送邀请，或返回登录页。</p>
+            <button type="button" className="auth-switch" onClick={() => { window.history.replaceState({}, "", "/"); onDone(); }}>
+              返回登录
+            </button>
+          </>
         )}
         {preview?.valid && (
           <>
