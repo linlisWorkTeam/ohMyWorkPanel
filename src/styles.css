@@ -615,7 +615,7 @@
 .group-nav-item { flex:none; height:44px; padding:0 12px; border:0; background:transparent; color:var(--lp-text-dim); font-size:13px; cursor:pointer; border-bottom:2px solid transparent; white-space:nowrap; }
 .group-nav-item:hover { color:var(--lp-text); background:var(--lp-bg-hover); }
 .group-nav-item:focus-visible { outline:2px solid var(--lp-ring); outline-offset:-2px; }
-.group-nav-item.is-active { color:var(--lp-accent); border-bottom-color:var(--lp-accent); }
+.group-nav-item.is-active { color:var(--lp-text); border-bottom-color:var(--lp-accent); }
 .group-nav-item:disabled { color:var(--lp-disabled-text); cursor:not-allowed; }
 
 /* ==== 目标页（工作台重设计 P07） ==== */
