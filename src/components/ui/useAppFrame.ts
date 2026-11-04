@@ -10,10 +10,10 @@ import type { DividerProps } from "./Divider";
  */
 const LS = { leftW: "lp.frame.leftW", rightW: "lp.frame.rightW" };
 const RAIL_W = 56;
-const LEFT_MIN = 160, LEFT_MAX = 340, LEFT_START = 248, LEFT_SNAP = 176;
-const RIGHT_MIN = 240, RIGHT_MAX = 420, RIGHT_START = 310, RIGHT_SNAP = 250;
-export const CONCEDE_RIGHT = 1100;
-export const CONCEDE_LEFT = 860;
+const LEFT_MIN = 200, LEFT_MAX = 340, LEFT_START = 232, LEFT_SNAP = 208;
+const RIGHT_MIN = 280, RIGHT_MAX = 360, RIGHT_START = 320, RIGHT_SNAP = 280;
+export const CONCEDE_RIGHT = 1280;
+export const CONCEDE_LEFT = 1280;
 
 function readNum(key: string, fallback: number): number {
   try {
@@ -45,7 +45,7 @@ export function useAppFrame(options: UseAppFrameOptions = {}) {
   const [leftW, setLeftWState] = useState(() => readNum(LS.leftW, LEFT_START));
   const [rightW, setRightWState] = useState(() => readNum(LS.rightW, RIGHT_START));
   const [leftMode, setLeftMode] = useState<"open" | "rail">(() =>
-    typeof window !== "undefined" && window.matchMedia("(max-width: 1080px)").matches ? "rail" : "open",
+    typeof window !== "undefined" && window.matchMedia("(max-width: 1279px)").matches ? "rail" : "open",
   );
   const [dragging, setDragging] = useState(false);
   const leftWRef = useRef(leftW);

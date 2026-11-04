@@ -21,8 +21,8 @@ describe("Shell chrome", () => {
     expect(css).toMatch(/\.wp-shell:not\(:has\(\.wp-right\s*>\s*\*\)\)[^}]*--right:\s*0/);
   });
 
-  it("zeros overlay columns at ≤1080px and drawers onto wp-left / wp-right", () => {
-    const idx = css.indexOf("@media (max-width: 1080px)");
+  it("zeros overlay columns at ≤1279px and drawers onto wp-left / wp-right", () => {
+    const idx = css.indexOf("@media (max-width: 1279px)");
     expect(idx).toBeGreaterThan(-1);
     const chunk = css.slice(idx, idx + 1600);
     expect(chunk).toMatch(/\.wp-shell\s*\{[^}]*--left:\s*0/);
@@ -32,9 +32,9 @@ describe("Shell chrome", () => {
     expect(chunk).toMatch(/\.wp-right\s*\{[^}]*position:\s*fixed/);
   });
 
-  it("defaults leftMode to rail on max-width 1080px", () => {
+  it("defaults leftMode to rail on max-width 1279px", () => {
     const frame = readFileSync(resolve("src/components/ui/useAppFrame.ts"), "utf8");
-    expect(frame).toMatch(/matchMedia\(\s*["']\(max-width:\s*1080px\)["']\s*\)/);
+    expect(frame).toMatch(/matchMedia\(\s*["']\(max-width:\s*1279px\)["']\s*\)/);
     expect(frame).toMatch(/useState<"open"\s*\|\s*"rail">\(\s*\(\)\s*=>[\s\S]*?["']rail["']/);
   });
 });

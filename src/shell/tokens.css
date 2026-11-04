@@ -8,7 +8,7 @@
   --breath: 0;
   --radius-mode: 10px;
   --rail: 56px;
-  --left: 220px;
+  --left: 232px;
   --right: 320px;
 }
 
@@ -211,7 +211,7 @@ body::before {
   border-right-width: 0;
 }
 
-@media (max-width: 1080px) {
+@media (max-width: 1279px) {
   .wp-shell {
     --left: 0;
     --right: 0;
@@ -318,7 +318,10 @@ body::before {
 }
 
 .wp-head {
-  padding: 12px 16px;
+  min-height: 64px;
+  box-sizing: border-box;
+  align-items: center;
+  padding: 10px 20px;
   border-bottom: 1px solid var(--line);
   display: flex;
   justify-content: space-between;
@@ -342,7 +345,11 @@ body::before {
 
 .wp-chat {
   flex: 1;
-  padding: 12px 16px 8px;
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: 12px 24px 8px;
   overflow: auto;
   min-height: 0;
   background:

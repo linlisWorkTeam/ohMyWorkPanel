@@ -1029,14 +1029,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 
 /* ── Mobile / narrow layouts ── */
-@media (max-width: 1080px) {
+@media (max-width: 1279px) {
   .app-shell { grid-template-columns: 1fr; }
   .app-shell[data-left="rail"],
   .app-shell[data-right="closed"] { grid-template-columns: 1fr; }
   .app-shell .divider { display: none; }
   .wp-shell { --left: 0; --right: 0; }
   .wp-left {
-    position: fixed; left: 0; top: 0; bottom: 0; width: min(290px, 86vw); z-index: 30;
+    position: fixed; left: 0; top: 0; bottom: 0; width: 208px; z-index: 30;
     transform: translateX(-100%); transition: transform .22s ease;
     box-shadow: 20px 0 60px #00000055;
     overflow-y: auto; -webkit-overflow-scrolling: touch;
@@ -1068,7 +1068,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .message-list { padding-left: 18px; padding-right: 18px; }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 720px) {
+  .wp-left { width: min(320px, calc(100vw - 32px)); }
   .chat-header { padding: 8px 12px; min-height: 60px; }
   .chat-header h1 { font-size: 16px; }
   .message-list { padding: 16px 12px; }
