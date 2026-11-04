@@ -9,6 +9,7 @@ import {
   formatQuotePrefix,
   isNearBottom,
 } from "./chat/chatUi";
+import { applyPresence, shouldBumpUnread } from "./accounts/presence";
 import { currentMentionQuery, findMentionedMemberIds } from "./chat/mentions";
 import { applyMessageDelta, applyRunStatus, isTerminalRunStatus } from "./chat/stateReducers";
 import { defaultModelForAdapter, modelsForAdapter, applyAgentModelsPayload } from "./agents/agentModels";
@@ -527,24 +528,11 @@ export function App() {
       const payload = event.payload;
       const activeGroupId: string | null | undefined = currentGroupIdRef.current;
       if (isIgnorableWsKind(payload.kind)) return;
-      if (payload.kind === "presence_snapshot" && Array.isArray(payload.onlineUserIds)) {
-        setOnlineUserIds(new Set(payload.onlineUserIds.filter(Boolean) as string[]));
+      if (payload.kind === "presence_snapshot" || payload.kind === "presence") {
+        setOnlineUserIds((previous) => applyPresence(previous, payload));
         return;
       }
-      if (payload.kind === "presence" && payload.userId) {
-        setOnlineUserIds((prev) => {
-          const next = new Set(prev);
-          if (payload.online) next.add(payload.userId!);
-          else next.delete(payload.userId!);
-          return next;
-        });
-        return;
-      }
-      if (
-        payload.groupId &&
-        (payload.kind === "message_created" ||
-          (payload.kind === "run_status" && payload.status === "completed"))
-      ) {
+      if (shouldBumpUnread(payload)) {
         setGroups((prev) => bumpUnread(prev, payload.groupId!, activeGroupId));
       }
       if (payload.kind === "orchestration_status") {

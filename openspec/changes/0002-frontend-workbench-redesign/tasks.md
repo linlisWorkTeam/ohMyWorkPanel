@@ -126,3 +126,12 @@
 | run_status 合并与终态收尾移入 chat | 已实现 | `applyRunStatus` + `isTerminalRunStatus` |
 | 纯逻辑单测 | 已实现 | `stateReducers.test.ts` 9 例（追加/replace/lazy/跨群/missing/终态） |
 | App 行数 | 缩减 | 事件处理块从 ~140 行降到 ~35 行 |
+
+### M1 第二刀：presence 与未读判定（2026-11-05 第九轮）
+
+| 项 | 状态 | 证据 |
+|---|---|---|
+| presence 快照/单用户上下线归并 | 已实现 | `accounts/presence.ts` `applyPresence` |
+| 未读触发判定 | 已实现 | `shouldBumpUnread`（message_created / run completed） |
+| 单测 | 已实现 | `presence.test.ts` 7 例 |
+| App 事件块 | 缩减 | presence 两分支合并为一行调用 |
