@@ -6,6 +6,8 @@ export function Shell({
   onOpenSettings,
   showAgentConfig,
   onOpenAgentConfig,
+  showObservability,
+  onOpenObservability,
   brand,
   groups,
   footer,
@@ -21,6 +23,8 @@ export function Shell({
   onOpenSettings: () => void;
   showAgentConfig: boolean;
   onOpenAgentConfig: () => void;
+  showObservability?: boolean;
+  onOpenObservability?: () => void;
   brand: ReactNode;
   groups: ReactNode;
   footer: ReactNode;
@@ -39,6 +43,9 @@ export function Shell({
         <button type="button" className="wp-rail-btn" title="设置" onClick={onOpenSettings}>◎</button>
         {showAgentConfig && (
           <button type="button" className="wp-rail-btn" title="Agent 配置" onClick={onOpenAgentConfig}>◇</button>
+        )}
+        {showObservability && (
+          <button type="button" className="wp-rail-btn" title="可观测（日志/经验/指标/运维）" onClick={onOpenObservability}>▤</button>
         )}
       </nav>
       <aside className="wp-left">
