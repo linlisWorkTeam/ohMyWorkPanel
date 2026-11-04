@@ -68,6 +68,7 @@ import { GoalStrip } from "./goals/GoalStrip";
 import { GoalsPage } from "./goals/GoalsPage";
 import { MarketingPage } from "./marketing/MarketingPage";
 import { ObservabilityPage } from "./observability/ObservabilityPage";
+import { SettingsPage } from "./settings/SettingsPage";
 import { GroupNavigation, type GroupNavItem } from "./shell/GroupNavigation";
 import { GroupSettingsView } from "./groups/GroupSettingsView";
 import { AgentConfigView } from "./agents/AgentConfigView";
@@ -1337,7 +1338,7 @@ export function App() {
     <Shell
       leftOpen={frame.leftMode === "open"}
       onToggleLeft={frame.toggleLeft}
-      onOpenSettings={() => { setShowMembers(true); setRightPanelTab("core.settings"); }}
+      onOpenSettings={() => setMainView("settings")}
       showAgentConfig={isAdmin}
       onOpenAgentConfig={() => setMainView("agent-config")}
       showObservability
@@ -1450,7 +1451,13 @@ export function App() {
         </>
       ) : null}
       chat={current ? (
-        mainView === "observability" ? (
+        mainView === "settings" ? (
+          <SettingsPage
+            sendKeyMode={sendKeyMode}
+            onSendKeyModeChange={(mode) => { setSendKeyMode(mode); saveSendKeyMode(mode); }}
+            onError={(msg) => setError(msg)}
+          />
+        ) : mainView === "observability" ? (
           <ObservabilityPage
             groupId={current?.group.id ?? null}
             members={members}
@@ -1551,7 +1558,7 @@ export function App() {
       ) : groups.length === 0 && groupsLoaded ? (
         <EmptyHome canCreate={isAdmin} onCreate={() => setShowCreate(true)} />
       ) : <div className="loading">正在打开本地群聊…</div>}
-      composer={current && mainView !== "dsh" && mainView !== "agent-config" && mainView !== "scene" && mainView !== "goals" && mainView !== "marketing" && mainView !== "observability" && !(!isChatGroup && mainView === "versions") ? <div className="wp-composer-anchor">
+      composer={current && mainView !== "dsh" && mainView !== "agent-config" && mainView !== "scene" && mainView !== "goals" && mainView !== "marketing" && mainView !== "observability" && mainView !== "settings" && !(!isChatGroup && mainView === "versions") ? <div className="wp-composer-anchor">
           {slashOpen && (
             <div className="mention-menu slash-menu">
               {SLASH_COMMANDS.map((c) => (

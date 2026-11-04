@@ -789,3 +789,28 @@
   .version-pane { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr); }
   .version-list { border-right:0; border-bottom:1px solid var(--lp-border); padding:0 0 10px; max-height:180px; }
 }
+
+
+/* ==== 设置页（工作台重设计 P11） ==== */
+.settings-page { display:flex; flex-direction:column; gap:20px; }
+.settings-hint { color:var(--lp-text-dim); font-size:12px; line-height:1.6; }
+.settings-form { display:flex; flex-direction:column; gap:12px; }
+.settings-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:12px; }
+.settings-grid label { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--lp-text-dim); }
+.settings-grid input { background:var(--lp-bg-panel); border:1px solid var(--lp-border); border-radius:var(--lp-radius-sm); color:var(--lp-text); padding:7px 10px; font:inherit; }
+.settings-grid input:focus { outline:2px solid var(--lp-ring); outline-offset:1px; border-color:var(--lp-border-strong); }
+.settings-grid .settings-check { flex-direction:row; align-items:center; gap:8px; color:var(--lp-text); }
+.settings-actions { display:flex; gap:10px; align-items:center; }
+.settings-notes { max-height:180px; overflow:auto; margin:0; padding:8px 10px; border:1px solid var(--lp-border); border-radius:var(--lp-radius-sm); background:var(--lp-bg-panel); font-family:var(--mono); font-size:11px; color:var(--lp-text-dim); white-space:pre-wrap; }
+.settings-radios { display:flex; flex-direction:column; gap:8px; }
+.settings-radio { display:flex; align-items:center; gap:10px; padding:8px 10px; border:1px solid var(--lp-border); border-radius:var(--lp-radius-sm); cursor:pointer; color:var(--lp-text); font-size:13px; }
+.settings-radio.is-active { border-color:var(--lp-accent); background:var(--lp-bg-active); }
+.settings-radio small { color:var(--lp-text-dim); font-size:11px; }
+.theme-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:10px; }
+.theme-card { display:flex; flex-direction:column; gap:4px; align-items:flex-start; padding:10px; border:1px solid var(--lp-border); border-radius:var(--lp-radius-sm); background:var(--lp-bg-panel); color:var(--lp-text); cursor:pointer; text-align:left; }
+.theme-card:hover { background:var(--lp-bg-hover); }
+.theme-card.is-active { border-color:var(--lp-accent); background:var(--lp-bg-active); }
+.theme-card strong { font-size:13px; }
+.theme-card small { color:var(--lp-text-dim); font-size:11px; }
+.theme-swatch { display:flex; gap:4px; }
+.theme-swatch i { width:18px; height:18px; border-radius:4px; border:1px solid var(--lp-border); }
