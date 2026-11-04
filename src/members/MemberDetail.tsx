@@ -34,6 +34,7 @@ interface MemberDetailProps {
   group: Group;
   runs: TaskRun[];
   detecting: boolean;
+  onlineUserIds?: ReadonlySet<string>;
   onClose: () => void;
   onDetect: (member: Member) => void;
   onAdmin: (memberId: string | null) => void;
@@ -48,6 +49,7 @@ export function MemberDetail({
   group,
   runs,
   detecting,
+  onlineUserIds,
   onClose,
   onDetect,
   onAdmin,
@@ -112,13 +114,29 @@ export function MemberDetail({
       </div>
 
       <dl className="member-detail-grid">
-        <div><dt>角色</dt><dd>{member.roleDescription || "—"}</dd></div>
-        <div><dt>模型</dt><dd>{member.model || "—"}</dd></div>
-        <div><dt>可执行文件</dt><dd className="mono">{member.executablePath || "—"}</dd></div>
-        <div><dt>工作区</dt><dd className="mono">{workspaceLabel || "（默认沙箱）"}</dd></div>
-        <div><dt>API Key</dt><dd>{member.apiKeySet ? "已设置" : "未设置"}</dd></div>
-        <div><dt>API URL</dt><dd className="mono">{member.apiUrl || "—"}</dd></div>
-        <div><dt>保活</dt><dd>{member.keepAlive ? "开" : "关"}{member.warmStatus ? ` · ${member.warmStatus}` : ""}</dd></div>
+        <div><dt>角色</dt><dd>{member.roleDescription === "owner" ? "群主" : member.roleDescription || "—"}</dd></div>
+        {member.kind === "user" && (
+          <>
+            <div><dt>登录账号</dt><dd className="mono">{member.authUserId || "—"}</dd></div>
+            <div><dt>在线</dt><dd>{member.authUserId && onlineUserIds?.has(member.authUserId) ? "在线" : "离线"}</dd></div>
+            <div><dt>邀请</dt><dd>{member.invitePending ? "待接受" : "已加入"}</dd></div>
+          </>
+        )}
+        {member.kind === "agent" && (
+          <>
+            <div><dt>模型</dt><dd>{member.model || "—"}</dd></div>
+            <div><dt>可执行文件</dt><dd className="mono">{member.executablePath || "—"}</dd></div>
+            <div><dt>工作区</dt><dd className="mono">{workspaceLabel || "（默认沙箱）"}</dd></div>
+            <div><dt>保活</dt><dd>{member.keepAlive ? "开" : "关"}{member.warmStatus ? ` · ${member.warmStatus}` : ""}</dd></div>
+          </>
+        )}
+        {member.kind === "chatbot" && (
+          <>
+            <div><dt>模型</dt><dd>{member.model || "—"}</dd></div>
+            <div><dt>API Key</dt><dd>{member.apiKeySet ? "已设置" : "未设置"}</dd></div>
+            <div><dt>API URL</dt><dd className="mono">{member.apiUrl || "—"}</dd></div>
+          </>
+        )}
         <div><dt>加入时间</dt><dd>{formatTime(member.createdAt)}</dd></div>
       </dl>
 
@@ -162,7 +180,7 @@ export function MemberDetail({
       )}
 
       <div className="member-detail-actions">
-        {isOwner && (
+        {isOwner && member.kind === "agent" && (
           <button
             type="button"
             className="pm-btn sm"

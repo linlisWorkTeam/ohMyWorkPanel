@@ -1066,3 +1066,9 @@
 .member-detail .pm-btn.danger { color:var(--lp-error); border-color:var(--lp-error); }
 
 .wp-m-row[role="button"] { cursor:pointer; }
+
+
+/* 成员表单分组（设计 P04：label 13/20） */
+.member-form-legend { margin:8px 0 0; font-size:12px; line-height:18px; font-weight:600; color:var(--lp-text-dim); letter-spacing:.04em; }
+.member-field { display:flex; flex-direction:column; gap:4px; font-size:13px; line-height:20px; color:var(--lp-text-dim); }
+.member-field input, .member-field select { width:100%; box-sizing:border-box; }

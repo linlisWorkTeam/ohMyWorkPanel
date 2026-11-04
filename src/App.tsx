@@ -1779,6 +1779,7 @@ export function App() {
           </div>
         )}
         {showAddMember ? <form className="add-member-form" onSubmit={addMember}>
+          <p className="member-form-legend">成员类型</p>
           <select
             value={addMemberKind}
             onChange={(event) => {
@@ -1796,9 +1797,14 @@ export function App() {
           {chatbotTaken && (
             <p className="form-hint">项目群限 1 个聊天机器人；聊天群可添加多个。</p>
           )}
-          <input autoFocus value={newMember.displayName} onChange={(event) => setNewMember((value) => ({ ...value, displayName: event.target.value }))} placeholder="成员显示名称" required />
-          <input value={newMember.roleDescription} onChange={(event) => setNewMember((value) => ({ ...value, roleDescription: event.target.value }))} placeholder={addMemberKind === "agent" ? "职责，例如：代码审查" : addMemberKind === "chatbot" ? "机器人说明（可选）" : "成员说明（可选）"} />
+          <label className="member-field"><span>显示名称</span>
+            <input autoFocus value={newMember.displayName} onChange={(event) => setNewMember((value) => ({ ...value, displayName: event.target.value }))} placeholder="成员显示名称" required />
+          </label>
+          <label className="member-field"><span>角色说明</span>
+            <input value={newMember.roleDescription} onChange={(event) => setNewMember((value) => ({ ...value, roleDescription: event.target.value }))} placeholder={addMemberKind === "agent" ? "职责，例如：代码审查" : addMemberKind === "chatbot" ? "机器人说明（可选）" : "成员说明（可选）"} />
+          </label>
           {addMemberKind === "user" && <>
+            <p className="member-form-legend">账号</p>
             <select
               value={newMember.userAddMode}
               onChange={(event) => setNewMember((value) => ({
@@ -1812,8 +1818,12 @@ export function App() {
               <option value="invite">邀请链接（待接受）</option>
             </select>
             {newMember.userAddMode === "create" ? <>
-              <input value={newMember.loginUsername} onChange={(event) => setNewMember((value) => ({ ...value, loginUsername: event.target.value }))} placeholder="登录用户名" required autoComplete="off" />
-              <input type="password" value={newMember.loginPassword} onChange={(event) => setNewMember((value) => ({ ...value, loginPassword: event.target.value }))} placeholder="登录密码" required autoComplete="new-password" />
+              <label className="member-field"><span>登录用户名</span>
+                <input value={newMember.loginUsername} onChange={(event) => setNewMember((value) => ({ ...value, loginUsername: event.target.value }))} placeholder="登录用户名" required autoComplete="off" />
+              </label>
+              <label className="member-field"><span>登录密码</span>
+                <input type="password" value={newMember.loginPassword} onChange={(event) => setNewMember((value) => ({ ...value, loginPassword: event.target.value }))} placeholder="登录密码" required autoComplete="new-password" />
+              </label>
               <p className="form-hint">对方用该用户名/密码登录后，只能看到并进入本群对话。若用户名已存在，请改选「加入已有账号」。</p>
             </> : newMember.userAddMode === "invite" ? (
               <p className="form-hint">创建占位成员并生成 24 小时邀请链接；对方登录/注册后自动入群。接受前成员显示「链接中」。</p>
@@ -1840,6 +1850,8 @@ export function App() {
             </>}
           </>}
           {addMemberKind === "agent" && <>
+            <p className="member-form-legend">Agent 配置</p>
+            <label className="member-field"><span>适配器</span>
             <select value={newMember.adapter} onChange={(event) => {
               const adapter = event.target.value;
               setNewMember((value) => ({ ...value, adapter, model: defaultModelForAdapter(adapter) }));
@@ -1848,10 +1860,13 @@ export function App() {
               <option key={a.id} value={a.id}>{a.displayName}</option>
             ))}
             </select>
+            </label>
             {!isConnecterRemote && modelsForAdapter(newMember.adapter).length > 0 && (
-              <select value={newMember.model || defaultModelForAdapter(newMember.adapter)} onChange={(event) => setNewMember((value) => ({ ...value, model: event.target.value }))}>
-                {modelsForAdapter(newMember.adapter).map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
+              <label className="member-field"><span>模型</span>
+                <select value={newMember.model || defaultModelForAdapter(newMember.adapter)} onChange={(event) => setNewMember((value) => ({ ...value, model: event.target.value }))}>
+                  {modelsForAdapter(newMember.adapter).map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </label>
             )}
             {isConnecterRemote ? <>
               <input
@@ -1893,6 +1908,8 @@ export function App() {
             )}
           </>}
           {addMemberKind === "chatbot" && <>
+            <p className="member-form-legend">机器人接口</p>
+            <label className="member-field"><span>服务商</span>
             <select value={newMember.chatbotProvider} onChange={(event) => {
               const chatbotProvider = event.target.value as NewMember["chatbotProvider"];
               setNewMember((value) => ({ ...value, chatbotProvider, model: defaultModelForAdapter(chatbotAdapterFor(chatbotProvider)) }));
@@ -1901,6 +1918,7 @@ export function App() {
               <option value="deepseek">DeepSeek 官方</option>
               <option value="custom">自定义（OpenAI 兼容）</option>
             </select>
+            </label>
             <input
               value={newMember.apiUrl}
               onChange={(event) => setNewMember((value) => ({ ...value, apiUrl: event.target.value }))}
@@ -1940,6 +1958,7 @@ export function App() {
           group={current!.group}
           runs={current?.runs ?? []}
           detecting={detecting === selectedMember.id}
+          onlineUserIds={onlineUserIds}
           onClose={() => setSelectedMemberId(null)}
           onDetect={(member) => void detect(member)}
           onAdmin={(memberId) => void setAdmin(memberId)}
