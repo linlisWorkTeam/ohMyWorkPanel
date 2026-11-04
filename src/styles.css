@@ -1082,3 +1082,12 @@
 .pm-tab { font-size:12px; min-height:36px; padding:8px 12px; }
 .pm-tab.active { color:var(--lp-text); border-bottom-color:var(--lp-accent); }
 .pm-count { font-size:11px; }
+
+
+/* 路径选择器与场景控件（设计 §3/§4） */
+.path-crumbs .crumb { min-height:28px; padding:4px 8px; font-size:12px; line-height:18px; }
+.path-entry { min-height:40px; font-size:13px; line-height:20px; }
+.scene-head .scene-exit { height:36px; }
+@media (pointer: coarse) {
+  .path-crumbs .crumb, .path-entry, .scene-head .scene-exit { min-height:44px; height:44px; }
+}
