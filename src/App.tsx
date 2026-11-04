@@ -66,6 +66,7 @@ import { resolveSceneView, openSceneGroupScope } from "./scene/host";
 import type { SceneViewProps } from "./scene/SceneView";
 import { GoalStrip } from "./goals/GoalStrip";
 import { GoalsPage } from "./goals/GoalsPage";
+import { MarketingPage } from "./marketing/MarketingPage";
 import { GroupNavigation, type GroupNavItem } from "./shell/GroupNavigation";
 import { GroupSettingsView } from "./groups/GroupSettingsView";
 import { AgentConfigView } from "./agents/AgentConfigView";
@@ -1319,10 +1320,11 @@ export function App() {
     { id: "chat", label: "协作" },
     ...(!isChatGroup ? [{ id: "versions", label: "交付" } as GroupNavItem] : []),
     ...(!isChatGroup ? [{ id: "goals", label: "目标" } as GroupNavItem] : []),
+    ...(!isChatGroup ? [{ id: "marketing", label: "内容" } as GroupNavItem] : []),
     { id: "scene", label: "场景" },
   ];
   const activeGroupNav =
-    mainView === "goals" || mainView === "versions" || mainView === "scene"
+    mainView === "goals" || mainView === "versions" || mainView === "scene" || mainView === "marketing"
       ? mainView
       : mainView === "chat"
         ? "chat"
@@ -1425,7 +1427,7 @@ export function App() {
       nav={current ? (
         <GroupNavigation items={groupNavItems} active={activeGroupNav} onSelect={(id) => setMainView(id)} />
       ) : null}
-      wave={!isChatGroup && current && mainView !== "goals" ? (
+      wave={!isChatGroup && current && mainView === "chat" ? (
         <>
           <div
             className="goal-bar"
@@ -1456,6 +1458,13 @@ export function App() {
         ) : !isChatGroup && mainView === "goals" ? (
           <GoalsPage
             groupId={current.group.id}
+            canManage={isAdmin || Boolean(senderMemberId && current.group.ownerMemberId === senderMemberId)}
+          />
+        ) : !isChatGroup && mainView === "marketing" ? (
+          <MarketingPage
+            groupId={current.group.id}
+            members={members}
+            senderMemberId={senderMemberId}
             canManage={isAdmin || Boolean(senderMemberId && current.group.ownerMemberId === senderMemberId)}
           />
         ) : !isChatGroup && mainView === "versions" ? (
@@ -1531,7 +1540,7 @@ export function App() {
       ) : groups.length === 0 && groupsLoaded ? (
         <EmptyHome canCreate={isAdmin} onCreate={() => setShowCreate(true)} />
       ) : <div className="loading">正在打开本地群聊…</div>}
-      composer={current && mainView !== "dsh" && mainView !== "agent-config" && mainView !== "scene" && mainView !== "goals" && !(!isChatGroup && mainView === "versions") ? <div className="wp-composer-anchor">
+      composer={current && mainView !== "dsh" && mainView !== "agent-config" && mainView !== "scene" && mainView !== "goals" && mainView !== "marketing" && !(!isChatGroup && mainView === "versions") ? <div className="wp-composer-anchor">
           {slashOpen && (
             <div className="mention-menu slash-menu">
               {SLASH_COMMANDS.map((c) => (
