@@ -68,6 +68,7 @@ import { GoalStrip } from "./goals/GoalStrip";
 import { GoalsPage } from "./goals/GoalsPage";
 import { MarketingPage } from "./marketing/MarketingPage";
 import { ObservabilityPage } from "./observability/ObservabilityPage";
+import { MemberDetail } from "./members/MemberDetail";
 import { RunDetails } from "./members/RunDetails";
 import { ExtensionsPage } from "./extensions/ExtensionsPage";
 import { SettingsPage } from "./settings/SettingsPage";
@@ -197,6 +198,7 @@ export function App() {
   );
   const [rightPanelTab, setRightPanelTab] = useState("core.members");
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [detailInner, setDetailInner] = useState<"home" | "experiences" | "logs">("home");
   const [quote, setQuote] = useState<{ author: string; excerpt: string } | null>(null);
   const [dock, setDock] = useState<DockGeom>(() => readDockGeom());
@@ -1368,6 +1370,7 @@ export function App() {
   };
 
   const selectedRun = current?.runs.find((run) => run.id === selectedRunId) ?? null;
+  const selectedMember = members.find((member) => member.id === selectedMemberId) ?? null;
   const groupNavItems: GroupNavItem[] = [
     { id: "chat", label: "协作" },
     ...(!isChatGroup ? [{ id: "versions", label: "交付" } as GroupNavItem] : []),
@@ -1603,7 +1606,7 @@ export function App() {
               onPlayVoice={playMessageVoice}
               onQuote={(msg, senderName) => setQuote({ author: senderName, excerpt: extractReplyPreview(msg.content, 80) })}
               onMarketingError={(message) => setError(message)}
-              onOpenRun={(run) => { setSelectedRunId(run.id); setShowMembers(true); setRightPanelTab("core.details"); }}
+              onOpenRun={(run) => { setSelectedRunId(run.id); setSelectedMemberId(null); setShowMembers(true); setRightPanelTab("core.details"); }}
               onReview={(run, decision) => void changeRunReview(run, decision)}
             />
           )}
@@ -1758,6 +1761,12 @@ export function App() {
           onModel={(m, model) => void changeMemberModel(m, model)}
           onEditApiKey={(m, key) => void changeMemberApiKey(m, key)}
           onEditApiUrl={(m, url) => void changeMemberApiUrl(m, url)}
+          onOpenDetail={(member) => {
+            setSelectedMemberId(member.id);
+            setSelectedRunId(null);
+            setShowMembers(true);
+            setRightPanelTab("core.details");
+          }}
           onCancelRun={(run) => void changeRun(run, "cancel")}
           onOpenDsh={() => setMainView("dsh")}
         />
@@ -1924,6 +1933,20 @@ export function App() {
           onCancel={(run) => void changeRun(run, "cancel")}
           onRetry={(run) => void changeRun(run, "retry")}
           onReview={(run, decision) => void changeRunReview(run, decision)}
+        />
+      ) : selectedMember ? (
+        <MemberDetail
+          member={selectedMember}
+          group={current!.group}
+          runs={current?.runs ?? []}
+          detecting={detecting === selectedMember.id}
+          onClose={() => setSelectedMemberId(null)}
+          onDetect={(member) => void detect(member)}
+          onAdmin={(memberId) => void setAdmin(memberId)}
+          onRemove={(member) => void removeMember(member)}
+          onModel={(member, model) => void changeMemberModel(member, model)}
+          onApiKey={(member, key) => void changeMemberApiKey(member, key)}
+          onError={(message) => setError(message)}
         />
       ) : <div className="details-pane">
         {detailInner !== "home" && (

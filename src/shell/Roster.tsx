@@ -20,6 +20,7 @@ export type RosterProps = {
   onOpenDsh?: (member: Member) => void;
   onEditApiKey?: (member: Member, apiKey: string) => void;
   onEditApiUrl?: (member: Member, apiUrl: string) => void;
+  onOpenDetail?: (member: Member) => void;
 };
 
 export function Roster(props: RosterProps): JSX.Element {
@@ -49,6 +50,7 @@ function RosterRow({
   onOpenDsh,
   onEditApiKey,
   onEditApiUrl,
+  onOpenDetail,
 }: RosterProps & { member: Member }): JSX.Element {
   const detecting = detectingId === member.id;
   const online =
@@ -184,6 +186,10 @@ function RosterRow({
   return (
     <div
       className={rowClass}
+      role={onOpenDetail ? "button" : undefined}
+      tabIndex={onOpenDetail ? 0 : undefined}
+      onClick={onOpenDetail ? () => onOpenDetail(member) : undefined}
+      onKeyDown={onOpenDetail ? (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpenDetail(member); } } : undefined}
       onContextMenu={(event) => {
         event.preventDefault();
         openMenu(event.clientX, event.clientY);
