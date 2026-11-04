@@ -164,3 +164,12 @@
 | 面包屑 28、目录行 40、粗指针 44 | 已实现 | `.path-crumbs .crumb` / `.path-entry` / coarse 规则 |
 | 场景返回按钮 36、粗指针 44 | 已实现 | 实测 36 |
 | 七主题矩阵最终重拍 | 已完成 | 35 张 `output/theme-*.png` |
+
+### 分层与 320 弹窗（2026-11-05 第十三轮）
+
+| 项 | 状态 | 证据 |
+|---|---|---|
+| 层级：抽屉 40 / 遮罩 50 / 模态 60 / toast 70 | 已实现 | 实测 backdrop z=60、toast z=70 |
+| 弹窗为底部 toast 留安全区 | 已实现 | `max-height: calc(100dvh - 120px)`（手机 140） |
+| 320 宽弹窗 | 已测 | 全宽底部抽屉，`scrollWidth === innerWidth`，无横向溢出 |
+| 实拍 | 已产出 | `output/modal-320.png` |

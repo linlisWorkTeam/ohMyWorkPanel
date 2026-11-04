@@ -2206,3 +2206,16 @@ header .theme-pop { display: none; }
   body::after { animation: none !important; opacity: 0 !important; }
 }
 
+
+
+/* ==== 分层（设计 §3：sticky10 下拉30 抽屉40 遮罩50 模态60 toast70） ==== */
+.wp-left, .wp-right, .group-sidebar, .member-panel, .right-dock-extra { z-index: 40; }
+.sidebar-backdrop, .members-backdrop { z-index: 50; }
+.modal-backdrop { z-index: 60; }
+.error-toast { z-index: 70; }
+.mention-menu, .slash-menu, .context-menu, [role="menu"] { z-index: 30; }
+/* 给底部 toast 留出安全区，避免压住弹窗提交按钮 */
+.modal { max-height: calc(100dvh - 120px); }
+@media (max-width: 720px) {
+  .modal { max-height: calc(100dvh - 140px); }
+}
