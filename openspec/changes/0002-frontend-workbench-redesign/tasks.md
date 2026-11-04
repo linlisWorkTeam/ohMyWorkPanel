@@ -135,3 +135,13 @@
 | 未读触发判定 | 已实现 | `shouldBumpUnread`（message_created / run completed） |
 | 单测 | 已实现 | `presence.test.ts` 7 例 |
 | App 事件块 | 缩减 | presence 两分支合并为一行调用 |
+
+### M1 第三刀：WS 事件路由（2026-11-05 第十轮）
+
+| 项 | 状态 | 证据 |
+|---|---|---|
+| 事件 → 动作分类 | 已实现 | `chat/eventRouting.ts` `routeChatEvent`：ignore/presence/orchestration/delta/run/resync/refresh |
+| 顺序与既有行为一致 | 已实现 | presence → orchestration → delta → run → resync → refresh |
+| 单测 | 已实现 | 7 例（心跳/live、快照/单用户、缺字段回落、编排、delta/run、重连、未知） |
+| App 接入 | 已实现 | 忽略、presence、orchestration、resync 四处改用 route |
+| 真实 WS 冒烟 | 通过 | 发消息 → 用户消息可见、Agent 回复落地（8 条消息，终态 2s） |

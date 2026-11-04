@@ -10,6 +10,7 @@ import {
   isNearBottom,
 } from "./chat/chatUi";
 import { applyPresence, shouldBumpUnread } from "./accounts/presence";
+import { routeChatEvent } from "./chat/eventRouting";
 import { currentMentionQuery, findMentionedMemberIds } from "./chat/mentions";
 import { applyMessageDelta, applyRunStatus, isTerminalRunStatus } from "./chat/stateReducers";
 import { defaultModelForAdapter, modelsForAdapter, applyAgentModelsPayload } from "./agents/agentModels";
@@ -29,7 +30,7 @@ import {
   formatUnreadBadge,
   sortGroupsForSidebar,
 } from "./groups/groupListSort";
-import { isIgnorableWsKind, shouldResyncAfterWsEvent, subscribeWsLinkState } from "./observability/realtimeWs";
+import { subscribeWsLinkState } from "./observability/realtimeWs";
 import { releasingBannerText, type WsLinkState } from "./observability/releasingState";
 import type { MetricsSample } from "./types";
 import {
@@ -527,15 +528,16 @@ export function App() {
     const unlisten = listen<ChatEvent>("chat-event", (event) => {
       const payload = event.payload;
       const activeGroupId: string | null | undefined = currentGroupIdRef.current;
-      if (isIgnorableWsKind(payload.kind)) return;
-      if (payload.kind === "presence_snapshot" || payload.kind === "presence") {
+      const route = routeChatEvent(payload);
+      if (route === "ignore") return;
+      if (route === "presence") {
         setOnlineUserIds((previous) => applyPresence(previous, payload));
         return;
       }
       if (shouldBumpUnread(payload)) {
         setGroups((prev) => bumpUnread(prev, payload.groupId!, activeGroupId));
       }
-      if (payload.kind === "orchestration_status") {
+      if (route === "orchestration") {
         if (activeGroupId) {
           void refresh(activeGroupId ?? undefined).catch((reason) => {
             if (isUnauthorizedError(reason)) goLogin("登录已失效，请重新登录");
@@ -544,7 +546,7 @@ export function App() {
         }
         return;
       }
-      if (shouldResyncAfterWsEvent(payload.kind)) {
+      if (route === "resync") {
         void (async () => {
           try {
             const boot = await api.bootstrap();
