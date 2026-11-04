@@ -117,3 +117,12 @@
 | 添加成员表单分组与可见 label（13/20） | 已实现 | 图 `output/member-add-form.png`：成员类型 / Agent 配置 / 显示名称 / 角色说明 |
 | 用户/Agent/chatbot 字段按类型显示 | 已实现 | 表单按 addMemberKind 分支 |
 | 工作区显示去掉 `\?\` 与 `owner` 角色文案 | 已实现 | `output/member-detail-user.png` |
+
+### M1 第一刀：聊天状态归并下沉（2026-11-05 第八轮）
+
+| 项 | 状态 | 证据 |
+|---|---|---|
+| message_delta 合并移入 `chat/stateReducers.ts` | 已实现 | `applyMessageDelta`；App 只负责 missing 时刷新 |
+| run_status 合并与终态收尾移入 chat | 已实现 | `applyRunStatus` + `isTerminalRunStatus` |
+| 纯逻辑单测 | 已实现 | `stateReducers.test.ts` 9 例（追加/replace/lazy/跨群/missing/终态） |
+| App 行数 | 缩减 | 事件处理块从 ~140 行降到 ~35 行 |

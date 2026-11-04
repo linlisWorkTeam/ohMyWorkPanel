@@ -10,10 +10,7 @@ import {
   isNearBottom,
 } from "./chat/chatUi";
 import { currentMentionQuery, findMentionedMemberIds } from "./chat/mentions";
-import {
-  appendChannelDelta,
-  isLazyMessageChannel,
-} from "./chat/messageContent";
+import { applyMessageDelta, applyRunStatus, isTerminalRunStatus } from "./chat/stateReducers";
 import { defaultModelForAdapter, modelsForAdapter, applyAgentModelsPayload } from "./agents/agentModels";
 import {
   CONNECTER_REMOTE_ADAPTER,
@@ -601,85 +598,32 @@ export function App() {
         });
         return;
       }
-      const inCurrent = (previous: GroupState | null) =>
-        !!previous && (!payload.groupId || payload.groupId === previous.group.id
-          || (!!payload.runId && previous.runs.some((r) => r.id === payload.runId)));
       if (payload.kind === "message_delta" && payload.messageId) {
         if (payload.groupId && payload.groupId !== activeGroupId) return;
-        const messageId = payload.messageId;
-        const channel = payload.channel ?? "final";
-        const lazy = isLazyMessageChannel(channel);
-        if (!lazy && !payload.delta) return;
-        const delta = payload.delta ?? "";
-        const replace = Boolean(payload.replace);
         setCurrent((previous) => {
-          if (!previous || !inCurrent(previous)) return previous;
-          const idx = previous.messages.findIndex((m) => m.id === messageId);
-          if (idx < 0) {
-            void refresh(previous.group.id).catch(() => {});
-            return previous;
+          const outcome = applyMessageDelta(previous, payload);
+          if (outcome.missing) {
+            void refresh(previous?.group.id ?? activeGroupId).catch((reason) => {
+              if (isUnauthorizedError(reason)) goLogin("登录已失效，请重新登录");
+              else setError(readError(reason));
+            });
           }
-          const messages = previous.messages.slice();
-          const message = messages[idx];
-          if (lazy) {
-            messages[idx] = {
-              ...message,
-              hasThinking: channel === "thinking" || channel === "reasoning" || channel === "thought"
-                ? true
-                : message.hasThinking,
-              hasArtifact: channel === "artifact" || channel === "tool" || channel === "tool_result"
-                || channel === "command"
-                ? true
-                : message.hasArtifact,
-              status: "streaming",
-            };
-          } else {
-            messages[idx] = {
-              ...message,
-              content: appendChannelDelta(message.content, channel, delta, replace),
-              status: payload.status === "completed" ? "completed" : "streaming",
-            };
-          }
-          return { ...previous, messages };
+          return outcome.state;
         });
         return;
       }
       if (payload.kind === "run_status" && payload.runId) {
-        const terminal = ["completed", "failed", "cancelled", "interrupted"].includes(String(payload.status ?? ""));
+        const terminal = isTerminalRunStatus(payload.status);
         setCurrent((previous) => {
-          if (!previous || !inCurrent(previous)) return previous;
-          const idx = previous.runs.findIndex((r) => r.id === payload.runId);
-          if (idx < 0) {
-            void refresh(payload.groupId || previous.group.id).catch((reason) => {
+          const outcome = applyRunStatus(previous, payload);
+          if (outcome.missing) {
+            void refresh(payload.groupId || previous?.group.id).catch((reason) => {
               if (isUnauthorizedError(reason)) goLogin("登录已失效，请重新登录");
               else setError(readError(reason));
             });
-            return previous;
           }
-          const runs = previous.runs.slice();
-          runs[idx] = {
-            ...runs[idx],
-            status: (payload.status as TaskRun["status"]) ?? runs[idx].status,
-            outputMessageId: payload.messageId ?? runs[idx].outputMessageId,
-            errorMessage: payload.error ?? runs[idx].errorMessage,
-            phase: payload.phase ?? runs[idx].phase,
-            phaseUpdatedAt: Date.now(),
-          };
-          let messages = previous.messages;
-          const outputId = runs[idx].outputMessageId;
-          if (terminal && outputId) {
-            const mi = messages.findIndex((m) => m.id === outputId);
-            if (mi >= 0 && messages[mi].status === "streaming") {
-              messages = messages.slice();
-              messages[mi] = {
-                ...messages[mi],
-                status: payload.status === "completed" ? "completed" : (payload.status ?? messages[mi].status),
-              };
-            }
-          }
-          return { ...previous, runs, messages };
+          return outcome.state;
         });
-        // Terminal status: resync from server so missed deltas still appear without a full reload.
         if (terminal) {
           void refresh(payload.groupId || activeGroupId).catch((reason) => {
             if (isUnauthorizedError(reason)) goLogin("登录已失效，请重新登录");
