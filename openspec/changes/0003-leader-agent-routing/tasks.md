@@ -15,4 +15,4 @@
 - [x] 3.1 纯逻辑单测：分类样本、决策全分支（classify/decide 共 7 例）
 - [x] 3.2 DB 集成测试：首次失败重试、重试耗尽升级、Leader 失败不升级、根运行不路由（5 例）
 - [x] 3.3 `cargo test --no-default-features --lib` 全绿（316 passed，含 12 个 routing 测试）
-- [ ] 3.4 真实群冒烟（可选，需可复现的 CLI 失败）
+- [ ] 3.4 真实群冒烟（未完成：mock 不回显 @，E2E 无法触发委派；需真实 CLI 或可回显的测试适配器）
