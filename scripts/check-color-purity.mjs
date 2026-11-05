@@ -9,6 +9,8 @@ const THEME_SOURCES = new Set([
   "src/themes.css",
   "src/shell/tokens.css",
 ]);
+// 参考站设计稿逐像素移植：颜色字面量必须原样保留（Design 1105）。
+const VENDOR_DESIGN_SOURCES = new Set(["src/design/preview.css"]);
 
 function walk(directory) {
   const files = [];
@@ -32,7 +34,7 @@ function withoutComments(source) {
 
 function inspect(path) {
   const file = relative(ROOT, path).replaceAll("\\", "/");
-  if (THEME_SOURCES.has(file)) return [];
+  if (THEME_SOURCES.has(file) || VENDOR_DESIGN_SOURCES.has(file)) return [];
   const source = withoutComments(readFileSync(path, "utf8"));
   const findings = [];
   for (const match of source.matchAll(COLOR_LITERAL)) {

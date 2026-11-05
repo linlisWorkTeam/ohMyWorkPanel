@@ -1,0 +1,337 @@
+/* 参考站 ohmyworkpanel-design-1105 样式，作用域限定在 .pv-root 下，原样保留尺寸与颜色。 */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
+.pv-root{--bg:#111318;--surface:#17191f;--panel:#1c1f26;--elev:#242830;--border:#2a2e37;--ink:#e9ecf2;--dim:#9299a8;--faint:#626b7b;--accent:#bcf278;--accentSoft:#bcf27812;--green:#91d9ad;--amber:#e5bc78;--blue:#9bbdf8;--red:#e99494;--shadow:#0008}
+.pv-root, .pv-root *{box-sizing:border-box}
+.pv-root{margin:0;background:var(--bg);color:var(--ink);font:13px 'DM Sans','Noto Sans SC',sans-serif;line-height:1.6}
+.pv-root.light{--bg:#f2f3ef;--surface:#fafbf7;--panel:#fff;--elev:#ecefe7;--border:#dce0d6;--ink:#242c25;--dim:#6d766d;--faint:#7b857a;--accent:#496e2b;--accentSoft:#496e2b0c;--green:#407d56;--amber:#9a6729;--blue:#4b72a6;--red:#b85858;--shadow:#15201522}
+.pv-root button, .pv-root input, .pv-root textarea, .pv-root select{font:inherit;color:inherit}
+.pv-root button{cursor:pointer;background:none;border:0}
+.pv-root button:disabled{opacity:.45;cursor:default}
+.pv-root button:hover{color:var(--accent)}
+.pv-root button:focus-visible, .pv-root a:focus-visible, .pv-root input:focus-visible, .pv-root textarea:focus-visible, .pv-root select:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.pv-root input, .pv-root textarea, .pv-root select{background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:10px;width:100%}
+.pv-root input::placeholder, .pv-root textarea::placeholder{color:var(--faint)}
+.pv-root .review{height:42px;border-bottom:1px solid var(--border);padding:0 22px;display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--dim);letter-spacing:.6px}
+.pv-root .review>span, .pv-root .review>div{display:flex;align-items:center;gap:18px}
+.pv-root .review b{font-size:9px;color:var(--accent);letter-spacing:1.8px}
+.pv-root .review i{height:12px;width:1px;background:var(--border)}
+.pv-root .review button{font-size:11px;color:var(--dim)}
+.pv-root .sample{opacity:.65;font-size:10px;letter-spacing:0}
+.pv-root .app{display:grid;grid-template-columns:60px 234px minmax(0,1fr) 298px;height:calc(100dvh - 42px);min-height:550px}
+.pv-root .rail{background:var(--surface);border-right:1px solid var(--border);display:flex;align-items:center;flex-direction:column;padding:18px 0;gap:13px}
+.pv-root .logo{color:var(--ink);font-size:29px;font-weight:700;line-height:1;margin-bottom:25px;letter-spacing:-4px}
+.pv-root .logo span{color:var(--accent)}
+.pv-root .railItem{width:36px;height:36px;font-size:20px;color:var(--dim);border-radius:9px}
+.pv-root .railItem.selected{background:var(--accentSoft);color:var(--accent);border:1px solid #bcf27828}
+.pv-root .railBottom{margin-top:auto;display:grid;gap:16px}
+.pv-root .sidebar{background:var(--surface);border-right:1px solid var(--border);padding:23px 16px 0;display:flex;flex-direction:column;min-width:0}
+.pv-root .brand{font-weight:700;font-size:16px;letter-spacing:-.5px}
+.pv-root .brand>span{display:block;font-size:8px;letter-spacing:2px;color:var(--faint);font-weight:500;margin-top:4px}
+.pv-root .sideHeading{margin-top:29px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;color:var(--dim);font-size:10px;letter-spacing:1px}
+.pv-root .sideHeading button{color:var(--dim);font-size:18px}
+.pv-root .search{border:1px solid var(--border);border-radius:6px;display:flex;align-items:center;padding:6px 9px;color:var(--faint);gap:7px}
+.pv-root .search input{border:0;background:transparent;padding:0;font-size:11px;min-width:0;outline:0}
+.pv-root .search kbd{font-size:8px;white-space:nowrap}
+.pv-root .groupList{margin-top:13px}
+.pv-root .group{width:100%;display:flex;align-items:center;text-align:left;gap:10px;padding:11px 9px;border-radius:7px;color:var(--dim);margin:3px 0}
+.pv-root .group.active{background:var(--elev);color:var(--ink);box-shadow:inset 2px 0 var(--accent)}
+.pv-root .groupIcon{width:30px;height:30px;border:1px solid var(--border);border-radius:7px;display:grid;place-items:center;font-size:15px;color:var(--dim)}
+.pv-root .group.active .groupIcon{color:var(--accent);background:var(--accentSoft)}
+.pv-root .group span:nth-child(2){font-size:11px;min-width:0;flex:1}
+.pv-root .group small{display:block;font-size:9px;color:var(--faint);margin-top:1px}
+.pv-root .group em, .pv-root .sideLink em{font-style:normal;font-size:9px;background:var(--elev);padding:0 5px;border-radius:4px}
+.pv-root .group b{height:5px;width:5px;border-radius:50%;background:var(--accent)}
+.pv-root .sideHeading.sub{margin-top:26px}
+.pv-root .sideLink{display:flex;gap:12px;color:var(--dim);padding:9px 10px;align-items:center;text-align:left;font-size:12px}
+.pv-root .sideLink span{flex:1}
+.pv-root .sidebarFooter{margin-top:auto}
+.pv-root .server{border:1px solid var(--border);border-radius:6px;padding:9px;font-size:9px;color:var(--dim);display:flex;align-items:center;gap:6px}
+.pv-root .server small{margin-left:auto;color:var(--faint);font-size:8px}
+.pv-root .dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--green);flex:none}
+.pv-root .profile{display:flex;gap:10px;align-items:center;padding:17px 2px;font-size:11px}
+.pv-root .profile small{display:block;color:var(--faint);font-size:9px}
+.pv-root .profile button{margin-left:auto;color:var(--dim)}
+.pv-root .avatar{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;font-size:12px;font-weight:600;flex:none;background:var(--elev);color:var(--accent);border:1px solid var(--border)}
+.pv-root .avatar.you{color:#d4cfec;background:#34313f}
+.pv-root .avatar.a{color:#e3c999;background:#352f25}
+.pv-root .avatar.b{color:#b3d5f1;background:#263541}
+.pv-root .avatar.c{color:#c3b5e9;background:#322b45}
+.pv-root main{display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.pv-root .header{height:86px;min-height:86px;padding:0 27px;display:flex;gap:13px;align-items:center}
+.pv-root .projectIcon{width:38px;height:38px;display:grid;place-items:center;border:1px solid var(--border);border-radius:10px;font-size:23px;color:var(--accent);background:var(--surface)}
+.pv-root h1{font-size:17px;line-height:1.5;letter-spacing:-.4px;margin:0;display:flex;align-items:center;gap:9px}
+.pv-root h1 span{font-size:8px;font-weight:400;letter-spacing:0;border:1px solid var(--border);padding:1px 5px;border-radius:4px;color:var(--dim)}
+.pv-root .header p{font:9px monospace;color:var(--faint);margin:4px 0 0}
+.pv-root .headRight{display:flex;align-items:center;gap:13px;margin-left:auto}
+.pv-root .connected{color:var(--dim);font-size:9px;display:flex;align-items:center;gap:6px}
+.pv-root .icon{color:var(--dim);width:26px;height:30px;font-size:17px}
+.pv-root .membersBtn{display:flex;align-items:center;padding:0;color:var(--dim);font-size:10px;white-space:nowrap}
+.pv-root .membersBtn>span:last-child{margin-left:8px}
+.pv-root .tinyAv{height:22px;width:22px;display:grid;place-items:center;border:2px solid var(--bg);border-radius:50%;margin-left:-5px;background:#343c32;color:#d6e6cd;font-size:8px}
+.pv-root .tinyAv.b{background:#34314a;color:#d4c9ee}
+.pv-root .tinyAv.c{background:#493c2d;color:#ecd4aa}
+.pv-root .tabs{height:43px;min-height:43px;display:flex;align-items:stretch;gap:24px;padding:0 27px;border-bottom:1px solid var(--border)}
+.pv-root .tabs button{font-size:11px;color:var(--dim);padding:0 0 12px;position:relative;white-space:nowrap}
+.pv-root .tabs button.active{color:var(--ink)}
+.pv-root .tabs button.active:after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--accent)}
+.pv-root .tabs button span{margin-right:6px;font-size:13px}
+.pv-root #content{flex:1;min-height:0;display:flex;flex-direction:column}
+.pv-root .summary{display:flex;gap:13px;background:var(--surface);margin:18px 25px 0;padding:11px 14px;border:1px solid var(--border);border-radius:8px;align-items:center;font-size:10px;color:var(--dim)}
+.pv-root .summary .progress{width:80px;height:3px;background:var(--border);border-radius:8px}
+.pv-root .progress i{display:block;width:66%;height:100%;background:var(--accent);border-radius:8px}
+.pv-root .summary strong{font-size:10px;color:var(--ink);font-weight:500}
+.pv-root .summary button{margin-left:auto;color:var(--accent);font-size:10px}
+.pv-root .tag{font-size:9px;white-space:nowrap;border:1px solid var(--border);padding:2px 6px;border-radius:4px;color:var(--dim)}
+.pv-root .tag.green{color:var(--green);background:#91d9ad09;border-color:#91d9ad28}
+.pv-root .tag.amber{color:var(--amber);background:#e5bc7809;border-color:#e5bc7828}
+.pv-root .tag.blue{color:var(--blue);background:#9bbdf809;border-color:#9bbdf828}
+.pv-root .transcript{overflow:auto;padding:18px 28px 12px;flex:1;min-height:0;scroll-behavior:smooth}
+.pv-root .dateLine{text-align:center;font-size:9px;color:var(--faint);margin:2px 0 23px;display:flex;align-items:center;gap:12px}
+.pv-root .dateLine:before, .pv-root .dateLine:after{content:'';height:1px;background:var(--border);flex:1;opacity:.6}
+.pv-root .message{display:flex;gap:12px;margin-bottom:24px}
+.pv-root .messageBody{min-width:0;flex:1}
+.pv-root .messageMeta{display:flex;align-items:center;gap:8px;font-size:11px;margin-bottom:7px}
+.pv-root .messageMeta time{color:var(--faint);font-size:9px}
+.pv-root .messageMeta small{color:var(--faint);font-size:8px}
+.pv-root .message p{font-size:12px;line-height:1.9;margin:0;color:var(--ink)}
+.pv-root .mention{color:var(--accent);background:var(--accentSoft);padding:1px 4px;border-radius:3px}
+.pv-root .bubble{border:1px solid var(--border);background:var(--surface);border-radius:0 9px 9px 9px;padding:15px 17px;max-width:760px}
+.pv-root .message.user .bubble{background:transparent;border:0;padding:0}
+.pv-root .messageTools{display:flex;gap:16px;margin:8px 0 0;color:var(--faint);font-size:9px}
+.pv-root .messageTools button{font-size:10px;color:var(--dim);padding:0}
+.pv-root .disclosure{display:block;color:var(--dim);font-size:10px;border-bottom:1px solid var(--border);padding:0 0 10px;width:100%;text-align:left;margin-bottom:12px}
+.pv-root .checkList{list-style:none;margin:12px 0 10px;padding:0;font-size:11px;color:var(--dim)}
+.pv-root .checkList li{margin:6px 0}
+.pv-root .checkList i{color:var(--accent);font-style:normal;margin-right:9px}
+.pv-root .file{display:flex;gap:11px;align-items:center;border:1px solid var(--border);padding:11px 13px;border-radius:6px;margin-top:13px;max-width:330px;font-size:11px;background:var(--panel)}
+.pv-root .file>span{font-size:20px;color:var(--blue)}
+.pv-root .file small{display:block;color:var(--faint);font-size:9px}
+.pv-root .file button{margin-left:auto;color:var(--dim)}
+.pv-root .runLine{margin-top:12px;display:flex;align-items:center;gap:8px;font-size:9px;color:var(--dim)}
+.pv-root .runLine .track{width:90px;height:3px;background:var(--border)}
+.pv-root .track i{display:block;height:100%;width:72%;background:var(--accent)}
+.pv-root .typing{display:inline-flex;gap:3px;margin-left:6px}
+.pv-root .typing i{width:3px;height:3px;background:var(--accent);border-radius:50%;animation:pulse 1.4s infinite}
+.pv-root .typing i:nth-child(2){animation-delay:.2s}
+.pv-root .typing i:nth-child(3){animation-delay:.4s}
+@keyframes pulse{50%{opacity:.2}}
+.pv-root .composerWrap{padding:8px 25px 15px}
+.pv-root .composer{border:1px solid #bcf27835;border-radius:10px;background:var(--surface);overflow:hidden}
+.pv-root .composer textarea{resize:none;display:block;min-height:65px;max-height:160px;padding:14px 15px;border:0;background:transparent;font-size:12px;outline:0}
+.pv-root .composerTools{display:flex;align-items:center;gap:13px;padding:5px 12px 11px;color:var(--dim)}
+.pv-root .composerTools button{font-size:15px;padding:0}
+.pv-root .composerTools small{font-size:9px;color:var(--faint)}
+.pv-root .composerTools .send{margin-left:auto;padding:5px 12px;background:var(--accent);color:var(--bg);font-size:10px;border-radius:5px;font-weight:600}
+.pv-root .composerFoot{display:flex;justify-content:space-between;color:var(--faint);font-size:8px;margin-top:8px}
+.pv-root .inspector{border-left:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;min-width:0}
+.pv-root .rightTabs{height:61px;min-height:61px;border-bottom:1px solid var(--border);display:flex;gap:23px;padding:0 20px;align-items:stretch}
+.pv-root .rightTabs button{color:var(--dim);font-size:11px;padding-top:7px;position:relative}
+.pv-root .rightTabs .active{color:var(--ink)}
+.pv-root .rightTabs .active:after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--accent)}
+.pv-root .rightTabs small{font-size:9px;color:var(--faint);margin-left:4px}
+.pv-root #rightContent{padding:21px 19px;flex:1;overflow:auto}
+.pv-root .eyebrow{font-size:9px;letter-spacing:1.5px;color:var(--faint);display:flex;justify-content:space-between;margin:0 0 15px}
+.pv-root .memberRow{display:flex;gap:11px;align-items:flex-start;width:100%;text-align:left;padding:0 0 20px;color:var(--ink)}
+.pv-root .memberRow .avatar{position:relative}
+.pv-root .memberRow .avatar:after{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);border:2px solid var(--surface);position:absolute;bottom:-3px;right:-3px;box-sizing:content-box}
+.pv-root .memberInfo{flex:1;font-size:11px}
+.pv-root .memberInfo small{display:block;color:var(--faint);font-size:9px;margin-top:2px}
+.pv-root .memberInfo .memberStatus{margin-top:6px;color:var(--accent);font-size:9px}
+.pv-root .memberRow .tag{font-size:8px}
+.pv-root .memberStatus.amber{color:var(--amber)}
+.pv-root .memberStatus.idle{color:var(--faint)}
+.pv-root .addMember{border:1px dashed var(--border);width:100%;font-size:10px;color:var(--dim);padding:9px;border-radius:6px;margin:5px 0 25px}
+.pv-root .rightCard{border:1px solid var(--border);border-radius:8px;padding:13px 12px;margin-top:14px;background:var(--bg)}
+.pv-root .rightCard h4{font-size:11px;font-weight:500;margin:0 0 9px}
+.pv-root .rightCard p{color:var(--dim);font-size:10px;margin:0}
+.pv-root .rightCard .progress{height:3px;background:var(--border);margin:13px 0 9px}
+.pv-root .rightCard footer{display:flex;justify-content:space-between;font-size:9px;color:var(--faint)}
+.pv-root .rightFoot{font-size:8px;color:var(--faint);padding:13px 19px;border-top:1px solid var(--border);display:flex;align-items:center;gap:6px}
+.pv-root .rightFoot>span:last-child{margin-left:auto}
+.pv-root .pageScroll{padding:28px;overflow:auto;flex:1}
+.pv-root .pageHeading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:23px}
+.pv-root .overline{font-size:9px;letter-spacing:2px;color:var(--faint);margin-bottom:6px}
+.pv-root .pageHeading h2{font-size:24px;letter-spacing:-1px;margin:0;font-weight:500}
+.pv-root .pageHeading p{color:var(--dim);font-size:11px;margin:7px 0 0}
+.pv-root .primary, .pv-root .secondary{border-radius:6px;padding:8px 12px;font-size:11px;white-space:nowrap}
+.pv-root .primary{background:var(--accent);color:var(--bg);font-weight:600}
+.pv-root .primary:hover{color:var(--bg);filter:brightness(1.1)}
+.pv-root .secondary{border:1px solid var(--border);color:var(--dim)}
+.pv-root .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:26px}
+.pv-root .stat{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px}
+.pv-root .stat span{font-size:10px;color:var(--dim)}
+.pv-root .stat strong{font-size:24px;font-weight:500;display:block;margin-top:8px;letter-spacing:-1px}
+.pv-root .stat strong small{font-size:11px;color:var(--faint);font-weight:400;margin-left:4px}
+.pv-root .panel{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:20px;margin-bottom:16px}
+.pv-root .panelHead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:19px}
+.pv-root .panelHead h3{font-size:13px;margin:0;font-weight:500}
+.pv-root .panelHead small{color:var(--faint);font-size:10px}
+.pv-root .muted{color:var(--dim)}
+.pv-root .small{font-size:11px}
+.pv-root .timeline{list-style:none;padding:0;margin:0}
+.pv-root .timeline li{padding:0 0 24px 28px;position:relative;border-left:1px solid var(--border);margin-left:6px}
+.pv-root .timeline li:last-child{padding-bottom:0;border:0}
+.pv-root .timeline li:before{content:'';position:absolute;left:-5px;top:6px;width:9px;height:9px;border-radius:50%;background:var(--panel);border:1px solid var(--dim)}
+.pv-root .timeline li.done:before{background:var(--accent);border-color:var(--accent)}
+.pv-root .timeline li.current:before{border:2px solid var(--accent);box-shadow:0 0 0 4px var(--accentSoft)}
+.pv-root .waveTitle{display:flex;align-items:center;gap:8px;font-size:12px}
+.pv-root .timeline p{font-size:11px;color:var(--dim);margin:6px 0 9px}
+.pv-root .timeline footer{display:flex;gap:13px;color:var(--faint);font-size:9px}
+.pv-root .buttonRow{display:flex;gap:8px;flex-wrap:wrap}
+.pv-root .round{display:grid;grid-template-columns:36px 1fr auto;gap:10px;border-top:1px solid var(--border);padding:16px 0}
+.pv-root .round:last-child{padding-bottom:0}
+.pv-root .roundNum{font:11px monospace;color:var(--faint)}
+.pv-root .round p{font-size:11px;margin:7px 0;color:var(--dim)}
+.pv-root .round small{color:var(--faint);font-size:9px}
+.pv-root .round button{font-size:10px;color:var(--dim)}
+.pv-root .budget{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin:18px 0 22px}
+.pv-root .budget>div{font-size:10px;color:var(--dim)}
+.pv-root .budget strong{font-size:17px;color:var(--ink);display:block;font-weight:500;margin:6px 0}
+.pv-root .budget small{font-size:10px;color:var(--faint)}
+.pv-root .budget .progress{height:3px;background:var(--border);margin-top:9px}
+.pv-root .pillSwitch{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim)}
+.pv-root .pillSwitch input{width:auto;accent-color:var(--accent)}
+.pv-root .table{width:100%;border-collapse:collapse;font-size:11px}
+.pv-root .table th{text-align:left;color:var(--faint);font-size:9px;font-weight:400;padding:0 0 12px}
+.pv-root .table td{padding:13px 6px 13px 0;border-top:1px solid var(--border)}
+.pv-root .table td:last-child{text-align:right}
+.pv-root .table .avatar{display:inline-grid;width:25px;height:25px;font-size:10px;margin-right:6px}
+.pv-root .empty{padding:35px;text-align:center;color:var(--dim)}
+.pv-root .configGrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.pv-root .formLabel{font-size:11px;display:block;margin:15px 0;color:var(--dim)}
+.pv-root .formLabel input, .pv-root .formLabel select, .pv-root .formLabel textarea{margin-top:7px}
+.pv-root .scene{min-height:320px;border:1px solid var(--border);border-radius:8px;position:relative;background-color:var(--surface);background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:25px 25px;display:grid;grid-template-columns:2fr 1fr;gap:22px;padding:22px}
+.pv-root .zone{border:1px dashed var(--faint);background:var(--bg);border-radius:6px;padding:15px;display:flex;align-content:flex-start;flex-wrap:wrap;gap:25px}
+.pv-root .zone h4{font-size:10px;font-weight:400;color:var(--dim);width:100%;margin:0 0 25px}
+.pv-root .pixel{display:flex;flex-direction:column;align-items:center;gap:9px;padding:5px}
+.pv-root .pixelPerson{width:18px;height:18px;background:var(--accent);box-shadow:0 18px var(--accent),-9px 18px var(--accent),9px 18px var(--accent),-5px 34px var(--dim),5px 34px var(--dim);margin-bottom:33px;image-rendering:pixelated}
+.pv-root .pixel small{font-size:9px;color:var(--dim)}
+.pv-root .mobileOnly{display:none}
+.pv-root .hidden{display:none!important}
+.pv-root .app.noRight{grid-template-columns:60px 234px minmax(0,1fr)}
+.pv-root .app.noRight .inspector{display:none}
+.pv-root .app.phone{max-width:440px;grid-template-columns:1fr;margin:20px auto;height:calc(100dvh - 85px);border:1px solid var(--border);border-radius:18px;overflow:hidden}
+.pv-root .app.phone .rail, .pv-root .app.phone .sidebar, .pv-root .app.phone .inspector{display:none}
+.pv-root .app.phone .mobileOnly{display:block}
+.pv-root .app.phone .header{padding:0 14px;height:70px;min-height:70px}
+.pv-root .app.phone .headRight .connected, .pv-root .app.phone .membersBtn, .pv-root .app.phone .projectIcon{display:none}
+.pv-root .app.phone h1{font-size:14px}
+.pv-root .app.phone .tabs{padding:0 16px;gap:20px;overflow:auto}
+.pv-root .app.phone .pageScroll{padding:18px 14px}
+.pv-root .app.phone .cards{gap:7px}
+.pv-root .app.phone .stat{padding:10px}
+.pv-root .app.phone .summary{margin:12px 12px 0;gap:8px}
+.pv-root .app.phone .summary .progress{display:none}
+.pv-root .app.phone .transcript{padding:18px 14px}
+.pv-root .app.phone .composerWrap{padding:8px 12px 12px}
+.pv-root .app.phone .configGrid{grid-template-columns:1fr}
+.pv-root .app.phone .header p{max-width:210px;overflow:hidden;text-overflow:ellipsis}
+.pv-root .app.phone .scene{grid-template-columns:1fr}
+.pv-root .app.phone .pageHeading h2{font-size:21px}
+.pv-root #toast{position:fixed;bottom:27px;left:50%;transform:translateX(-50%) translateY(100px);opacity:0;transition:.2s;background:var(--elev);border:1px solid var(--border);padding:12px 19px;border-radius:8px;box-shadow:0 10px 40px var(--shadow);font-size:12px;z-index:100;pointer-events:none;max-width:90vw}
+.pv-root #toast.show{transform:translateX(-50%);opacity:1}
+.pv-root dialog{background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:620px;width:calc(100vw - 32px);box-shadow:0 20px 100px var(--shadow);max-height:85dvh;overflow:auto}
+.pv-root dialog::backdrop{background:#0009;backdrop-filter:blur(5px)}
+.pv-root .modalTop{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.pv-root .modalTop h2{font-size:18px;margin:0;font-weight:500}
+.pv-root .modalTop button{font-size:24px;color:var(--dim)}
+.pv-root #modalBody p{font-size:12px;color:var(--dim);line-height:1.9}
+.pv-root .designList{display:grid;gap:12px}
+.pv-root .designList>div{border-top:1px solid var(--border);padding-top:13px}
+.pv-root .designList strong{font-size:12px}
+.pv-root .designList small{display:block;color:var(--dim);margin-top:5px;font-size:11px}
+.pv-root .badge{background:var(--accentSoft);color:var(--accent);padding:3px 7px;border-radius:4px;font-size:9px}
+.pv-root .log{font:10px/2 monospace;word-break:break-word}
+.pv-root .app.phone .sidebar.open{display:flex;position:fixed;inset:60px auto 20px 20px;width:270px;z-index:40;box-shadow:0 0 0 100vmax #0007}
+.pv-root .app.phone .inspector.open{display:flex;position:fixed;inset:70px 14px 20px auto;width:min(320px,calc(100% - 28px));z-index:40;box-shadow:0 0 0 100vmax #0007}
+@media(min-width:1650px){.pv-root .app{grid-template-columns:64px 252px minmax(0,1fr) 330px}
+.pv-root .transcript{padding-left:38px;padding-right:38px}}
+@media(max-width:1200px){.pv-root .app{grid-template-columns:56px 205px minmax(0,1fr) 265px}
+.pv-root .headRight .connected{display:none}
+.pv-root .header{padding:0 20px}
+.pv-root .tabs{gap:20px;padding:0 20px}
+.pv-root .membersBtn>span:last-child{display:none}
+.pv-root .review .sample{display:none}}
+@media(max-width:1020px){.pv-root .app{grid-template-columns:56px 205px minmax(0,1fr)}
+.pv-root .inspector{display:none}
+.pv-root .inspector.open{display:flex;position:fixed;top:42px;right:0;bottom:0;width:298px;z-index:30;box-shadow:-30px 0 80px var(--shadow)}
+.pv-root .app.noRight{grid-template-columns:56px 205px minmax(0,1fr)}}
+@media(max-width:720px){.pv-root .review{padding:0 12px}
+.pv-root .review>span{font-size:0;gap:0}
+.pv-root .review>span b{font-size:8px}
+.pv-root .review>span i{display:none}
+.pv-root .review>div{gap:12px}
+.pv-root .review button{font-size:10px}
+.pv-root #mobilePreview{display:none}
+.pv-root .app, .pv-root .app.noRight{grid-template-columns:1fr;min-height:0}
+.pv-root .rail, .pv-root .sidebar{display:none}
+.pv-root .sidebar.open{display:flex;position:fixed;top:42px;bottom:0;left:0;width:270px;z-index:40;box-shadow:0 0 0 100vmax #0008}
+.pv-root .mobileOnly{display:block}
+.pv-root .header{padding:0 12px;gap:9px;height:72px;min-height:72px}
+.pv-root .header h1{font-size:14px}
+.pv-root .header p{font-size:8px;max-width:210px;text-overflow:ellipsis;overflow:hidden;white-space:nowrap}
+.pv-root .projectIcon{display:none}
+.pv-root .headRight{gap:6px}
+.pv-root .membersBtn>span:last-child{display:none}
+.pv-root .tabs{gap:22px;padding:0 15px;overflow:auto}
+.pv-root .tabs button{font-size:11px}
+.pv-root .summary{margin:13px 12px 0;padding:10px;gap:8px}
+.pv-root .summary .progress{display:none}
+.pv-root .summary strong{font-size:9px}
+.pv-root .transcript{padding:18px 14px}
+.pv-root .message{gap:9px}
+.pv-root .message p{font-size:12px}
+.pv-root .bubble{padding:12px}
+.pv-root .composerWrap{padding:8px 12px 12px}
+.pv-root .composerFoot span:first-child{display:none}
+.pv-root .pageScroll{padding:22px 15px}
+.pv-root .pageHeading h2{font-size:22px}
+.pv-root .cards{gap:8px}
+.pv-root .stat{padding:12px}
+.pv-root .stat strong{font-size:22px}
+.pv-root .panel{padding:16px}
+.pv-root .configGrid{grid-template-columns:1fr}
+.pv-root .budget{gap:8px}
+.pv-root .budget strong{font-size:15px}
+.pv-root .scene{grid-template-columns:1fr}
+.pv-root .table{font-size:10px}
+.pv-root .table .hideMobile{display:none}
+.pv-root button{min-height:36px}
+.pv-root .tag{font-size:8px}
+.pv-root .review button{min-height:30px}
+.pv-root .memberRow{min-height:64px}
+.pv-root .group{min-height:55px}
+.pv-root .composerTools .send{min-height:32px}}
+@media(prefers-reduced-motion:reduce){.pv-root, .pv-root *{animation:none!important;scroll-behavior:auto!important;transition:none!important}}
+.pv-root, .pv-root *{scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+@media(pointer:coarse){.pv-root button, .pv-root .tabs button, .pv-root .rightTabs button{min-height:44px}
+.pv-root .icon{min-width:44px}
+.pv-root .composerTools button{min-width:44px}}
+/* 隔离旧设计系统的通用类（旧样式仍全局加载）：显式固定 shell 尺寸 */
+.pv-root .review, .pv-root .header, .pv-root .tabs { flex: none; }
+.pv-root .app { width: 100%; }
+.pv-root .app > main { flex: 1; min-width: 0; }
+.pv-root .transcript { flex: 1 1 auto; }
+.pv-root .composer textarea { width: 100%; box-sizing: border-box; }
+
+/* 旧设计系统里同名的通用类：强制回到参考站行为 */
+.pv-root .brand { display: block; min-height: 0; padding: 0; gap: 0; }
+.pv-root .brand > span { display: block; }
+
+/* 旧 .composer-wrap textarea 规则优先级更高：显式覆盖 */
+.pv-root .composerWrap .composer textarea {
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.6;
+  height: auto;
+  min-height: 65px;
+  padding: 14px 15px;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+}
+.pv-root .composerWrap .composer textarea::placeholder { color: var(--faint); }
+.pv-root .composerWrap .composer textarea { background: transparent !important; background-color: transparent !important; }
+.pv-root .composerWrap .composer textarea:focus,
+.pv-root .composerWrap .composer textarea:focus-visible { background: transparent !important; box-shadow: none; }

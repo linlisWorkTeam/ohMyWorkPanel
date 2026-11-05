@@ -10,6 +10,7 @@ import {
   isNearBottom,
 } from "./chat/chatUi";
 import { bootSession } from "./shell/bootSession";
+import { PreviewWorkbench } from "./design/PreviewWorkbench";
 import { dispatchChatEvent, type ChatEventBridgeDeps } from "./chat/chatEventBridge";
 import { currentMentionQuery, findMentionedMemberIds } from "./chat/mentions";
 import { defaultModelForAdapter, modelsForAdapter, applyAgentModelsPayload } from "./agents/agentModels";
@@ -202,6 +203,10 @@ export function App() {
   const [dock, setDock] = useState<DockGeom>(() => readDockGeom());
   const unreadJumpRef = useRef(0);
   const [mainView, setMainView] = useState<string>("chat");
+  const previewDesign =
+    typeof window !== "undefined" &&
+    (new URLSearchParams(window.location.search).get("design") === "1105" ||
+      window.localStorage.getItem("omwp.design") === "1105");
   const [adminInAsk, setAdminInAsk] = useState(false);
   const [extensions, setExtensions] = useState<ExtensionStatus[]>([]);
   const [extTogglingId, setExtTogglingId] = useState<string | null>(null);
@@ -1270,6 +1275,39 @@ export function App() {
       : mainView === "chat"
         ? "chat"
         : null;
+
+  if (previewDesign) {
+    return (
+      <PreviewWorkbench
+        groups={groups}
+        archived={archivedGroups}
+        current={current}
+        onlineUserIds={onlineUserIds}
+        connected={wsLink.state === "connected"}
+        view={mainView}
+        goalBar={goalBar}
+        senderMemberId={senderMemberId}
+        isAdmin={isAdmin}
+        onSelectGroup={selectGroup}
+        onCreateGroup={() => setShowCreate(true)}
+        onView={(next) => setMainView(next)}
+        onSend={async (text) => {
+          if (!current || !senderMemberId) return;
+          await api.sendMessage(current.group.id, senderMemberId, text, findMentionedMemberIds(text, activeMembers));
+          await refresh(current.group.id);
+        }}
+        onMember={(member) => {
+          setSelectedMemberId(member.id);
+          setSelectedRunId(null);
+          setShowMembers(true);
+          setRightPanelTab("core.details");
+        }}
+        onReview={(run, decision) => void changeRunReview(run, decision)}
+        onCancelRun={(run) => void changeRun(run, "cancel")}
+        onOpenSettings={() => setMainView("settings")}
+      />
+    );
+  }
 
   return <main className="app-shell" ref={frame.rootRef} style={{ ...frame.rootStyle, display: "flex", flexDirection: "column" }} data-left={frame.leftMode} data-right={frame.rightOpen ? "open" : "closed"}>
     {showMembers && <div className="members-backdrop" onClick={() => setShowMembers(false)} />}
