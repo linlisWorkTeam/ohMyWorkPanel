@@ -110,7 +110,7 @@ export function DeliveryPage(props: PreviewPageProps) {
         }}>＋ 新建版本</button>}
       />
       <Stats items={[
-        ["当前版本", version?.name ?? "—", version?.status ?? "未建立"],
+        ["当前版本", version ? (version.name.length > 9 ? `${version.name.slice(0, 9)}…` : version.name) : "—", VERSION_LABEL[version?.status ?? ""] ?? "未建立"],
         ["Wave 进度", `${done} / ${waves.length || 0}`, current ? "进行中" : "无进行中"],
         ["已发布", String(board?.versions.filter((v) => v.status === "released").length ?? 0), "个版本"],
       ]} />
@@ -138,12 +138,12 @@ export function DeliveryPage(props: PreviewPageProps) {
             return (
               <li key={wave.id} className={state}>
                 <div className="waveTitle">
-                  {String(wave.idx + 1).padStart(2, "0")} · {wave.title}
+                  {String(wave.idx).padStart(2, "0")} · {wave.title}
                   <span className={`tag ${wave.status === "completed" ? "green" : state === "current" ? "blue" : ""}`}>
                     {wave.status === "completed" ? "已完成" : state === "current" ? "进行中" : "待开始"}
                   </span>
                 </div>
-                <p>{wave.summary || "—"}</p>
+                <p>{wave.summary || "尚未生成阶段说明"}</p>
                 {state === "current" && (
                   <div className="buttonRow">
                     <button type="button" className="secondary" disabled={busy} onClick={() => void run(() => api.pauseWave(wave.id))}>Ⅱ 暂停 Wave</button>
@@ -173,10 +173,15 @@ export function DeliveryPage(props: PreviewPageProps) {
 /* ---------------------------------------------------------------- 目标 */
 
 const GOAL_LABEL: Record<string, string> = {
+  draft: "草稿",
   active: "进行中",
   paused: "已暂停",
   awaiting_approval: "等待批准",
+  completed: "已完成",
   aborted: "已停止",
+};
+const VERSION_LABEL: Record<string, string> = {
+  draft: "草稿", ready: "规划中", in_progress: "进行中", released: "已发布", archived: "已归档",
 };
 
 export function GoalsPage(props: PreviewPageProps) {
@@ -238,7 +243,9 @@ export function GoalsPage(props: PreviewPageProps) {
           <div>运行时间<strong>{elapsedMin} min <small>/ {Math.round((goal?.budget.maxWallTimeMs ?? 3600000) / 60000)} min</small></strong><div className="progress"><i style={{ width: `${goal?.budget.maxWallTimeMs ? Math.min(100, ((elapsedMin * 60000) / goal.budget.maxWallTimeMs) * 100) : 0}%` }} /></div></div>
         </div>
         <div className="buttonRow">
-          {goal ? (
+          {goal && (goal.status === "completed" || goal.status === "aborted") ? (
+            <span className="muted small">当前目标已结束（{GOAL_LABEL[goal.status]}），终态只读。</span>
+          ) : goal ? (
             <>
               <button type="button" className="primary" disabled={busy} onClick={() => void run(() => goal.status === "awaiting_approval" ? api.approveGoal(goal.id) : goal.status === "paused" ? api.startGoal(goal.id) : api.advanceGoal(goal.id))}>
                 {goal.status === "awaiting_approval" ? "✓ 批准本轮" : goal.status === "paused" ? "▶ 继续推进" : "推进一步 →"}

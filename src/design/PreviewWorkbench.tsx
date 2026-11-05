@@ -10,7 +10,7 @@ import { AgentsPage, ContentPage, DeliveryPage, ExtensionsPage, GoalsPage, LogsP
 import { api } from "../api";
 import { partsToPlainText, projectContentForList } from "../chat/messageContent";
 import type { GoalBarState } from "../hooks/useGoalBar";
-import type { Group, GroupState, Member, Message, TaskRun } from "../types";
+import type { Goal, Group, GroupState, Member, Message, TaskRun } from "../types";
 import "./preview.css";
 
 const TABS = [
@@ -143,6 +143,7 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [memberView, setMemberView] = useState<Member | null>(null);
+  const [inspectorGoal, setInspectorGoal] = useState<Goal | null>(null);
   const [runView, setRunView] = useState<TaskRun | null>(null);
   const [mentionOpen, setMentionOpen] = useState(false);
   const [commandsOpen, setCommandsOpen] = useState(false);
@@ -169,6 +170,15 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
     () => messages.filter((m) => m.status !== "streaming" || m.senderMemberId === senderMemberId),
     [messages, senderMemberId],
   );
+
+  useEffect(() => {
+    if (!group) { setInspectorGoal(null); return; }
+    let cancelled = false;
+    api.listGoals(group.id)
+      .then((goals) => { if (!cancelled) setInspectorGoal(goals[0] ?? null); })
+      .catch(() => { if (!cancelled) setInspectorGoal(null); });
+    return () => { cancelled = true; };
+  }, [group?.id]);
 
   useEffect(() => {
     const node = transcriptRef.current;
@@ -512,11 +522,11 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
                 })}
                 <div className="rightCard">
                   <div className="eyebrow" style={{ marginBottom: 10 }}>CURRENT GOAL <span>↗</span></div>
-                  <h4>{goalBar?.waveTitle || "尚未建立目标"}</h4>
-                  <p>{goalBar ? "Agent 正在自主推进" : "创建 Goal 后，Leader Agent 会按预算推进。"}</p>
-                  <div className="progress"><i style={{ width: `${goalBar?.total ? Math.round((goalBar.done / goalBar.total) * 100) : 0}%` }} /></div>
+                  <h4>{inspectorGoal?.objective || goalBar?.waveTitle || "尚未建立目标"}</h4>
+                  <p>{inspectorGoal ? "Agent 正在自主推进" : "创建 Goal 后，Leader Agent 会按预算推进。"}</p>
+                  <div className="progress"><i style={{ width: `${inspectorGoal?.budget.maxRounds ? Math.round(((inspectorGoal?.rounds.length ?? 0) / inspectorGoal.budget.maxRounds) * 100) : 0}%` }} /></div>
                   <footer>
-                    <span>{goalBar ? `${goalBar.done} / ${goalBar.total} 阶段` : "—"}</span>
+                    <span>{inspectorGoal ? `${inspectorGoal.rounds.length} / ${inspectorGoal.budget.maxRounds} 轮` : "—"}</span>
                     <button type="button" style={{ fontSize: 9, color: "var(--accent)", padding: 0 }} onClick={() => onView("goals")}>查看证据 →</button>
                   </footer>
                 </div>
