@@ -335,3 +335,9 @@
 .pv-root .composerWrap .composer textarea { background: transparent !important; background-color: transparent !important; }
 .pv-root .composerWrap .composer textarea:focus,
 .pv-root .composerWrap .composer textarea:focus-visible { background: transparent !important; box-shadow: none; }
+
+/* 场景像素人配色（参考站 inline --accent 的等价类） */
+.pv-root .pixelPerson.tone-a { --accent: #e3c999; }
+.pv-root .pixelPerson.tone-b { --accent: #9bbdf8; }
+.pv-root .pixelPerson.tone-c { --accent: #c3b5e9; }
+.pv-root .pixelPerson.tone-d { --accent: #b9becb; }

@@ -203,10 +203,14 @@ export function App() {
   const [dock, setDock] = useState<DockGeom>(() => readDockGeom());
   const unreadJumpRef = useRef(0);
   const [mainView, setMainView] = useState<string>("chat");
-  const previewDesign =
-    typeof window !== "undefined" &&
-    (new URLSearchParams(window.location.search).get("design") === "1105" ||
-      window.localStorage.getItem("omwp.design") === "1105");
+  const previewDesign = (() => {
+    if (typeof window === "undefined") return false;
+    const params = new URLSearchParams(window.location.search);
+    const design = params.get("design");
+    if (design === "1105") return true;
+    if (design === "legacy" || params.get("legacy") === "1") return false;
+    return window.localStorage.getItem("omwp.design") !== "legacy";
+  })();
   const [adminInAsk, setAdminInAsk] = useState(false);
   const [extensions, setExtensions] = useState<ExtensionStatus[]>([]);
   const [extTogglingId, setExtTogglingId] = useState<string | null>(null);
@@ -1287,9 +1291,13 @@ export function App() {
         view={mainView}
         goalBar={goalBar}
         senderMemberId={senderMemberId}
+        userName={authUser?.username ?? "root"}
         isAdmin={isAdmin}
         onSelectGroup={selectGroup}
-        onCreateGroup={() => setShowCreate(true)}
+        onGroupCreated={(group) => {
+          setGroups((prev) => sortGroupsForSidebar([...prev, group]));
+          void selectGroup(group);
+        }}
         onView={(next) => setMainView(next)}
         onSend={async (text) => {
           if (!current || !senderMemberId) return;
@@ -1305,6 +1313,7 @@ export function App() {
         onReview={(run, decision) => void changeRunReview(run, decision)}
         onCancelRun={(run) => void changeRun(run, "cancel")}
         onOpenSettings={() => setMainView("settings")}
+        onRefresh={async () => { if (current) await refresh(current.group.id); }}
       />
     );
   }

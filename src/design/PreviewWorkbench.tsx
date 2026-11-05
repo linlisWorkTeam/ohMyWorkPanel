@@ -5,6 +5,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { AgentsPage, ContentPage, DeliveryPage, ExtensionsPage, GoalsPage, LogsPage, ScenePage, SettingsPage } from "./PreviewPages";
+
+import { api } from "../api";
 import { partsToPlainText, projectContentForList } from "../chat/messageContent";
 import type { GoalBarState } from "../hooks/useGoalBar";
 import type { Group, GroupState, Member, Message, TaskRun } from "../types";
@@ -32,15 +35,17 @@ export type PreviewWorkbenchProps = {
   view: string;
   goalBar: GoalBarState | null;
   senderMemberId: string | null;
+  userName: string;
   isAdmin: boolean;
   onSelectGroup: (group: Group) => void;
-  onCreateGroup: () => void;
+  onGroupCreated: (group: Group) => void;
   onView: (view: string) => void;
   onSend: (text: string) => Promise<void> | void;
   onMember: (member: Member) => void;
   onReview: (run: TaskRun, decision: "approved" | "rejected") => void;
   onCancelRun: (run: TaskRun) => void;
   onOpenSettings: () => void;
+  onRefresh: () => Promise<void> | void;
 };
 
 function timeLabel(ts: number): string {
@@ -82,6 +87,24 @@ function renderContent(content: string, members: Member[]) {
   return out.length ? out : content;
 }
 
+function PreviewDialog({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  const ref = useRef<HTMLDialogElement | null>(null);
+  useEffect(() => {
+    const node = ref.current;
+    if (node && !node.open) node.showModal();
+    return () => node?.close();
+  }, []);
+  return (
+    <dialog
+      ref={ref}
+      onCancel={(event) => { event.preventDefault(); onClose(); }}
+      onClick={(event) => { if (event.target === ref.current) onClose(); }}
+    >
+      {children}
+    </dialog>
+  );
+}
+
 export function PreviewWorkbench(props: PreviewWorkbenchProps) {
   const {
     groups,
@@ -91,14 +114,16 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
     view,
     goalBar,
     senderMemberId,
+    userName,
     onSelectGroup,
-    onCreateGroup,
+    onGroupCreated,
     onView,
     onSend,
     onMember,
     onReview,
     onCancelRun,
     onOpenSettings,
+    onRefresh,
   } = props;
 
   const [light, setLight] = useState(false);
@@ -111,6 +136,13 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
   const [memberOpen, setMemberOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [noRight, setNoRight] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newKind, setNewKind] = useState<"project" | "chat">("project");
+  const [newPath, setNewPath] = useState("");
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [memberView, setMemberView] = useState<Member | null>(null);
   const transcriptRef = useRef<HTMLDivElement | null>(null);
 
   const group = current?.group ?? null;
@@ -191,7 +223,7 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
         <aside className={`sidebar${sidebarOpen ? " open" : ""}`}>
           <div className="brand">ohMyWorkPanel<span>LOCAL WORKSPACE</span></div>
           <div className="sideHeading">
-            工作空间 <button type="button" title="创建群" onClick={onCreateGroup}>＋</button>
+            工作空间 <button type="button" title="创建群" onClick={() => setCreateOpen(true)}>＋</button>
           </div>
           <label className="search">
             ⌕ <input placeholder="查找群组" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -365,18 +397,48 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
                   </div>
                 </div>
               </>
-            ) : (
-              <div className="pageScroll">
-                <div className="pageHeading">
-                  <div>
-                    <div className="overline">WORKBENCH / MIGRATING</div>
-                    <h2>该页正在按参考站迁移</h2>
-                    <p>主壳与协作页已 1:1 对齐；此页将在下一阶段像素级实现。</p>
-                  </div>
-                  <button type="button" className="secondary" onClick={() => onView("chat")}>返回协作 ↗</button>
-                </div>
-              </div>
-            )}
+            ) : (() => {
+              const pageProps = {
+                group,
+                members,
+                runs,
+                onlineUserIds,
+                senderMemberId,
+                goalBar,
+                light,
+                onToggleLight: () => setLight((v) => !v),
+                onView,
+                onMember,
+                onRefresh,
+              };
+              switch (view) {
+                case "versions":
+                  return <DeliveryPage {...pageProps} />;
+                case "goals":
+                  return <GoalsPage {...pageProps} />;
+                case "marketing":
+                  return <ContentPage {...pageProps} />;
+                case "scene":
+                  return <ScenePage {...pageProps} />;
+                case "extensions":
+                  return <ExtensionsPage {...pageProps} />;
+                case "agent-config":
+                  return <AgentsPage {...pageProps} />;
+                case "observability":
+                  return <LogsPage {...pageProps} />;
+                case "settings":
+                  return <SettingsPage {...pageProps} />;
+                default:
+                  return (
+                    <div className="pageScroll">
+                      <div className="pageHeading">
+                        <div><div className="overline">WORKBENCH</div><h2>该页暂未迁移</h2><p>请从左侧导航选择已迁移的页面。</p></div>
+                        <button type="button" className="secondary" onClick={() => onView("chat")}>返回协作 ↗</button>
+                      </div>
+                    </div>
+                  );
+              }
+            })()}
           </div>
         </main>
 
@@ -393,7 +455,7 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
                 {agents.map((agent, index) => {
                   const active = activeRuns.find((run) => run.agentMemberId === agent.id);
                   return (
-                    <button type="button" key={agent.id} className="memberRow" onClick={() => onMember(agent)}>
+                    <button type="button" key={agent.id} className="memberRow" onClick={() => { setMemberView(agent); onMember(agent); }}>
                       <div className={`avatar ${AVATAR_TONES[(index % 3) + 1]}`}>{agent.displayName.slice(0, 1)}</div>
                       <div className="memberInfo">
                         {agent.displayName}
@@ -406,12 +468,12 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
                     </button>
                   );
                 })}
-                <button type="button" className="addMember" onClick={onCreateGroup}>＋ 添加 Agent 或成员</button>
+                <button type="button" className="addMember" onClick={() => setCreateOpen(true)}>＋ 添加 Agent 或成员</button>
                 <div className="eyebrow">PEOPLE <span>{people.length} 位</span></div>
                 {people.map((person, index) => {
                   const online = Boolean(person.authUserId && onlineUserIds?.has(person.authUserId));
                   return (
-                    <button type="button" key={person.id} className="memberRow" onClick={() => onMember(person)}>
+                    <button type="button" key={person.id} className="memberRow" onClick={() => { setMemberView(person); onMember(person); }}>
                       <div className={`avatar ${index === 0 ? "you" : ""}`}>{person.displayName.slice(0, 1)}</div>
                       <div className="memberInfo">
                         {person.displayName}
@@ -469,8 +531,51 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
         </aside>
       </div>
 
+      {createOpen && (
+        <PreviewDialog onClose={() => setCreateOpen(false)}>
+          <div className="modalTop"><h2>创建群</h2><button type="button" onClick={() => setCreateOpen(false)}>×</button></div>
+          <label className="formLabel">群名称<input value={newName} placeholder="项目或协作空间的名称" onChange={(e) => setNewName(e.target.value)} /></label>
+          <label className="formLabel">群类型
+            <select value={newKind} onChange={(e) => setNewKind(e.target.value as "project" | "chat")}>
+              <option value="project">项目群</option>
+              <option value="chat">聊天群</option>
+            </select>
+          </label>
+          <label className="formLabel">服务器工作区<input value={newPath} placeholder="/workspace/my-project" onChange={(e) => setNewPath(e.target.value)} /></label>
+          <p>工作区指服务端目录，不是浏览器本机目录。</p>
+          {createError && <p style={{ color: "var(--red)" }}>{createError}</p>}
+          <button type="button" className="primary" disabled={creating} onClick={() => {
+            if (!newName.trim()) { setCreateError("请填写群名称"); return; }
+            setCreating(true);
+            setCreateError(null);
+            void api.createGroup({ name: newName.trim(), workspacePath: newPath.trim() || ".", ownerName: userName, groupKind: newKind })
+              .then((state) => {
+                onGroupCreated(state.group);
+                setCreateOpen(false);
+                setNewName("");
+                setNewPath("");
+              })
+              .catch((reason) => setCreateError(reason instanceof Error ? reason.message : String(reason)))
+              .finally(() => setCreating(false));
+          }}>{creating ? "创建中…" : "创建群"}</button>
+        </PreviewDialog>
+      )}
+      {memberView && (
+        <PreviewDialog onClose={() => setMemberView(null)}>
+          <div className="modalTop"><h2>{memberView.displayName} · 成员详情</h2><button type="button" onClick={() => setMemberView(null)}>×</button></div>
+          <div className="buttonRow">
+            <span className="tag green">● {memberView.kind === "agent" ? (memberView.runtimeStatus === "ready" ? "就绪" : "待检测") : "成员"}</span>
+            <span className="tag">{memberView.kind === "agent" ? "Agent 同事" : "人类成员"}</span>
+          </div>
+          <p>角色：{memberView.roleDescription || "—"}{memberView.id === group?.adminMemberId ? " · 群管理员 Agent" : ""}</p>
+          <label className="formLabel">工作区<input value={group?.workspacePath ?? ""} readOnly /></label>
+          <label className="formLabel">适配器 / 模型<input value={`${memberView.adapter ?? "—"} · ${memberView.model || "项目默认模型"}`} readOnly /></label>
+          <p>状态与配置来自当前群的真实成员记录。</p>
+          <button type="button" className="primary" onClick={() => setMemberView(null)}>关闭</button>
+        </PreviewDialog>
+      )}
       {showGuide && (
-        <dialog open>
+        <PreviewDialog onClose={() => setShowGuide(false)}>
           <div className="modalTop"><h2>设计说明 / Workbench 01</h2><button type="button" onClick={() => setShowGuide(false)}>×</button></div>
           <div className="overline">CALM SPACE. CLEAR PROGRESS.</div>
           <p>群是稳定的协作空间；中心区域服务当前任务，上下文在右侧渐进展开。</p>
@@ -481,7 +586,7 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
             <div><strong>04 · 渐进迁移</strong><small>保留 React、语义 token、双端 API 与插件边界。</small></div>
           </div>
           <button type="button" className="primary" onClick={() => setShowGuide(false)}>知道了</button>
-        </dialog>
+        </PreviewDialog>
       )}
     </div>
   );
