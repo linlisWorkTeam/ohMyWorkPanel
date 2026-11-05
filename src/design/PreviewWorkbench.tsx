@@ -143,6 +143,17 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [memberView, setMemberView] = useState<Member | null>(null);
+  const [runView, setRunView] = useState<TaskRun | null>(null);
+  const [mentionOpen, setMentionOpen] = useState(false);
+  const [commandsOpen, setCommandsOpen] = useState(false);
+  const [noticeOpen, setNoticeOpen] = useState(false);
+  const [toast, setToast] = useState<{ text: string; show: boolean }>({ text: "", show: false });
+  const toastTimer = useRef<number | null>(null);
+  const showToast = (text: string) => {
+    setToast({ text, show: true });
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast((prev) => ({ ...prev, show: false })), 3200);
+  };
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
 
@@ -282,7 +293,7 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
             </div>
             <div className="headRight">
               <span className="connected"><span className="dot" /> {connected ? "已连接" : "连接中"}</span>
-              <button type="button" className="icon" title="群公告">⚑</button>
+              <button type="button" className="icon" title="群公告" onClick={() => setNoticeOpen(true)}>⚑</button>
               <button type="button" className="membersBtn" onClick={toggleRight}>
                 {agents.slice(0, 3).map((a, index) => (
                   <span key={a.id} className={`tinyAv ${AVATAR_TONES[index % 4]}`}>{a.displayName.slice(0, 1)}</span>
@@ -350,7 +361,7 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
                                 {run?.phase && <span>· {run.phase}</span>}
                                 <div className="track"><i /></div>
                                 {run && (
-                                  <button type="button" style={{ color: "var(--dim)", fontSize: 9, marginLeft: "auto" }} onClick={() => onCancelRun(run)}>
+                                  <button type="button" style={{ color: "var(--dim)", fontSize: 9, marginLeft: "auto" }} onClick={() => setRunView(run)}>
                                     查看详情 ↗
                                   </button>
                                 )}
@@ -371,7 +382,7 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
                               <button type="button" onClick={() => { if (run) onReview(run, "approved"); }}>✓ 通过审阅</button>
                               <button type="button" onClick={() => { if (run) onReview(run, "rejected"); }}>↺ 要求修改</button>
                               <button type="button">↩ 引用</button>
-                              <button type="button" onClick={() => void navigator.clipboard?.writeText(displayText)}>▢ 复制</button>
+                              <button type="button" onClick={() => { void navigator.clipboard?.writeText(displayText); showToast("已复制消息内容"); }}>▢ 复制</button>
                             </div>
                           )}
                         </div>
@@ -400,9 +411,9 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
                       }}
                     />
                     <div className="composerTools">
-                      <button type="button" title="提及成员">＠</button>
-                      <button type="button" title="命令菜单">/</button>
-                      <button type="button" title="OCR">▧</button>
+                      <button type="button" title="提及成员" onClick={() => setMentionOpen(true)}>＠</button>
+                      <button type="button" title="命令菜单" onClick={() => setCommandsOpen(true)}>/</button>
+                      <button type="button" title="OCR" onClick={() => showToast("OCR 入口示意：提取图片文字后填入草稿")}>▧</button>
                       <span style={{ height: 12, width: 1, background: "var(--border)" }} />
                       <small>默认响应：{agents.find((a) => a.id === group?.adminMemberId)?.displayName ?? "未设置"}</small>
                       <button type="button" className="send" onClick={() => void send()} disabled={sending || !draft.trim()}>发送 ↑</button>
@@ -548,6 +559,48 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
         </aside>
       </div>
 
+      {mentionOpen && (
+        <PreviewDialog onClose={() => setMentionOpen(false)}>
+          <div className="modalTop"><h2>提及成员</h2><button type="button" onClick={() => setMentionOpen(false)}>×</button></div>
+          <p>选择一位 Agent 加入当前任务。</p>
+          <div className="buttonRow">
+            {agents.map((agent) => (
+              <button type="button" key={agent.id} className="secondary" onClick={() => { setDraft((prev) => `${prev}@${agent.displayName} `.trimStart()); setMentionOpen(false); }}>@{agent.displayName}</button>
+            ))}
+          </div>
+        </PreviewDialog>
+      )}
+      {commandsOpen && (
+        <PreviewDialog onClose={() => setCommandsOpen(false)}>
+          <div className="modalTop"><h2>命令入口</h2><button type="button" onClick={() => setCommandsOpen(false)}>×</button></div>
+          <p>导航示例；命令清单以现有 contrib 注册表为准。</p>
+          <div className="buttonRow">
+            <button type="button" className="secondary" onClick={() => { onView("versions"); setCommandsOpen(false); }}>/ 交付</button>
+            <button type="button" className="secondary" onClick={() => { onView("goals"); setCommandsOpen(false); }}>/ 目标</button>
+            <button type="button" className="secondary" onClick={() => { onView("agent-config"); setCommandsOpen(false); }}>/ Agent 环境</button>
+          </div>
+        </PreviewDialog>
+      )}
+      {runView && (
+        <PreviewDialog onClose={() => setRunView(null)}>
+          <div className="modalTop"><h2>RUN-{runView.id.slice(0, 6).toUpperCase()} · 执行详情</h2><button type="button" onClick={() => setRunView(null)}>×</button></div>
+          <span className={`tag ${runView.status === "running" ? "blue" : runView.status === "failed" ? "amber" : "green"}`}>{runView.status}</span>
+          <p>
+            执行者：{members.find((m) => m.id === runView.agentMemberId)?.displayName ?? "Agent"}<br />
+            阶段：{runView.phase || "—"}<br />
+            深度：{runView.depth} · 父任务：{runView.parentRunId?.slice(0, 6) ?? "无"}<br />
+            开始：{runView.startedAt ? timeLabel(runView.startedAt) : "—"} · 完成：{runView.completedAt ? timeLabel(runView.completedAt) : "—"}
+          </p>
+          {runView.errorMessage && <p style={{ color: "var(--red)" }}>{runView.errorMessage}</p>}
+          <button type="button" className="secondary" onClick={() => { onCancelRun(runView); setRunView(null); }}>取消运行</button>
+        </PreviewDialog>
+      )}
+      {noticeOpen && (
+        <PreviewDialog onClose={() => setNoticeOpen(false)}>
+          <div className="modalTop"><h2>群公告</h2><button type="button" onClick={() => setNoticeOpen(false)}>×</button></div>
+          <p>{group?.announcement?.trim() || "群公告尚未设置。"}</p>
+        </PreviewDialog>
+      )}
       {createOpen && (
         <PreviewDialog onClose={() => setCreateOpen(false)}>
           <div className="modalTop"><h2>创建群</h2><button type="button" onClick={() => setCreateOpen(false)}>×</button></div>
@@ -591,6 +644,7 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
           <button type="button" className="primary" onClick={() => setMemberView(null)}>关闭</button>
         </PreviewDialog>
       )}
+      <div id="toast" className={toast.show ? "show" : ""}>{toast.text}</div>
       {showGuide && (
         <PreviewDialog onClose={() => setShowGuide(false)}>
           <div className="modalTop"><h2>设计说明 / Workbench 01</h2><button type="button" onClick={() => setShowGuide(false)}>×</button></div>

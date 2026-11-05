@@ -119,7 +119,7 @@ export function DeliveryPage(props: PreviewPageProps) {
         <div className="panel">
           <div className="panelHead">
             <h3>{version.name} <span className="tag green">{version.status === "released" ? "已发布" : "当前版本"}</span></h3>
-            <small>Git · {board?.git?.headSha?.slice(0, 7) ?? (board?.git?.isGitRepo ? "Git 已连接" : "非 Git 仓库")}</small>
+            <button type="button" className="secondary" onClick={() => document.querySelector(".timeline")?.scrollIntoView({ behavior: "smooth", block: "center" })}>路线图 ↗</button>
           </div>
           <p className="small muted">
             What · {version.what || "—"}<br />
@@ -495,10 +495,10 @@ export function AgentsPage(props: PreviewPageProps) {
       />
       {error && <PageError message={error} />}
       <div className="configGrid">
-        {agents.map((agent) => (
+        {agents.map((agent, index) => (
           <div className="panel" key={agent.id}>
             <div className="panelHead">
-              <div className={`avatar ${agent.runtimeStatus === "ready" ? "b" : ""}`}>{agent.displayName.slice(0, 1)}</div>
+              <div className={`avatar ${["a", "b", "c", ""][index % 4]}`}>{agent.displayName.slice(0, 1)}</div>
               <span className={`tag ${agent.runtimeStatus === "ready" ? "green" : "amber"}`}>{agent.runtimeStatus === "ready" ? "就绪" : agent.runtimeStatus === "unavailable" ? "不可用" : "待检测"}</span>
             </div>
             <h3 style={{ margin: 0 }}>{agent.displayName} <span className="tag">{ADAPTER_LABEL[agent.adapter ?? ""] ?? agent.adapter ?? "未配置"}</span></h3>
