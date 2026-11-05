@@ -146,6 +146,7 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
   const [memberView, setMemberView] = useState<Member | null>(null);
   const [inspectorGoal, setInspectorGoal] = useState<Goal | null>(null);
   const [summaryBoard, setSummaryBoard] = useState<VersionBoard | null>(null);
+  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [runView, setRunView] = useState<TaskRun | null>(null);
   const [mentionOpen, setMentionOpen] = useState(false);
   const [commandsOpen, setCommandsOpen] = useState(false);
@@ -379,7 +380,15 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
                             {sender?.adapter && <span className="tag">{sender.adapter}</span>}
                             <time>{timeLabel(message.createdAt)}</time>
                           </div>
-                          <div className="bubble">
+                          <div
+                            className="bubble"
+                            style={{ cursor: "pointer" }}
+                            onClick={() => {
+                              setSelectedMessage(message);
+                              setRightTab("details");
+                              if (window.innerWidth <= 1020) setMemberOpen(true);
+                            }}
+                          >
                             {message.hasThinking && (
                               <button type="button" className="disclosure" title="执行摘要">
                                 ▸ 分析与执行过程
@@ -579,10 +588,33 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
             {rightTab === "details" && (
               <>
                 <div className="eyebrow">CONTEXT / DETAILS</div>
-                <div className="rightCard">
-                  <h4>{group?.name ?? "未选择群"}</h4>
-                  <p>选中一条消息、任务或成员，在此查看关联信息。</p>
-                </div>
+                {selectedMessage ? (
+                  <>
+                    <div className="rightCard">
+                      <div className="panelHead" style={{ marginBottom: 8 }}>
+                        <h4>{members.find((m) => m.id === selectedMessage.senderMemberId)?.displayName ?? "已移除成员"}</h4>
+                        <small className="muted">{timeLabel(selectedMessage.createdAt)}</small>
+                      </div>
+                      <p>{partsToPlainText(projectContentForList(selectedMessage.content).content).slice(0, 160) || "（空消息）"}</p>
+                      <footer>
+                        <span>{selectedMessage.status}</span>
+                        <button type="button" style={{ fontSize: 9, color: "var(--accent)", padding: 0 }} onClick={() => { setSelectedMessage(null); }}>清除选择</button>
+                      </footer>
+                    </div>
+                    {runFor(selectedMessage) && (
+                      <div className="rightCard">
+                        <h4>关联运行</h4>
+                        <p>状态：{runFor(selectedMessage)?.status}<br />阶段：{runFor(selectedMessage)?.phase || "—"}</p>
+                        <button type="button" className="secondary" onClick={() => { const run = runFor(selectedMessage); if (run) setRunView(run); }}>执行详情 ↗</button>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="rightCard">
+                    <h4>{group?.name ?? "未选择群"}</h4>
+                    <p>选中一条消息、任务或成员，在此查看关联信息。</p>
+                  </div>
+                )}
                 <div className="rightCard">
                   <h4>项目公告</h4>
                   <p>{group?.announcement?.trim() || "群公告尚未设置。"}</p>
