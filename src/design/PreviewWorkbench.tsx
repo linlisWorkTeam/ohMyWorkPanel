@@ -426,7 +426,7 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
                       <button type="button" title="OCR" onClick={() => showToast("OCR 入口示意：提取图片文字后填入草稿")}>▧</button>
                       <span style={{ height: 12, width: 1, background: "var(--border)" }} />
                       <small>默认响应：{agents.find((a) => a.id === group?.adminMemberId)?.displayName ?? "未设置"}</small>
-                      <button type="button" className="send" onClick={() => void send()} disabled={sending || !draft.trim()}>发送 ↑</button>
+                      <button type="button" className="send" onClick={() => void send()}>发送 ↑</button>
                     </div>
                   </div>
                   <div className="composerFoot">
