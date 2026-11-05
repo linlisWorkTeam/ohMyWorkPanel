@@ -9,8 +9,9 @@ import { AgentsPage, ContentPage, DeliveryPage, ExtensionsPage, GoalsPage, LogsP
 
 import { api } from "../api";
 import { partsToPlainText, projectContentForList } from "../chat/messageContent";
+import { parseMarketingMarker } from "../marketing/markers";
 import type { GoalBarState } from "../hooks/useGoalBar";
-import type { Goal, Group, GroupState, Member, Message, TaskRun } from "../types";
+import type { Goal, Group, GroupState, Member, Message, TaskRun, VersionBoard } from "../types";
 import "./preview.css";
 
 const TABS = [
@@ -144,6 +145,7 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
   const [creating, setCreating] = useState(false);
   const [memberView, setMemberView] = useState<Member | null>(null);
   const [inspectorGoal, setInspectorGoal] = useState<Goal | null>(null);
+  const [summaryBoard, setSummaryBoard] = useState<VersionBoard | null>(null);
   const [runView, setRunView] = useState<TaskRun | null>(null);
   const [mentionOpen, setMentionOpen] = useState(false);
   const [commandsOpen, setCommandsOpen] = useState(false);
@@ -167,9 +169,24 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
   const people = members.filter((m) => m.kind !== "agent");
 
   const myMessages = useMemo(
-    () => messages.filter((m) => m.status !== "streaming" || m.senderMemberId === senderMemberId),
+    () =>
+      messages.filter((message) => {
+        const marker = parseMarketingMarker(message.content);
+        // 内容管道的内部标记不进入协作流；活动本身在「内容」页查看。
+        if (marker) return false;
+        return message.status !== "streaming" || message.senderMemberId === senderMemberId;
+      }),
     [messages, senderMemberId],
   );
+
+  useEffect(() => {
+    if (!group) { setSummaryBoard(null); return; }
+    let cancelled = false;
+    api.getVersionBoard(group.id)
+      .then((board) => { if (!cancelled) setSummaryBoard(board); })
+      .catch(() => { if (!cancelled) setSummaryBoard(null); });
+    return () => { cancelled = true; };
+  }, [group?.id]);
 
   useEffect(() => {
     if (!group) { setInspectorGoal(null); return; }
@@ -222,6 +239,14 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
       setNoRight((open) => !open);
     }
   };
+
+  const summaryVersion = summaryBoard?.versions.find((v) => v.status !== "released") ?? summaryBoard?.versions[0] ?? null;
+  const summaryWaves = summaryBoard?.waves ?? [];
+  const summaryDone = summaryWaves.filter((wave) => wave.status === "completed").length;
+  const summaryCurrent = summaryWaves.find((wave) => wave.status !== "completed" && wave.status !== "blocked");
+  const waveLabel = summaryWaves.length
+    ? `Wave ${String(summaryCurrent?.idx ?? summaryDone + 1).padStart(2, "0")} / ${String(summaryWaves.length).padStart(2, "0")}`
+    : "尚无 Wave";
 
   const runFor = (message: Message) => runs.find((run) => run.outputMessageId === message.id);
   const activeRuns = runs.filter((run) => run.status === "running" || run.status === "queued");
@@ -328,9 +353,9 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
                 {!isChatGroup && (
                   <div className="summary">
                     <span style={{ color: "var(--accent)" }}>◉</span>
-                    <strong>{goalBar?.versionName || "v2.1.2 · 当前工作台"}</strong>
-                    <span className="tag green">{goalBar?.waveTitle || "尚无 Wave"}</span>
-                    <div className="progress"><i style={{ width: `${goalBar?.total ? Math.round((goalBar.done / goalBar.total) * 100) : 0}%` }} /></div>
+                    <strong>{summaryVersion?.name || goalBar?.versionName || "v2.1.2 · 当前工作台"}</strong>
+                    <span className="tag green">{waveLabel}</span>
+                    <div className="progress"><i style={{ width: `${summaryWaves.length ? Math.round((summaryDone / summaryWaves.length) * 100) : 0}%` }} /></div>
                     <button type="button" onClick={() => onView("versions")}>查看交付 →</button>
                   </div>
                 )}
