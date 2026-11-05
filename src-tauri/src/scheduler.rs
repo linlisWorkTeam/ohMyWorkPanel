@@ -1136,7 +1136,7 @@ fn append_delta(
 }
 
 async fn finish_failed(state: &SchedulerState, run_id: &str, error: &str) {
-    let result = (|| -> AppResult<(String, Option<String>)> {
+    let result = (|| -> AppResult<(String, Option<String>, bool)> {
         let conn = open_db(&state.db_path)?;
         let run: TaskRun = conn
             .query_row(
@@ -1161,9 +1161,9 @@ async fn finish_failed(state: &SchedulerState, run_id: &str, error: &str) {
             }
             insert_run_event(&conn, run_id, "failed", error)?;
         }
-        Ok((run.group_id, run.output_message_id))
+        Ok((run.group_id, run.output_message_id, changed > 0))
     })();
-    if let Ok((group_id, message_id)) = result {
+    if let Ok((group_id, message_id, changed)) = result {
         emit(
             state,
             ChatEvent {
@@ -1195,6 +1195,15 @@ async fn finish_failed(state: &SchedulerState, run_id: &str, error: &str) {
             );
         }
         crate::marketing::on_run_terminal(state, run_id, false, Some(error));
+        if changed {
+            if let Some((route_group_id, routed_runs)) =
+                crate::routing::route_failed_run(state, run_id, error)
+            {
+                if !routed_runs.is_empty() {
+                    schedule_group(state.clone(), route_group_id);
+                }
+            }
+        }
     }
 }
 

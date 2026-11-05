@@ -32,6 +32,7 @@ mod models;
 mod ocr;
 pub mod orchestrator;
 pub mod plugins;
+pub mod routing;
 pub mod scheduler;
 pub mod web;
 pub mod wiki_context;
