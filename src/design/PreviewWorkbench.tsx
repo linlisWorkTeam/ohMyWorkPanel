@@ -144,6 +144,7 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
   const [creating, setCreating] = useState(false);
   const [memberView, setMemberView] = useState<Member | null>(null);
   const transcriptRef = useRef<HTMLDivElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
 
   const group = current?.group ?? null;
   const members = current?.members ?? [];
@@ -162,6 +163,22 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
     const node = transcriptRef.current;
     if (node) node.scrollTop = node.scrollHeight;
   }, [current?.group.id, messages.length]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setSidebarOpen(true);
+        searchRef.current?.focus();
+      }
+      if (event.key === "Escape") {
+        setSidebarOpen(false);
+        setMemberOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const filteredGroups = groups.filter((g) => g.name.toLowerCase().includes(search.toLowerCase()));
 
@@ -226,7 +243,7 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
             工作空间 <button type="button" title="创建群" onClick={() => setCreateOpen(true)}>＋</button>
           </div>
           <label className="search">
-            ⌕ <input placeholder="查找群组" value={search} onChange={(e) => setSearch(e.target.value)} />
+            ⌕ <input ref={searchRef} placeholder="查找群组" value={search} onChange={(e) => setSearch(e.target.value)} />
             <kbd>⌘ K</kbd>
           </label>
           <div className="groupList">
@@ -444,8 +461,8 @@ export function PreviewWorkbench(props: PreviewWorkbenchProps) {
 
         <aside className={`inspector${memberOpen ? " open" : ""}`}>
           <div className="rightTabs">
-            <button type="button" className={rightTab === "members" ? "active" : ""} onClick={() => setRightTab("members")}>成员<small>{members.length}</small></button>
-            <button type="button" className={rightTab === "queue" ? "active" : ""} onClick={() => setRightTab("queue")}>队列<small>{activeRuns.length}</small></button>
+            <button type="button" className={rightTab === "members" ? "active" : ""} onClick={() => setRightTab("members")}>成员 <small>{members.length}</small></button>
+            <button type="button" className={rightTab === "queue" ? "active" : ""} onClick={() => setRightTab("queue")}>队列 <small>{activeRuns.length}</small></button>
             <button type="button" className={rightTab === "details" ? "active" : ""} onClick={() => setRightTab("details")}>详情</button>
           </div>
           <div id="rightContent">

@@ -315,7 +315,7 @@
 .pv-root .composer textarea { width: 100%; box-sizing: border-box; }
 
 /* 旧设计系统里同名的通用类：强制回到参考站行为 */
-.pv-root .brand { display: block; min-height: 0; padding: 0; gap: 0; }
+.pv-root .brand { display: block; min-height: 0; padding: 0; }
 .pv-root .brand > span { display: block; }
 
 /* 旧 .composer-wrap textarea 规则优先级更高：显式覆盖 */
@@ -341,3 +341,22 @@
 .pv-root .pixelPerson.tone-b { --accent: #9bbdf8; }
 .pv-root .pixelPerson.tone-c { --accent: #c3b5e9; }
 .pv-root .pixelPerson.tone-d { --accent: #b9becb; }
+
+/* 逐像素校准：与参考站 computed style 对齐 */
+.pv-root .brand { display: flex; flex-direction: column; justify-content: flex-start; }
+.pv-root .composer { padding: 0; }
+.pv-root .composerWrap .composer textarea { border-radius: 7px; }
+.pv-root .bubble { font-size: 13px; }
+
+/* 旧壳 `.brand{height:72px;padding:0 22px;font-size:18px}` 仍会命中：显式归零 */
+.pv-root .brand {
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  font-size: 16px;
+  font-weight: 700;
+  display: block;
+  gap: normal;
+}
+.pv-root .bubble, .pv-root .bubble p { color: var(--ink); }
+.pv-root .bubble { line-height: 1.6; }
