@@ -333,7 +333,7 @@ export function ContentPage(props: PreviewPageProps) {
             </div>
             <h3 style={{ fontSize: 20, fontWeight: 500 }}>{brief?.coreMessage || draft?.title || "内容活动"}</h3>
             <p className="muted small">
-              来源：{campaign.sourceMode} · {campaign.baseRef ?? "未指定"} · {campaign.headRef}<br />
+              来源：{campaign.sourceMode === "include_uncommitted" ? "含未提交改动" : "已提交"} · {campaign.baseRef ?? "未指定"} · {campaign.headRef.slice(0, 7)}<br />
               规划：{campaign.plannerAgentId.slice(0, 6)} / 写作：{campaign.writerAgentId.slice(0, 6)}
             </p>
             {draft && (
@@ -344,7 +344,7 @@ export function ContentPage(props: PreviewPageProps) {
             )}
             {(campaign.validation ?? []).length > 0 && <p className="small" style={{ color: "var(--amber)" }}>校验提示：{campaign.validation[0].message}</p>}
             <div className="buttonRow">
-              <button type="button" className="primary" disabled={busy} onClick={() => void run(() => api.approveMarketingCampaign(campaign.id, senderMemberId ?? ""))}>批准并导出导出包</button>
+              <button type="button" className="primary" disabled={busy} onClick={() => void run(() => api.approveMarketingCampaign(campaign.id, senderMemberId ?? ""))}>批准并导出</button>
               <button type="button" className="secondary" disabled={busy} onClick={() => {
                 const feedback = window.prompt("修改意见");
                 if (feedback) void run(() => api.reviseMarketingCampaign(campaign.id, senderMemberId ?? "", feedback));
